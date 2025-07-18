@@ -7,7 +7,7 @@ import  roles  from '../middlewares/roles.js';   // role guard
 
 const router = express.Router();
 
-router.get('/plans', protect, roles('superadmin'), getAllPlans);
+router.get('/plans', getAllPlans);
 router.post('/plans', protect, roles('superadmin'), createPricePlan);
 router.put('/plans/:id', protect, roles('superadmin'), updatePlan);
 router.delete('/plans/:id', protect, roles('superadmin'), deletePlan);

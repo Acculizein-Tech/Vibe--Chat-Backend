@@ -22,6 +22,7 @@ import visitRoutes from './routes/visitRoutes.js';
 import leadsRoute from './routes/leadsRoute.js'; // Import leads route
 import notificationRoutes from './routes/notificationRoute.js';
 import paymentRoutes from "./routes/paymentRoute.js";
+import uploadRoutes from './routes/uploadData.js'; // Import upload routes
 import './cronJobs/leadReminderJob.js';
 import cors from 'cors';
 dotenv.config();
@@ -133,6 +134,7 @@ app.use('/api/visit', visitRoutes);
 app.use('/api/leads', leadsRoute); // Leads management route
 app.use('/api/notifications', notificationRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use('/api/upload', uploadRoutes); // Use upload routes
 app.use("/invoices", express.static(path.join(path.resolve(), "invoices")));
 
 

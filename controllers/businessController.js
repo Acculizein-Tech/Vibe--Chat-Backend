@@ -9,6 +9,9 @@ import User from '../models/user.js';
 import moment from 'moment'; // Optional for time comparison
 import Leads from '../models/Leads.js';
 import { notifyUser, notifyRole } from '../utils/sendNotification.js';
+//
+import Priceplan from '../models/Priceplan.js';
+import mongoose from 'mongoose';
 
 const categoryModels = {
   Health,
@@ -35,7 +38,8 @@ export const createBusiness = async (req, res) => {
       description,
       referralCode,
       services,
-      categoryData
+      categoryData,
+      planId // ✅ add this
     } = req.body;
 
     const CategoryModel = categoryModels[category];
@@ -90,6 +94,27 @@ export const createBusiness = async (req, res) => {
         salesExecutive = salesUsers[randomIndex]._id;
       }
     }
+// ✅ Validate Plan ID if provided
+const rawPlanId = req.body.planId;
+const cleanPlanId = typeof rawPlanId === 'string'
+  ? rawPlanId.trim().replace(/^["']|["']$/g, '')
+  : rawPlanId;
+  
+let validPlanId = null;
+if (cleanPlanId) {
+  const isValid = mongoose.Types.ObjectId.isValid(cleanPlanId);
+  if (!isValid) {
+    return res.status(400).json({ message: 'Invalid plan ID format' });
+  }
+
+  const plan = await Priceplan.findById(cleanPlanId);
+  if (!plan) {
+    return res.status(400).json({ message: 'Plan not found' });
+  }
+
+  validPlanId = plan._id;
+}
+
 
     // ✅ Create Business
     const business = await Business.create({
@@ -111,7 +136,8 @@ export const createBusiness = async (req, res) => {
       category,
       categoryModel: category,
       services: parsedServices,
-      salesExecutive
+      salesExecutive,
+      plan: validPlanId
     });
 
     // ✅ Create category-specific document
@@ -149,7 +175,7 @@ export const createBusiness = async (req, res) => {
         userId: salesExecutive,
         type: 'NEW_BUSINESS_BY_REFERRAL',
         title: '📢 New Business Listed',
-        message: `A new business "${name}" was listed by your referred user.`,
+        message:`A new business "${name}" was listed by your referred user.`,
         data: {
           businessId: business._id,
           businessName: name,
@@ -164,10 +190,10 @@ export const createBusiness = async (req, res) => {
         role: 'admin',
         type: 'NEW_BUSINESS_LISTED',
         title: '🆕 Business Listing Submitted',
-        message: salesExecutive
-          ? `"${name}" has been listed and assigned to a sales executive.`
-          : `"${name}" has been listed but not yet assigned to any sales executive.`,
-        data: {
+        message: `${salesExecutive
+        ? `${name} has been listed and assigned to a sales executive.`
+        : `${name} has been listed but not yet assigned to any sales executive.`}`, 
+       data: {
           businessId: business._id,
           ownerId: owner,
           assignedTo: salesExecutive || null,
@@ -178,14 +204,14 @@ export const createBusiness = async (req, res) => {
         role: 'superadmin',
         type: 'NEW_BUSINESS_LISTED',
         title: '🆕 Business Listing Submitted',
-        message: salesExecutive
-          ? `"${name}" has been listed and assigned to a sales executive.`
-          : `"${name}" has been listed but not yet assigned to any sales executive.`,
+       message: `${salesExecutive
+  ? `${name} has been listed and assigned to a sales executive.`
+  : `${name} has been listed but not yet assigned to any sales executive.`}`,
         data: {
           businessId: business._id,
           ownerId: owner,
           assignedTo: salesExecutive || null,
-          redirectPath: `/superadmin/business/${business._id}`
+          redirectPath:` /superadmin/business/${business._id}`
         }
       })
     ]);
@@ -202,8 +228,6 @@ export const createBusiness = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
-
-
 
 
 export const updateBusiness = async (req, res) => {
@@ -660,39 +684,38 @@ export const getUserBusinessViewsAnalytics = asyncHandler(async (req, res) => {
   }
 });
 
-
 export const getBusinessId = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Step 1: Fetch business document
+    // 1. Fetch business document
     const businessDoc = await Business.findById(id);
     if (!businessDoc) {
       return res.status(404).json({ message: 'Business not found' });
     }
 
-    // Step 2: Get IP
+    // 2. Get IP address
     let userIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     if (userIp?.startsWith('::ffff:')) userIp = userIp.replace('::ffff:', '');
 
-    // Step 3: Get User ID (if logged in)
+    // 3. Get user ID if authenticated
     const userId = req.user?._id || null;
 
-    // Step 4: Ensure viewers array exists
+    // 4. Ensure viewers array exists
     if (!Array.isArray(businessDoc.viewers)) {
       businessDoc.viewers = [];
     }
 
-    // Step 5: Check if IP or user viewed in last 24h
+    // 5. Check if already viewed in the last 24 hours
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-    const hasViewed = businessDoc.viewers.some((v) =>
-      (v.ip === userIp || (userId && v.user?.toString() === userId.toString())) &&
-      new Date(v.viewedAt) > oneDayAgo
+    const hasViewed = businessDoc.viewers.some(
+      (v) =>
+        (v.ip === userIp || (userId && v.user?.toString() === userId.toString())) &&
+        new Date(v.viewedAt) > oneDayAgo
     );
 
-    // Step 6: Add view if new
+    // 6. Add view if not viewed recently
     if (!hasViewed) {
       businessDoc.views += 1;
       businessDoc.viewers.push({
@@ -703,7 +726,7 @@ export const getBusinessId = async (req, res) => {
       await businessDoc.save();
     }
 
-    // Step 7: Load category data
+    // 7. Load category data
     let categoryData = {};
     const CategoryModel = categoryModels[businessDoc.categoryModel];
     if (CategoryModel && businessDoc.categoryRef) {
@@ -714,7 +737,7 @@ export const getBusinessId = async (req, res) => {
       }
     }
 
-    // Step 8: Load reviews
+    // 8. Load reviews
     const reviews = await Review.find({ business: id })
       .populate('user', 'fullName profile.avatar')
       .sort({ createdAt: -1 })
@@ -728,13 +751,28 @@ export const getBusinessId = async (req, res) => {
       time: r.createdAt,
     }));
 
-    // Step 9: Final response
+    // 9. Load full plan data from Priceplan collection
+    let planData = null;
+    if (businessDoc.plan) {
+      try {
+        const planDoc = await Priceplan.findById(businessDoc.plan).lean();
+        if (planDoc) {
+          const { _id, __v, ...rest } = planDoc;
+          planData = rest;
+        }
+      } catch (err) {
+        console.warn('⚠️ Invalid plan ID:', businessDoc.plan);
+      }
+    }
+
+    // 10. Prepare and send final response
     const business = businessDoc.toObject();
     const fullData = {
       ...business,
       categoryData,
       reviews: formattedReviews,
       totalViews: businessDoc.views || 0,
+      planData,
     };
 
     res.status(200).json({

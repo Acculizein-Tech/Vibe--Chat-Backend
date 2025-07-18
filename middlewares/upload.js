@@ -1,74 +1,52 @@
-import dotenv from 'dotenv';
-dotenv.config();
 import multer from 'multer';
-import multerS3 from 'multer-s3';
-import aws from 'aws-sdk';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-// ✅ Setup AWS credentials from .env
-aws.config.update({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION
+dotenv.config();
+
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
 });
 
-const s3 = new aws.S3();
-
-// ✅ Allowed file types
-const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
-const pdfTypes = ['.pdf'];
-
-// ✅ File filter
-const fileFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-
-  if (file.fieldname === 'certificateImages') {
-    return pdfTypes.includes(ext)
-      ? cb(null, true)
-      : cb(new Error('Only PDF files are allowed for certificateImages'));
-  }
-
-  if (['profileImage', 'coverImage', 'galleryImages'].includes(file.fieldname)) {
-    return imageTypes.includes(ext)
-      ? cb(null, true)
-      : cb(new Error(`Only image files are allowed for ${file.fieldname}`));
-  }
-
-  cb(null, true);
-};
-
-// ✅ S3 folder selection based on fieldname
-const getS3Folder = (fieldname, baseUrl) => {
-  if (fieldname === 'profileImage') {
-    return baseUrl.includes('/user') ? 'userImage' : 'profile';
-  } else if (fieldname === 'coverImage') {
-    return 'coverImage';
-  } else if (fieldname === 'certificateImages') {
-    return 'certificates';
-  } else if (fieldname === 'galleryImages') {
-    return 'gallery';
-  } else if (fieldname === 'eventImages') {
-    return 'events';
-  } else {
-    return 'others';
-  }
-};
-
-// ✅ Multer-S3 storage setup
-const storage = multerS3({
-  s3: s3,
-  bucket: process.env.AWS_BUCKET_NAME,
-  acl: 'public-read',
-  contentType: multerS3.AUTO_CONTENT_TYPE,
-  key: function (req, file, cb) {
-    const folder = getS3Folder(file.fieldname, req.baseUrl);
-    const ext = path.extname(file.originalname).toLowerCase();
-    const fileName = `${Date.now()}-${file.fieldname}${ext}`;
-    cb(null, `${folder}/${fileName}`);
-  }
+// Temporary storage in local folder before uploading to S3
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const tempPath = './temp/';
+    if (!fs.existsSync(tempPath)) fs.mkdirSync(tempPath);
+    cb(null, tempPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
 });
 
-// ✅ Final Multer Upload
-const upload = multer({ storage, fileFilter });
+const upload = multer({ storage });
+
+// Function to upload file to S3
+export const uploadToS3 = async (file) => {
+  const fileStream = fs.createReadStream(file.path);
+
+  const uploadParams = {
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: `uploads/${file.filename}`,
+    Body: fileStream,
+    ContentType: file.mimetype,
+  };
+
+  await s3.send(new PutObjectCommand(uploadParams));
+
+  // Cleanup local file
+  fs.unlinkSync(file.path);
+
+  return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/uploads/${file.filename}`;
+};
 
 export default upload;

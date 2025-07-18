@@ -16,6 +16,11 @@ const businessSchema = new mongoose.Schema({
     ref: 'User',
     required: true // ensures every listing is tied to a user
   },
+  plan: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Priceplan',
+  default: null
+},
   location: {
     address: String,
     pincode: String,
