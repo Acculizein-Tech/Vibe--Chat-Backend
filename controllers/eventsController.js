@@ -158,19 +158,22 @@ export const approveEvent = asyncHandler(async (req, res) => {
 export const getEventsByUser = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
-  // Step 1: Find the business owned by this user
-  const business = await Business.findOne({ owner: userId });
+  // Step 1: Find all businesses owned by this user
+  const businesses = await Business.find({ owner: userId });
 
-  if (!business) {
-    return res.status(404).json({ message: 'No business found for this user' });
+  if (!businesses || businesses.length === 0) {
+    return res.status(404).json({ message: 'No businesses found for this user' });
   }
 
-  // Step 2: Fetch events for that business
-  const events = await Event.find({ business: business._id }).sort({ date: 1 });
+  // Extract all business IDs
+  const businessIds = businesses.map(b => b._id);
+
+  // Step 2: Fetch events for all those businesses
+  const events = await Event.find({ business: { $in: businessIds } }).sort({ date: 1 });
 
   res.status(200).json({
     message: 'Events fetched successfully',
-    businessId: business._id,
+    businessIds,
     count: events.length,
     events
   });

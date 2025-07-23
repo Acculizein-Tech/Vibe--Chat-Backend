@@ -1,4 +1,5 @@
 
+
 import Business from '../models/Business.js';
 import Health from '../models/Health.js';
 import Hotel from '../models/Hotel.js';
@@ -9,10 +10,9 @@ import User from '../models/user.js';
 import moment from 'moment'; // Optional for time comparison
 import Leads from '../models/Leads.js';
 import { notifyUser, notifyRole } from '../utils/sendNotification.js';
-//
 import Priceplan from '../models/Priceplan.js';
 import mongoose from 'mongoose';
-
+import { uploadToS3 } from '../middlewares/upload.js';
 const categoryModels = {
   Health,
   Hotel: Hotel,
@@ -71,12 +71,32 @@ export const createBusiness = async (req, res) => {
       open: entry.open || '',
       close: entry.close || ''
     }));
-
+//new line for s3 upload
+ // ✅ Upload files to S3 using uploadToS3
     const files = req.files || {};
-    const profileImage = files.profileImage?.[0]?.location || null;
-    const coverImage = files.coverImage?.[0]?.location || null;
-    const certificateImages = files.certificateImages?.map(f => f.location).slice(0, 5) || [];
-    const galleryImages = files.galleryImages?.map(f => f.location).slice(0, 10) || [];
+    const uploadedFiles = {};
+
+    for (const field in files) {
+      uploadedFiles[field] = [];
+
+      for (const file of files[field]) {
+        const s3Url = await uploadToS3(file, req);
+        uploadedFiles[field].push(s3Url);
+      }
+    }
+
+    const profileImage = uploadedFiles.profileImage?.[0] || null;
+    const coverImage = uploadedFiles.coverImage?.[0] || null;
+    const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+    const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+
+
+    // const files = req.files || {};
+    // const profileImage = files.profileImage?.[0]?.location || null;
+    // const coverImage = files.coverImage?.[0]?.location || null;
+    // const certificateImages = files.certificateImages?.map(f => f.location).slice(0, 5) || [];
+    // const galleryImages = files.galleryImages?.map(f => f.location).slice(0, 10) || [];
 
     let salesExecutive = null;
     if (referralCode) {
@@ -175,7 +195,7 @@ if (cleanPlanId) {
         userId: salesExecutive,
         type: 'NEW_BUSINESS_BY_REFERRAL',
         title: '📢 New Business Listed',
-        message:`A new business "${name}" was listed by your referred user.`,
+        message: `A new business "${name}" was listed by your referred user.`,
         data: {
           businessId: business._id,
           businessName: name,
@@ -190,10 +210,10 @@ if (cleanPlanId) {
         role: 'admin',
         type: 'NEW_BUSINESS_LISTED',
         title: '🆕 Business Listing Submitted',
-        message: `${salesExecutive
-        ? `${name} has been listed and assigned to a sales executive.`
-        : `${name} has been listed but not yet assigned to any sales executive.`}`, 
-       data: {
+        message: salesExecutive
+          ? `"${name}" has been listed and assigned to a sales executive.`
+          : `"${name}" has been listed but not yet assigned to any sales executive.`,
+        data: {
           businessId: business._id,
           ownerId: owner,
           assignedTo: salesExecutive || null,
@@ -204,14 +224,14 @@ if (cleanPlanId) {
         role: 'superadmin',
         type: 'NEW_BUSINESS_LISTED',
         title: '🆕 Business Listing Submitted',
-       message: `${salesExecutive
-  ? `${name} has been listed and assigned to a sales executive.`
-  : `${name} has been listed but not yet assigned to any sales executive.`}`,
+        message: salesExecutive
+          ? `"${name}" has been listed and assigned to a sales executive.`
+          : `"${name}" has been listed but not yet assigned to any sales executive.`,
         data: {
           businessId: business._id,
           ownerId: owner,
           assignedTo: salesExecutive || null,
-          redirectPath:` /superadmin/business/${business._id}`
+          redirectPath: `/superadmin/business/${business._id}`
         }
       })
     ]);
@@ -228,6 +248,10 @@ if (cleanPlanId) {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
+
+
+
+
 
 
 export const updateBusiness = async (req, res) => {
@@ -270,14 +294,34 @@ export const updateBusiness = async (req, res) => {
     /* ------------------------------------------------------------------ */
     /* 4️⃣  Handle file uploads                                           */
     /* ------------------------------------------------------------------ */
-    const files = req.files || {};
+    const { uploadToS3 } = await import('../middlewares/upload.js'); // ✅ dynamic import for ESM
 
-    if (files.profileImage?.length)  business.profileImage  = files.profileImage[0].location;
-    if (files.coverImage?.length)    business.coverImage    = files.coverImage[0].location;
-    if (files.certificateImages?.length)
-      business.certificateImages = files.certificateImages.map(f => f.location).slice(0, 5);
-    if (files.galleryImages?.length)
-      business.galleryImages = files.galleryImages.map(f => f.location).slice(0, 10);
+const files = req.files || {};
+
+if (files.profileImage?.length) {
+  const url = await uploadToS3(files.profileImage[0], req);
+  business.profileImage = url;
+}
+
+if (files.coverImage?.length) {
+  const url = await uploadToS3(files.coverImage[0], req);
+  business.coverImage = url;
+}
+
+if (files.certificateImages?.length) {
+  const certUrls = await Promise.all(
+    files.certificateImages.slice(0, 5).map(file => uploadToS3(file, req))
+  );
+  business.certificateImages = certUrls;
+}
+
+if (files.galleryImages?.length) {
+  const galleryUrls = await Promise.all(
+    files.galleryImages.slice(0, 10).map(file => uploadToS3(file, req))
+  );
+  business.galleryImages = galleryUrls;
+}
+
 
     /* ------------------------------------------------------------------ */
     /* 5️⃣  Update scalar fields                                          */

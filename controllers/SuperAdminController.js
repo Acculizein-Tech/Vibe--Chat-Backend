@@ -106,7 +106,7 @@ export const getAllBusinessListings = asyncHandler(async (req, res) => {
 export const updateUserProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const allowedFields = ['fullName', 'email', 'username', 'city', 'state', 'country', 'zipCode'];
+  const allowedFields = ['fullName', 'email', 'username', 'city', 'state', 'country', 'zipCode', 'role'];
   const updateData = {};
 
   for (let key of allowedFields) {

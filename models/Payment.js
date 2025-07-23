@@ -3,22 +3,28 @@ import mongoose from "mongoose";
 const paymentSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // Assuming you have a User model
+    ref: "User",
     required: true,
+  },
+  business: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Business",
+
   },
   orderId: { type: String, required: true },
   paymentId: { type: String, required: true },
   signature: { type: String, required: true },
 
-  amount: { type: Number, required: true },
+  amount: { type: Number },
+  baseAmount: { type: Number }, // amount before tax
+
   tax: {
     cgst: { type: Number, default: 0 },
     sgst: { type: Number, default: 0 },
     igst: { type: Number, default: 0 },
   },
-  baseAmount: { type: Number, required: true }, // amount before tax
 
-  isUP: { type: Boolean, required: true }, // true if in Uttar Pradesh
+  isUP: { type: Boolean },
 
   status: {
     type: String,
@@ -27,12 +33,22 @@ const paymentSchema = new mongoose.Schema({
   },
 
   billingDetails: {
-    name: String,
+    businessName: String,
+    ownerName: String,
     email: String,
-    contact: String,
-    state: String,
-    address: String,
+    phone: Number,
+    state: String, // e.g., UP, Delhi
+
+      // ✅ Newly Added Fields
+  planName: { type: String }, 
+  planPrice: { type: Number },               // e.g., Basic, Premium
+  currency: { type: String, default: "INR" }, // Support for multi-currency
+  // invoiceUrl: { type: String },               // Link to the generated invoice
+  // paymentMode: { type: String },    
+   
   },
+
+          // UPI, Card, Netbanking, etc.
 
   createdAt: {
     type: Date,
