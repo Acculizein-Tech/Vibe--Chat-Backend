@@ -1,5 +1,3 @@
-
-
 import Business from '../models/Business.js';
 import Health from '../models/Health.js';
 import Hotel from '../models/Hotel.js';

@@ -1,19 +1,25 @@
 // controllers/eventController.js
+// controllers/eventController.js
 import Event from '../models/Events.js';
 import Business from '../models/Business.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { notifyRole, notifyUser } from '../utils/sendNotification.js';
+import { notifyRole } from '../utils/sendNotification.js';
+import { uploadToS3 } from '../middlewares/upload.js';
+import fs from 'fs';
 
-
-//create event with notification
-// ✅ Create new event
+// ✅ Create new event with S3 upload
 export const createEvent = asyncHandler(async (req, res) => {
   const { business, title, description, startTime, endTime, link, location } = req.body;
-  const eventImages = req.file?.path;
 
   const businessExists = await Business.findById(business);
   if (!businessExists) {
     return res.status(404).json({ message: 'Business not found' });
+  }
+
+  let imageUrl = null;
+  if (req.file) {
+    imageUrl = await uploadToS3(req.file);
+    fs.unlinkSync(req.file.req); // clean local temp file
   }
 
   const event = await Event.create({
@@ -24,11 +30,10 @@ export const createEvent = asyncHandler(async (req, res) => {
     endTime,
     link,
     location,
-    eventImages,
-    isApproved: false // Admin will approve later
+    eventImages: imageUrl,
+    isApproved: false
   });
 
-  // ✅ Notify Admin and SuperAdmin
   const notifyPayload = {
     type: 'EVENT_REQUEST',
     title: '📅 New Event Submitted',
@@ -36,7 +41,7 @@ export const createEvent = asyncHandler(async (req, res) => {
     data: {
       eventId: event._id,
       businessId: business,
-      redirectPath: `/admin/events/${event._id}`  // your frontend event approval path
+      redirectPath: `/admin/events/${event._id}`
     }
   };
 
@@ -53,14 +58,15 @@ export const createEvent = asyncHandler(async (req, res) => {
 });
 
 
-
-// ✅ Edit event
+// ✅ Update event with optional image upload to S3
 export const updateEvent = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
 
-  if (req.file?.path) {
-    updates.eventImages = req.file.path;
+  if (req.file) {
+    const imageUrl = await uploadToS3(req.file);
+    updates.eventImages = imageUrl;
+    fs.unlinkSync(req.file.path); // clean local temp file
   }
 
   const updated = await Event.findByIdAndUpdate(id, updates, { new: true });
@@ -74,6 +80,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
     event: updated
   });
 });
+
 
 // ✅ Delete event
 export const deleteEvent = asyncHandler(async (req, res) => {
