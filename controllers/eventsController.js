@@ -8,77 +8,159 @@ import { uploadToS3 } from '../middlewares/upload.js';
 import fs from 'fs';
 
 // ✅ Create new event with S3 upload
+// export const createEvent = asyncHandler(async (req, res) => {
+//   const { business, title, description, startTime, endTime, link, location } = req.body;
+
+//   const businessExists = await Business.findById(business);
+//   if (!businessExists) {
+//     return res.status(404).json({ message: 'Business not found' });
+//   }
+
+//   let imageUrl = null;
+//   if (req.file) {
+//     imageUrl = await uploadToS3(req.file);
+//     fs.unlinkSync(req.file.req); // clean local temp file
+//   }
+
+//   const event = await Event.create({
+//     business,
+//     title,
+//     description,
+//     startTime,
+//     endTime,
+//     link,
+//     location,
+//     eventImages: imageUrl,
+//     isApproved: false
+//   });
+
+//   const notifyPayload = {
+//     type: 'EVENT_REQUEST',
+//     title: '📅 New Event Submitted',
+    // 
+//     data: {
+//       eventId: event._id,
+//       businessId: business,
+//       redirectPath: `/admin/events/${event._id}`
+//     }
+//   };
+
+//   const eventsData = await Promise.all([
+//     notifyRole({ role: 'admin', ...notifyPayload }),
+//     notifyRole({ role: 'superadmin', ...notifyPayload })
+//   ]);
+
+//   res.status(201).json({
+//     message: 'Event created successfully',
+//     event,
+//     eventsData
+//   });
+// });
+
+
+
 export const createEvent = asyncHandler(async (req, res) => {
-  const { business, title, description, startTime, endTime, link, location } = req.body;
+  try {
+    const {
+      title,
+      description,
+      date,
+      location,
+      ...otherFields
+    } = req.body;
 
-  const businessExists = await Business.findById(business);
-  if (!businessExists) {
-    return res.status(404).json({ message: 'Business not found' });
-  }
+    let eventImages = '';
 
-  let imageUrl = null;
-  if (req.file) {
-    imageUrl = await uploadToS3(req.file);
-    fs.unlinkSync(req.file.req); // clean local temp file
-  }
-
-  const event = await Event.create({
-    business,
-    title,
-    description,
-    startTime,
-    endTime,
-    link,
-    location,
-    eventImages: imageUrl,
-    isApproved: false
-  });
-
-  const notifyPayload = {
-    type: 'EVENT_REQUEST',
-    title: '📅 New Event Submitted',
-    message: `An event "${title}" has been submitted and is awaiting approval.`,
-    data: {
-      eventId: event._id,
-      businessId: business,
-      redirectPath: `/admin/events/${event._id}`
+    if (req.file) {
+      const s3Url = await uploadToS3(req.file, req); // Returns full S3 URL
+      eventImages = s3Url;
     }
-  };
 
-  const eventsData = await Promise.all([
-    notifyRole({ role: 'admin', ...notifyPayload }),
-    notifyRole({ role: 'superadmin', ...notifyPayload })
-  ]);
+    const newEvent = new Event({
+      title,
+      description,
+      date,
+      location,
+      eventImages: eventImages,
+      ...otherFields,
+    });
 
-  res.status(201).json({
-    message: 'Event created successfully',
-    event,
-    eventsData
-  });
+    const savedEvent = await newEvent.save();
+    res.status(201).json({
+      success: true,
+      message: 'Event created successfully',
+      // imageUrl: eventsImage, 
+      data: savedEvent,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Event creation failed',
+      error: err.message,
+    });
+  }
 });
 
 
 // ✅ Update event with optional image upload to S3
+// export const updateEvent = asyncHandler(async (req, res) => {
+//   const { id } = req.params;
+//   const updates = req.body;
+
+//   if (req.file) {
+//     const imageUrl = await uploadToS3(req.file);
+//     updates.eventImages = imageUrl;
+//     fs.unlinkSync(req.file.path); // clean local temp file
+//   }
+
+//   const updated = await Event.findByIdAndUpdate(id, updates, { new: true });
+
+//   if (!updated) {
+//     return res.status(404).json({ message: 'Event not found' });
+//   }
+
+//   res.status(200).json({
+//     message: 'Event updated successfully',
+//     event: updated
+//   });
+// });
+// ✅ Edit event
 export const updateEvent = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
+  try {
+    const { id } = req.params;
 
-  if (req.file) {
-    const imageUrl = await uploadToS3(req.file);
-    updates.eventImages = imageUrl;
-    fs.unlinkSync(req.file.path); // clean local temp file
+    let updatedData = { ...req.body };
+
+    if (req.file) {
+      const s3Url = await uploadToS3(req.file, req);
+      updatedData.eventsImage = s3Url;
+    }
+
+    const updatedEvent = await Event.findByIdAndUpdate(
+      id,
+      updatedData,
+      { new: true }
+    );
+
+    if (!updatedEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Event updated successfully',
+      data: updatedEvent,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Event update failed',
+      error: err.message,
+    });
   }
-
-  const updated = await Event.findByIdAndUpdate(id, updates, { new: true });
-
-  if (!updated) {
-    return res.status(404).json({ message: 'Event not found' });
-  }
-
-  res.status(200).json({
-    message: 'Event updated successfully',
-    event: updated
-  });
 });
 
 

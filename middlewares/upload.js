@@ -33,7 +33,8 @@ const storage = multer.diskStorage({
 // File filter logic
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
+  // const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
+  const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.bmp', '.tiff', '.svg'];
   const pdfTypes = ['.pdf'];
 
   if (file.fieldname === 'certificateImages') {
@@ -72,7 +73,7 @@ const getS3KeyPrefix = (req, file) => {
     folder = 'certificates';
   } else if (file.fieldname === 'galleryImages') {
     folder = 'gallery-images';
-  } else if (file.fieldname === 'eventImages') {
+  } else if (file.fieldname === 'eventsImage') {
     folder = 'events-photo';
   }
 
@@ -105,7 +106,7 @@ export const uploadToS3 = async (file, req) => {
     Key: key,
   });
 
-  const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 }); // 1 hour
+  const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
 
   return signedUrl;
 };
