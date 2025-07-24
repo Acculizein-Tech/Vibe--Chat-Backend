@@ -9,7 +9,9 @@ const mediaFields = upload.fields([
   { name: 'coverImage', maxCount: 1 },
   { name: 'certificateImages', maxCount: 5 },
   { name: 'galleryImages', maxCount: 10 },
-  { name: 'eventsImage', maxCount: 1 }
+  { name: 'eventsImage', maxCount: 1 },
+  { name: 'others', maxCount: 5 } // ✅ New field
+
 ]);
 
 router.post('/upload', mediaFields, async (req, res) => {

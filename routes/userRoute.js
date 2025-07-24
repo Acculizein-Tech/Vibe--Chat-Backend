@@ -10,7 +10,7 @@ const router = express.Router();
 // @desc    Get user profile
 // @access  Private
 router.get('/profile/:id', protect, getUserProfile);
-
+ 
 // @route   POST /api/user/profile/:id
 // @desc    Update user profile
 // @access  Private

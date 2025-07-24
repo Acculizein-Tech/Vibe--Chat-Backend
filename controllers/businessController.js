@@ -19,236 +19,238 @@ const categoryModels = {
 
 
 //create business with notification
-export const createBusiness = async (req, res) => {
-  try {
-    const {
-      name,
-      ownerName,
-      owner,
-      location,
-      phone,
-      website,
-      email,
-      socialLinks,
-      businessHours,
-      category,
-      experience,
-      description,
-      referralCode,
-      services,
-      categoryData,
-      planId // ✅ add this
-    } = req.body;
+// export const createBusiness = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       ownerName,
+//       owner,
+//       location,
+//       phone,
+//       website,
+//       email,
+//       socialLinks,
+//       businessHours,
+//       category,
+//       experience,
+//       description,
+//       referralCode,
+//       services,
+//       categoryData,
+//       planId // ✅ add this
+//     } = req.body;
 
-    const CategoryModel = categoryModels[category];
-    if (!CategoryModel) {
-      return res.status(400).json({ message: 'Invalid category model' });
-    }
+//     const CategoryModel = categoryModels[category];
+//     if (!CategoryModel) {
+//       return res.status(400).json({ message: 'Invalid category model' });
+//     }
 
-    const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
-    const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
-    const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
-    const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
+//     const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+//     const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
+//     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
+//     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
 
-    const registerNumber = parsedCategoryData?.registerNumber;
-    if (!registerNumber) {
-      return res.status(400).json({ message: 'Registration number is required' });
-    }
+//     const registerNumber = parsedCategoryData?.registerNumber;
+//     if (!registerNumber) {
+//       return res.status(400).json({ message: 'Registration number is required' });
+//     }
 
-    const existingCategory = await CategoryModel.findOne({ registerNumber });
-    if (existingCategory) {
-      return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
-    }
+//     const existingCategory = await CategoryModel.findOne({ registerNumber });
+//     if (existingCategory) {
+//       return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
+//     }
 
-    let parsedBusinessHours = Array.isArray(businessHours)
-      ? businessHours
-      : JSON.parse(businessHours || '[]');
+//     let parsedBusinessHours = Array.isArray(businessHours)
+//       ? businessHours
+//       : JSON.parse(businessHours || '[]');
 
-    const formattedBusinessHours = parsedBusinessHours.map(entry => ({
-      day: entry.day || '',
-      open: entry.open || '',
-      close: entry.close || ''
-    }));
-//new line for s3 upload
- // ✅ Upload files to S3 using uploadToS3
-    const files = req.files || {};
-    const uploadedFiles = {};
+//     const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+//       day: entry.day || '',
+//       open: entry.open || '',
+//       close: entry.close || ''
+//     }));
+// //new line for s3 upload
+//  // ✅ Upload files to S3 using uploadToS3
+//     const files = req.files || {};
+//     const uploadedFiles = {};
 
-    for (const field in files) {
-      uploadedFiles[field] = [];
+//     for (const field in files) {
+//       uploadedFiles[field] = [];
 
-      for (const file of files[field]) {
-        const s3Url = await uploadToS3(file, req);
-        uploadedFiles[field].push(s3Url);
-      }
-    }
+//       for (const file of files[field]) {
+//         const s3Url = await uploadToS3(file, req);
+//         uploadedFiles[field].push(s3Url);
+//       }
+//     }
 
-    const profileImage = uploadedFiles.profileImage?.[0] || null;
-    const coverImage = uploadedFiles.coverImage?.[0] || null;
-    const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
-    const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+//     const profileImage = uploadedFiles.profileImage?.[0] || null;
+//     const coverImage = uploadedFiles.coverImage?.[0] || null;
+//     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+//     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
 
 
 
-    // const files = req.files || {};
-    // const profileImage = files.profileImage?.[0]?.location || null;
-    // const coverImage = files.coverImage?.[0]?.location || null;
-    // const certificateImages = files.certificateImages?.map(f => f.location).slice(0, 5) || [];
-    // const galleryImages = files.galleryImages?.map(f => f.location).slice(0, 10) || [];
+//     // const files = req.files || {};
+//     // const profileImage = files.profileImage?.[0]?.location || null;
+//     // const coverImage = files.coverImage?.[0]?.location || null;
+//     // const certificateImages = files.certificateImages?.map(f => f.location).slice(0, 5) || [];
+//     // const galleryImages = files.galleryImages?.map(f => f.location).slice(0, 10) || [];
 
-    let salesExecutive = null;
-    if (referralCode) {
-      const refUser = await User.findOne({ referralCode });
-      if (!refUser) {
-        return res.status(400).json({ message: 'Invalid referral code' });
-      }
-      salesExecutive = refUser._id;
-    }
+//     let salesExecutive = null;
+//     if (referralCode) {
+//       const refUser = await User.findOne({ referralCode });
+//       if (!refUser) {
+//         return res.status(400).json({ message: 'Invalid referral code' });
+//       }
+//       salesExecutive = refUser._id;
+//     }
 
-    if (!salesExecutive) {
-      const salesUsers = await User.find({ role: 'sales' });
-      if (salesUsers.length > 0) {
-        const randomIndex = Math.floor(Math.random() * salesUsers.length);
-        salesExecutive = salesUsers[randomIndex]._id;
-      }
-    }
-// ✅ Validate Plan ID if provided
-const rawPlanId = req.body.planId;
-const cleanPlanId = typeof rawPlanId === 'string'
-  ? rawPlanId.trim().replace(/^["']|["']$/g, '')
-  : rawPlanId;
+//     if (!salesExecutive) {
+//       const salesUsers = await User.find({ role: 'sales' });
+//       if (salesUsers.length > 0) {
+//         const randomIndex = Math.floor(Math.random() * salesUsers.length);
+//         salesExecutive = salesUsers[randomIndex]._id;
+//       }
+//     }
+// // ✅ Validate Plan ID if provided
+// const rawPlanId = req.body.planId;
+// const cleanPlanId = typeof rawPlanId === 'string'
+//   ? rawPlanId.trim().replace(/^["']|["']$/g, '')
+//   : rawPlanId;
   
-let validPlanId = null;
-if (cleanPlanId) {
-  const isValid = mongoose.Types.ObjectId.isValid(cleanPlanId);
-  if (!isValid) {
-    return res.status(400).json({ message: 'Invalid plan ID format' });
-  }
+// let validPlanId = null;
+// if (cleanPlanId) {
+//   const isValid = mongoose.Types.ObjectId.isValid(cleanPlanId);
+//   if (!isValid) {
+//     return res.status(400).json({ message: 'Invalid plan ID format' });
+//   }
 
-  const plan = await Priceplan.findById(cleanPlanId);
-  if (!plan) {
-    return res.status(400).json({ message: 'Plan not found' });
-  }
+//   const plan = await Priceplan.findById(cleanPlanId);
+//   if (!plan) {
+//     return res.status(400).json({ message: 'Plan not found' });
+//   }
 
-  validPlanId = plan._id;
-}
+//   validPlanId = plan._id;
+// }
 
 
-    // ✅ Create Business
-    const business = await Business.create({
-      name,
-      ownerName,
-      owner,
-      location: parsedLocation,
-      phone,
-      website,
-      email,
-      socialLinks: parsedSocialLinks,
-      businessHours: formattedBusinessHours,
-      experience,
-      description,
-      profileImage,
-      coverImage,
-      certificateImages,
-      galleryImages,
-      category,
-      categoryModel: category,
-      services: parsedServices,
-      salesExecutive,
-      plan: validPlanId
-    });
+//     // ✅ Create Business
+//     const business = await Business.create({
+//       name,
+//       ownerName,
+//       owner,
+//       location: parsedLocation,
+//       phone,
+//       website,
+//       email,
+//       socialLinks: parsedSocialLinks,
+//       businessHours: formattedBusinessHours,
+//       experience,
+//       description,
+//       profileImage,
+//       coverImage,
+//       certificateImages,
+//       galleryImages,
+//       category,
+//       categoryModel: category,
+//       services: parsedServices,
+//       salesExecutive,
+//       plan: validPlanId
+//     });
 
-    // ✅ Create category-specific document
-    const categoryDoc = await CategoryModel.create({
-      ...parsedCategoryData,
-      business: business._id
-    });
+//     // ✅ Create category-specific document
+//     const categoryDoc = await CategoryModel.create({
+//       ...parsedCategoryData,
+//       business: business._id
+//     });
 
-    // ✅ Update business with category reference (no session used)
-    await Business.findByIdAndUpdate(business._id, {
-      $set: { categoryRef: categoryDoc._id }
-    });
+//     // ✅ Update business with category reference (no session used)
+//     await Business.findByIdAndUpdate(business._id, {
+//       $set: { categoryRef: categoryDoc._id }
+//     });
 
-    // 📇 Create Lead (not in transaction)
-    try {
-      const user = await User.findById(owner).select('fullName email');
-      if (user) {
-        await Leads.create({
-          name: user.fullName,
-          contact: user.email,
-          businessType: category,
-          status: 'Interested',
-          notes: 'Business listed on website',
-          salesUser: salesExecutive || null,
-          followUpDate: new Date(Date.now() + 2 * 60 * 1000)
-        });
-      }
-    } catch (leadErr) {
-      console.warn("⚠️ Lead creation failed:", leadErr.message);
-    }
+//     // 📇 Create Lead (not in transaction)
+//     try {
+//       const user = await User.findById(owner).select('fullName email');
+//       if (user) {
+//         await Leads.create({
+//           name: user.fullName,
+//           contact: user.email,
+//           businessType: category,
+//           status: 'Interested',
+//           notes: 'Business listed on website',
+//           salesUser: salesExecutive || null,
+//           followUpDate: new Date(Date.now() + 2 * 60 * 1000)
+//         });
+//       }
+//     } catch (leadErr) {
+//       console.warn("⚠️ Lead creation failed:", leadErr.message);
+//     }
 
-    // 🔔 Notifications
-    if (salesExecutive) {
-      await notifyUser({
-        userId: salesExecutive,
-        type: 'NEW_BUSINESS_BY_REFERRAL',
-        title: '📢 New Business Listed',
-        message: `A new business "${name}" was listed by your referred user.`,
-        data: {
-          businessId: business._id,
-          businessName: name,
-          userId: owner,
-          redirectPath: `/sales/business/${business._id}`
-        }
-      });
-    }
+//     // 🔔 Notifications
+//     if (salesExecutive) {
+//       await notifyUser({
+//         userId: salesExecutive,
+//         type: 'NEW_BUSINESS_BY_REFERRAL',
+//         title: '📢 New Business Listed',
+//         message: `A new business "${name}" was listed by your referred user.`,
+//         data: {
+//           businessId: business._id,
+//           businessName: name,
+//           userId: owner,
+//           redirectPath: `/sales/business/${business._id}`
+//         }
+//       });
+//     }
 
-    await Promise.all([
-      notifyRole({
-        role: 'admin',
-        type: 'NEW_BUSINESS_LISTED',
-        title: '🆕 Business Listing Submitted',
-        message: salesExecutive
-          ? `"${name}" has been listed and assigned to a sales executive.`
-          : `"${name}" has been listed but not yet assigned to any sales executive.`,
-        data: {
-          businessId: business._id,
-          ownerId: owner,
-          assignedTo: salesExecutive || null,
-          redirectPath: `/admin/business/${business._id}`
-        }
-      }),
-      notifyRole({
-        role: 'superadmin',
-        type: 'NEW_BUSINESS_LISTED',
-        title: '🆕 Business Listing Submitted',
-        message: salesExecutive
-          ? `"${name}" has been listed and assigned to a sales executive.`
-          : `"${name}" has been listed but not yet assigned to any sales executive.`,
-        data: {
-          businessId: business._id,
-          ownerId: owner,
-          assignedTo: salesExecutive || null,
-          redirectPath: `/superadmin/business/${business._id}`
-        }
-      })
-    ]);
+//     await Promise.all([
+//       notifyRole({
+//         role: 'admin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/admin/business/${business._id}`
+//         }
+//       }),
+//       notifyRole({
+//         role: 'superadmin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/superadmin/business/${business._id}`
+//         }
+//       })
+//     ]);
 
-    const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
+//     const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
 
-    res.status(201).json({
-      message: 'Business created successfully',
-      business: finalBusiness
-    });
+//     res.status(201).json({
+//       message: 'Business created successfully',
+//       business: finalBusiness
+//     });
 
-  } catch (error) {
-    console.error('❌ Error creating business:', error);
-    res.status(500).json({ message: 'Server Error', error: error.message });
-  }
+//   } catch (error) {
+//     console.error('❌ Error creating business:', error);
+//     res.status(500).json({ message: 'Server Error', error: error.message });
+//   }
+// };
+
+
+
+export const createBusiness = async (req, res) => {
 };
-
-
-
 
 
 
@@ -519,155 +521,6 @@ export const getAllBusinesses = async (req, res) => {
     });
   }
 };
-
-
-
-  
-//get the business by id with reveiws data
-// export const getBusinessId = asyncHandler(async (req, res) => {
-//   const { id } = req.params;
-
-//   // 🔍 1. Find the business by ID
-//   const business = await Business.findById(id).lean();
-//   if (!business) {
-//     console.log('❌ Business not found with id:', id);
-//     return res.status(404).json({ message: 'Business not found' });
-//   }
-
-//   // 🧠 2. Resolve dynamic category model and fetch category-specific data
-//   const CategoryModel = categoryModels[business.categoryModel];
-//   let categoryData = {};
-
-//   if (CategoryModel && business.categoryRef) {
-//     const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
-//     if (categoryDoc) {
-//       const { _id, __v, ...rest } = categoryDoc;
-//       categoryData = rest;
-//     }
-//   }
-
-//   // 💬 3. Fetch reviews related to this business
-//   const reviews = await Review.find({ business: id })
-//     .populate('user', 'fullName profile.avatar')
-//     .sort({ createdAt: -1 }) // latest first
-//     .lean();
-
-//   // 🧾 4. Format reviews
-//   const formattedReviews = reviews.map((r) => ({
-//     reviewerName: r.user?.fullName || 'Anonymous',
-//     reviewerAvatar: r.user?.profile?.avatar || null,
-//     rating: r.rating,
-//     comment: r.comment,
-//     time: r.createdAt,
-//   }));
-
-//   // 📦 5. Combine everything
-//   const fullData = {
-//     ...business,
-//     categoryData,
-//     reviews: formattedReviews,
-//   };
-
-//   res.status(200).json({
-//     message: 'Business fetched successfully',
-//     business: fullData,
-//   });
-// });
-
-// export const getBusinessId = async (req, res) => {
-
-
-
-//   try {
-//     const { id } = req.params;
-
-//     // Step 1: Fetch business
-//     const businessDoc = await Business.findById(id);
-//     if (!businessDoc) {
-//       return res.status(404).json({ message: 'Business not found' });
-//     }
-
-//     // Step 2: Determine IP
-//     let userIp =
-//       req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
-//     if (userIp.startsWith('::ffff:')) {
-//       userIp = userIp.replace('::ffff:', '');
-//     }
-//     console.log('👀 Visitor IP:', userIp);
-
-//     // Step 2.5: Ensure viewers is initialized
-//     if (!Array.isArray(businessDoc.viewers)) {
-//       businessDoc.viewers = [];
-//     }
-
-//     // Step 3: Check if IP has viewed in the last 24h
-//     const now = new Date();
-//     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-//     const hasViewed = businessDoc.viewers.some(
-//       (v) => v.ip === userIp && new Date(v.viewedAt) > oneDayAgo
-//     );
-
-//     if (!hasViewed) {
-//   await Business.updateOne(
-//     { _id: businessDoc._id },
-//     {
-//       $inc: { views: 1 },
-//       $push: { viewers: { ip: userIp, viewedAt: now } }
-//     }
-//   );
-//   console.log('✅ Counted new unique view from', userIp);
-// } else {
-//   console.log('🔁 Repeated view from same IP in last 24h:', userIp);
-// }
-
-
-//     // Step 4: Get plain object
-//     const business = businessDoc.toObject();
-
-//     // Step 5: Load categoryData
-//     let categoryData = {};
-//     const CategoryModel = categoryModels[business.categoryModel];
-//     if (CategoryModel && business.categoryRef) {
-//       const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
-//       if (categoryDoc) {
-//         const { _id, __v, ...rest } = categoryDoc;
-//         categoryData = rest;
-//       }
-//     }
-
-//     // Step 6: Load reviews
-//     const reviews = await Review.find({ business: id })
-//       .populate('user', 'fullName profile.avatar')
-//       .sort({ createdAt: -1 })
-//       .lean();
-
-//     const formattedReviews = reviews.map((r) => ({
-//       reviewerName: r.user?.fullName || 'Anonymous',
-//       reviewerAvatar: r.user?.profile?.avatar || null,
-//       rating: r.rating,
-//       comment: r.comment,
-//       time: r.createdAt,
-//     }));
-
-//     // Step 7: Final Response
-//     const fullData = {
-//       ...business,
-//       categoryData,
-//       reviews: formattedReviews,
-//       totalViews: businessDoc.views || 0, // make sure to read from saved doc
-//     };
-
-//     res.status(200).json({
-//       message: 'Business fetched successfully',
-//       business: fullData,
-//     });
-
-//   } catch (error) {
-//     console.error('❌ Error fetching business by ID:', error);
-//     res.status(500).json({ message: 'Server error', error: error.message });
-//   }
-// };
 
 
 //get user view
@@ -944,3 +797,5 @@ export const getBusinessBySalesId = asyncHandler(async (req, res) => {
     businesses: enrichedBusinesses,
   });
 });
+
+//export const businessCount

@@ -43,7 +43,7 @@ const fileFilter = (req, file, cb) => {
       : cb(new Error('Only PDF files are allowed for certificateImages'));
   }
 
-  const allowedImageFields = ['profileImage', 'coverImage', 'galleryImages', 'bannerImage'];
+  const allowedImageFields = ['profileImage', 'coverImage', 'galleryImages', 'bannerImage', 'others'];
   if (allowedImageFields.includes(file.fieldname)) {
     return imageTypes.includes(ext)
       ? cb(null, true)

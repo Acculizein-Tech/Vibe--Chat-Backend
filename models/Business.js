@@ -21,6 +21,16 @@ const businessSchema = new mongoose.Schema({
   ref: 'Priceplan',
   default: null
 },
+paymentStatus: {
+  type: String,
+  enum: ['pending', 'success', 'failed'],
+  default: 'pending'
+},
+lastPayment: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Payment',
+  default: null
+},
   location: {
     address: String,
     pincode: String,

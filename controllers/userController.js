@@ -5,6 +5,7 @@ import asyncHandler from '../utils/asyncHandler.js';
 
 import Business from '../models/Business.js';
 import Review from '../models/Review.js';
+import { uploadToS3 } from '../middlewares/upload.js';
 
 // @desc    Get current user details
 // @route   GET /api/user/profile/:id
@@ -31,49 +32,90 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 // @desc    Update user profile
 // @route   POST /api/user/profile/:id
 // @access  Private
-export const updateUserProfile = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+// export const updateUserProfile = asyncHandler(async (req, res) => {
+//   const { id } = req.params;
 
-  const allowedFields = ['fullName', 'email', 'username', 'city', 'state', 'country', 'zipCode'];
-  const updateData = {};
+//   const allowedFields = ['fullName', 'email', 'username', 'city', 'state', 'country', 'zipCode'];
+//   const updateData = {};
 
-  for (let key of allowedFields) {
-    if (req.body[key] !== undefined) {
-      updateData[key] = req.body[key];
-    }
-  }
+//   for (let key of allowedFields) {
+//     if (req.body[key] !== undefined) {
+//       updateData[key] = req.body[key];
+//     }
+//   }
 
-  // ✅ Handle nested profile fields
-  updateData.profile = {
-    name: req.body['profile.name'],
-    phone: req.body['profile.phone'],
-    photo: req.file ? `/uploads/others/${req.file.filename}` : undefined
-  };
+//   // ✅ Handle nested profile fields
+//   updateData.profile = {
+//     name: req.body['profile.name'],
+//     phone: req.body['profile.phone'],
+//     photo: req.file ? `/uploads/others/${req.file.filename}` : undefined
+//   };
 
-  // Remove undefined fields from profile
-  // Object.keys(updateData.profile).forEach(
-  //   (key) => updateData.profile[key] === undefined && delete updateData.profile[key]
-  // );
+//   // Remove undefined fields from profile
+//   // Object.keys(updateData.profile).forEach(
+//   //   (key) => updateData.profile[key] === undefined && delete updateData.profile[key]
+//   // );
 
-  const updatedUser = await User.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  }).select('-password -refreshTokens');
+//   const updatedUser = await User.findByIdAndUpdate(id, updateData, {
+//     new: true,
+//     runValidators: true,
+//   }).select('-password -refreshTokens');
 
-  if (!updatedUser) {
-    res.status(404);
-    throw new Error('User not found');
-  }
+//   if (!updatedUser) {
+//     res.status(404);
+//     throw new Error('User not found');
+//   }
 
-  res.status(200).json({
-    status: 'success',
-    message: 'User updated successfully',
-    data: updatedUser,
-  });
-});
+//   res.status(200).json({
+//     status: 'success',
+//     message: 'User updated successfully',
+//     data: updatedUser,
+//   });
+// });
 
 //update the password
 
+export const updateUserProfile = asyncHandler(async (req, res) => {
+  try {
+    const { email, phone, zip } = req.body;
+
+    let avatarUrl = '';
+
+    // Agar image bheji hai to S3 pr upload karo
+    if (req.file) {
+      const s3Url = await uploadToS3(req.file, req); // returns full URL
+      avatarUrl = s3Url;
+    }
+
+    const updatedFields = {
+      email,
+      phone,
+      zip,
+    };
+
+    if (avatarUrl) {
+      updatedFields['profile.avatar'] = avatarUrl;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: updatedFields },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedUser,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: err.message,
+    });
+  }
+});
 
 
 
