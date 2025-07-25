@@ -95,20 +95,39 @@ export const uploadToS3 = async (file, req) => {
     ContentType: file.mimetype,
   };
 
-  await s3.send(new PutObjectCommand(uploadParams));
+  // await s3.send(new PutObjectCommand(uploadParams));
 
-  // Remove local file after upload
-  fs.unlinkSync(file.path);
+  // // Remove local file after upload
+  // fs.unlinkSync(file.path);
+    try {
+    await s3.send(new PutObjectCommand(uploadParams));
+    fs.unlinkSync(file.path);
+  } catch (err) {
+    console.error(`❌ Failed to upload "${file.filename}" to S3:`, err.message);
+    return null;
+  }
 
-  // Generate pre-signed URL (valid for 1 hour)
-  const getCommand = new GetObjectCommand({
-    Bucket: process.env.AWS_BUCKET_NAME,
-    Key: key,
-  });
+  // // Generate pre-signed URL (valid for 1 hour)
+  // const getCommand = new GetObjectCommand({
+  //   Bucket: process.env.AWS_BUCKET_NAME,
+  //   Key: key,
+  // });
 
-  const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
+  // const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
 
-  return signedUrl;
+  // return signedUrl;
+
+    try {
+    const getCommand = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+    });
+    const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
+    return signedUrl;
+  } catch (err) {
+    console.error(`⚠️ Failed to generate signed URL for "${file.filename}":`, err.message);
+    return null;
+  }
 };
 
 export default upload;

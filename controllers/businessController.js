@@ -250,7 +250,245 @@ const categoryModels = {
 
 
 export const createBusiness = async (req, res) => {
+  try {
+    const {
+      name,
+      ownerName,
+      owner,
+      location,
+      phone,
+      website,
+      email,
+      socialLinks,
+      businessHours,
+      category,
+      experience,
+      description,
+      referralCode,
+      services,
+      categoryData,
+      planId,
+      paymentId // 🔄 NEW: expected only for paid plan
+    } = req.body;
+    console.log(req.body);
+    const CategoryModel = categoryModels[category];
+    if (!CategoryModel) {
+      return res.status(400).json({ message: 'Invalid category model' });
+    }
+
+    const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+    const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
+    const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
+    const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
+
+    const registerNumber = parsedCategoryData?.registerNumber;
+    if (!registerNumber) {
+      return res.status(400).json({ message: 'Registration number is required' });
+    }
+
+    const existingCategory = await CategoryModel.findOne({ registerNumber });
+    if (existingCategory) {
+      return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
+    }
+
+    let parsedBusinessHours = Array.isArray(businessHours)
+      ? businessHours
+      : JSON.parse(businessHours || '[]');
+
+    const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+      day: entry.day || '',
+      open: entry.open || '',
+      close: entry.close || ''
+    }));
+
+    // ✅ Upload to S3
+    const files = req.files || {};
+    const uploadedFiles = {};
+    for (const field in files) {
+      uploadedFiles[field] = [];
+      for (const file of files[field]) {
+        const s3Url = await uploadToS3(file, req);
+        uploadedFiles[field].push(s3Url);
+      }
+    }
+
+    const profileImage = uploadedFiles.profileImage?.[0] || null;
+    const coverImage = uploadedFiles.coverImage?.[0] || null;
+    const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+    const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+    let salesExecutive = null;
+    if (referralCode) {
+      const refUser = await User.findOne({ referralCode });
+      if (!refUser) {
+        return res.status(400).json({ message: 'Invalid referral code' });
+      }
+      salesExecutive = refUser._id;
+    }
+
+    if (!salesExecutive) {
+      const salesUsers = await User.find({ role: 'sales' });
+      if (salesUsers.length > 0) {
+        const randomIndex = Math.floor(Math.random() * salesUsers.length);
+        salesExecutive = salesUsers[randomIndex]._id;
+      }
+    }
+
+    // ✅ Plan validation
+    const rawPlanId = planId;
+    const cleanPlanId = typeof rawPlanId === 'string'
+      ? rawPlanId.trim().replace(/^["']|["']$/g, '')
+      : rawPlanId;
+
+    let validPlan = null;
+    if (cleanPlanId) {
+      const isValid = mongoose.Types.ObjectId.isValid(cleanPlanId);
+      if (!isValid) {
+        return res.status(400).json({ message: 'Invalid plan ID format' });
+      }
+
+      const plan = await Priceplan.findById(cleanPlanId);
+      if (!plan) {
+        return res.status(400).json({ message: 'Plan not found' });
+      }
+      validPlan = plan;
+
+      // 🔄 NEW: If plan is paid, payment must be completed and passed
+      if (plan.price > 0) {
+        if (!paymentId) {
+          return res.status(400).json({ message: 'Payment ID is required for paid plans' });
+        }
+
+        const payment = await Payment.findOne({ paymentId });
+
+        if (!payment || payment.status !== 'success') {
+          return res.status(400).json({ message: 'Payment not found or not verified' });
+        }
+
+        // 🔗 Optional: Link payment to business later after business is created
+      }
+    }
+
+    // ✅ Create Business
+    const business = await Business.create({
+      name,
+      ownerName,
+      owner,
+      location: parsedLocation,
+      phone,
+      website,
+      email,
+      socialLinks: parsedSocialLinks,
+      businessHours: formattedBusinessHours,
+      experience,
+      description,
+      profileImage,
+      coverImage,
+      certificateImages,
+      galleryImages,
+      category,
+      categoryModel: category,
+      services: parsedServices,
+      salesExecutive,
+      plan: validPlan?._id || null
+    });
+
+    // 🔗 Optional: If paid plan, update payment to link with business
+    if (validPlan?.price > 0 && paymentId) {
+      await Payment.findOneAndUpdate(
+        { paymentId },
+        { $set: { business: business._id } },
+        { new: true }
+      );
+    }
+
+    const categoryDoc = await CategoryModel.create({
+      ...parsedCategoryData,
+      business: business._id
+    });
+
+    await Business.findByIdAndUpdate(business._id, {
+      $set: { categoryRef: categoryDoc._id }
+    });
+
+    // 📇 Create Lead
+    try {
+      const user = await User.findById(owner).select('fullName email');
+      if (user) {
+        await Leads.create({
+          name: user.fullName,
+          contact: user.email,
+          businessType: category,
+          status: 'Interested',
+          notes: 'Business listed on website',
+          salesUser: salesExecutive || null,
+          followUpDate: new Date(Date.now() + 2 * 60 * 1000)
+        });
+      }
+    } catch (leadErr) {
+      console.warn("⚠️ Lead creation failed:", leadErr.message);
+    }
+
+    // 🔔 Notify
+    if (salesExecutive) {
+      await notifyUser({
+        userId: salesExecutive,
+        type: 'NEW_BUSINESS_BY_REFERRAL',
+        title: '📢 New Business Listed',
+        message: `A new business "${name}" was listed by your referred user.`,
+        data: {
+          businessId: business._id,
+          businessName: name,
+          userId: owner,
+          redirectPath: `/sales/business/${business._id}`
+        }
+      });
+    }
+
+    await Promise.all([
+      notifyRole({
+        role: 'admin',
+        type: 'NEW_BUSINESS_LISTED',
+        title: '🆕 Business Listing Submitted',
+        message: salesExecutive
+          ? `"${name}" has been listed and assigned to a sales executive.`
+          : `"${name}" has been listed but not yet assigned to any sales executive.`,
+        data: {
+          businessId: business._id,
+          ownerId: owner,
+          assignedTo: salesExecutive || null,
+          redirectPath: `/admin/business/${business._id}`
+        }
+      }),
+      notifyRole({
+        role: 'superadmin',
+        type: 'NEW_BUSINESS_LISTED',
+        title: '🆕 Business Listing Submitted',
+        message: salesExecutive
+          ? `"${name}" has been listed and assigned to a sales executive.`
+          : `"${name}" has been listed but not yet assigned to any sales executive.`,
+        data: {
+          businessId: business._id,
+          ownerId: owner,
+          assignedTo: salesExecutive || null,
+          redirectPath: `/superadmin/business/${business._id}`
+        }
+      })
+    ]);
+
+    const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
+    
+    res.status(201).json({
+      message: 'Business created successfully',
+      business: finalBusiness
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating business:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
 };
+
 
 
 
@@ -798,4 +1036,32 @@ export const getBusinessBySalesId = asyncHandler(async (req, res) => {
   });
 });
 
-//export const businessCount
+
+// Get count of businesses by category
+export const businessCountByCategory = asyncHandler(async (req, res) => {
+  try {
+    const counts = await Business.aggregate([
+      {
+        $group: {
+          _id: '$category',
+          total: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          category: '$_id',
+          total: 1
+        }
+      },
+      {
+        $sort: { category: 1 } // optional: sorts alphabetically
+      }
+    ]);
+
+    res.status(200).json({ success: true, data: counts });
+  } catch (error) {
+    console.error('❌ Error in category-wise count:', error.message);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
