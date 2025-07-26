@@ -139,3 +139,73 @@ export const getPayments = asyncHandler(async (req, res) => {
     payments,
   });
 });
+
+//get the payment data by user id
+export const getPaymentsByUserId = asyncHandler(async (req, res) => { 
+  const userId = req.user._id;
+
+  const payments = await Payment.find({ user: userId }).populate("user").sort({ createdAt: -1 });
+
+  if (!payments || payments.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "No payments found for this user",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    payments,
+  });
+});
+
+// ✅ Step 4: Generate Invoice PDF
+// export const generateInvoice = asyncHandler(async (req, res) => { 
+//   const { paymentId } = req.params;
+
+//   if (!paymentId) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Payment ID is required"
+//     });
+//   }
+
+//   const payment = await Payment.findById(paymentId).populate("user");
+
+//   if (!payment) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "Payment not found"
+//     });
+//   }
+
+//   // Generate PDF invoice using a library like pdfkit or any other
+//   const invoicePDF = await generatePDFInvoice(payment);
+
+//   res.status(200).json({
+//     success: true,
+//     message: "Invoice generated successfully",
+//     data: invoicePDF
+//   });
+// });
+
+//get the all verify payment details to superadmin
+export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
+  const payments = await Payment.find({ status: "success" })
+    .populate("user")
+    .sort({ createdAt: -1 });
+
+  if (!payments || payments.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "No verified payments found",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    payments,
+  });
+});

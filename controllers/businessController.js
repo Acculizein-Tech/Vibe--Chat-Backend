@@ -9,12 +9,17 @@ import moment from 'moment'; // Optional for time comparison
 import Leads from '../models/Leads.js';
 import { notifyUser, notifyRole } from '../utils/sendNotification.js';
 import Priceplan from '../models/Priceplan.js';
+import Payment from '../models/Payment.js';
+import Education from '../models/Education.js';
+import Garment from '../models/Garment.js'; 
 import mongoose from 'mongoose';
 import { uploadToS3 } from '../middlewares/upload.js';
 const categoryModels = {
   Health,
   Hotel: Hotel,
-  BeautySpa: BeautySpa
+  BeautySpa: BeautySpa,
+  Education: Education,
+  Garment: Garment
 };
 
 
@@ -249,6 +254,246 @@ const categoryModels = {
 
 
 
+// export const createBusiness = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       ownerName,
+//       owner,
+//       location,
+//       phone,
+//       website,
+//       email,
+//       socialLinks,
+//       businessHours,
+//       category,
+//       experience,
+//       description,
+//       referralCode,
+//       services,
+//       categoryData,
+//       planId,
+//       paymentId // 🔄 NEW: expected only for paid plan
+//     } = req.body;
+//     console.log(req.body);
+//     const CategoryModel = categoryModels[category];
+//     if (!CategoryModel) {
+//       return res.status(400).json({ message: 'Invalid category model' });
+//     }
+
+//     const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+//     const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
+//     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
+//     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
+
+//     const registerNumber = parsedCategoryData?.registerNumber;
+//     if (!registerNumber) {
+//       return res.status(400).json({ message: 'Registration number is required' });
+//     }
+
+//     const existingCategory = await CategoryModel.findOne({ registerNumber });
+//     if (existingCategory) {
+//       return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
+//     }
+
+//     let parsedBusinessHours = Array.isArray(businessHours)
+//       ? businessHours
+//       : JSON.parse(businessHours || '[]');
+
+//     const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+//       day: entry.day || '',
+//       open: entry.open || '',
+//       close: entry.close || ''
+//     }));
+
+//     // ✅ Upload to S3
+//     const files = req.files || {};
+//     const uploadedFiles = {};
+//     for (const field in files) {
+//       uploadedFiles[field] = [];
+//       for (const file of files[field]) {
+//         const s3Url = await uploadToS3(file, req);
+//         uploadedFiles[field].push(s3Url);
+//       }
+//     }
+
+//     const profileImage = uploadedFiles.profileImage?.[0] || null;
+//     const coverImage = uploadedFiles.coverImage?.[0] || null;
+//     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+//     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+//     let salesExecutive = null;
+//     if (referralCode) {
+//       const refUser = await User.findOne({ referralCode });
+//       if (!refUser) {
+//         return res.status(400).json({ message: 'Invalid referral code' });
+//       }
+//       salesExecutive = refUser._id;
+//     }
+
+//     if (!salesExecutive) {
+//       const salesUsers = await User.find({ role: 'sales' });
+//       if (salesUsers.length > 0) {
+//         const randomIndex = Math.floor(Math.random() * salesUsers.length);
+//         salesExecutive = salesUsers[randomIndex]._id;
+//       }
+//     }
+
+//     // ✅ Plan validation
+//     const rawPlanId = planId;
+//     const cleanPlanId = typeof rawPlanId === 'string'
+//       ? rawPlanId.trim().replace(/^["']|["']$/g, '')
+//       : rawPlanId;
+
+//     let validPlan = null;
+//     if (cleanPlanId) {
+//       const isValid = mongoose.Types.ObjectId.isValid(cleanPlanId);
+//       if (!isValid) {
+//         return res.status(400).json({ message: 'Invalid plan ID format' });
+//       }
+
+//       const plan = await Priceplan.findById(cleanPlanId);
+//       if (!plan) {
+//         return res.status(400).json({ message: 'Plan not found' });
+//       }
+//       validPlan = plan;
+
+//       // 🔄 NEW: If plan is paid, payment must be completed and passed
+//       if (plan.price > 0) {
+//         if (!paymentId) {
+//           return res.status(400).json({ message: 'Payment ID is required for paid plans' });
+//         }
+
+//         const payment = await Payment.findOne({ paymentId });
+
+//         if (!payment || payment.status !== 'success') {
+//           return res.status(400).json({ message: 'Payment not found or not verified' });
+//         }
+
+//         // 🔗 Optional: Link payment to business later after business is created
+//       }
+//     }
+
+//     // ✅ Create Business
+//     const business = await Business.create({
+//       name,
+//       ownerName,
+//       owner,
+//       location: parsedLocation,
+//       phone,
+//       website,
+//       email,
+//       socialLinks: parsedSocialLinks,
+//       businessHours: formattedBusinessHours,
+//       experience,
+//       description,
+//       profileImage,
+//       coverImage,
+//       certificateImages,
+//       galleryImages,
+//       category,
+//       categoryModel: category,
+//       services: parsedServices,
+//       salesExecutive,
+//       plan: validPlan?._id || null
+//     });
+
+//     // 🔗 Optional: If paid plan, update payment to link with business
+//     if (validPlan?.price > 0 && paymentId) {
+//       await Payment.findOneAndUpdate(
+//         { paymentId },
+//         { $set: { business: business._id } },
+//         { new: true }
+//       );
+//     }
+
+//     const categoryDoc = await CategoryModel.create({
+//       ...parsedCategoryData,
+//       business: business._id
+//     });
+
+//     await Business.findByIdAndUpdate(business._id, {
+//       $set: { categoryRef: categoryDoc._id }
+//     });
+
+//     // 📇 Create Lead
+//     try {
+//       const user = await User.findById(owner).select('fullName email');
+//       if (user) {
+//         await Leads.create({
+//           name: user.fullName,
+//           contact: user.email,
+//           businessType: category,
+//           status: 'Interested',
+//           notes: 'Business listed on website',
+//           salesUser: salesExecutive || null,
+//           followUpDate: new Date(Date.now() + 2 * 60 * 1000)
+//         });
+//       }
+//     } catch (leadErr) {
+//       console.warn("⚠️ Lead creation failed:", leadErr.message);
+//     }
+
+//     // 🔔 Notify
+//     if (salesExecutive) {
+//       await notifyUser({
+//         userId: salesExecutive,
+//         type: 'NEW_BUSINESS_BY_REFERRAL',
+//         title: '📢 New Business Listed',
+//         message: `A new business "${name}" was listed by your referred user.`,
+//         data: {
+//           businessId: business._id,
+//           businessName: name,
+//           userId: owner,
+//           redirectPath: `/sales/business/${business._id}`
+//         }
+//       });
+//     }
+
+//     await Promise.all([
+//       notifyRole({
+//         role: 'admin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/admin/business/${business._id}`
+//         }
+//       }),
+//       notifyRole({
+//         role: 'superadmin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/superadmin/business/${business._id}`
+//         }
+//       })
+//     ]);
+
+//     const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
+    
+//     res.status(201).json({
+//       message: 'Business created successfully',
+//       business: finalBusiness
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Error creating business:', error);
+//     res.status(500).json({ message: 'Server Error', error: error.message });
+//   }
+// };
+
 export const createBusiness = async (req, res) => {
   try {
     const {
@@ -291,26 +536,66 @@ export const createBusiness = async (req, res) => {
       return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
     }
 
-    let parsedBusinessHours = Array.isArray(businessHours)
-      ? businessHours
-      : JSON.parse(businessHours || '[]');
+    // let parsedBusinessHours = Array.isArray(businessHours)
+    //   ? businessHours
+    //   : JSON.parse(businessHours || '[]');
 
-    const formattedBusinessHours = parsedBusinessHours.map(entry => ({
-      day: entry.day || '',
-      open: entry.open || '',
-      close: entry.close || ''
-    }));
+    // const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+    //   day: entry.day || '',
+    //   open: entry.open || '',
+    //   close: entry.close || ''
+    // }));
+     let parsedBusinessHours = [];
+
+try {
+  parsedBusinessHours = Array.isArray(businessHours)
+    ? businessHours
+    : JSON.parse(businessHours || '[]');
+} catch (err) {
+  return res.status(400).json({ message: 'Invalid businessHours format' });
+}
+
+const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+  day: entry.day || '',
+  isWorking: entry.isWorking ?? true,
+  is24Hour: entry.is24Hour ?? false,
+  is24HourClose: entry.is24HourClose ?? false,
+  shifts: Array.isArray(entry.shifts)
+    ? entry.shifts
+        .filter(shift => shift.open && shift.close)
+        .map(shift => ({
+          open: shift.open,
+          close: shift.close
+        }))
+    : []
+}));
 
     // ✅ Upload to S3
     const files = req.files || {};
     const uploadedFiles = {};
+    // for (const field in files) {
+    //   uploadedFiles[field] = [];
+    //   for (const file of files[field]) {
+    //     const s3Url = await uploadToS3(file, req);
+    //     uploadedFiles[field].push(s3Url);
+    //   }
+    // }
     for (const field in files) {
-      uploadedFiles[field] = [];
-      for (const file of files[field]) {
-        const s3Url = await uploadToS3(file, req);
+  uploadedFiles[field] = [];
+
+  for (const file of files[field]) {
+    try {
+      const s3Url = await uploadToS3(file, req);
+      if (s3Url) {
         uploadedFiles[field].push(s3Url);
+      } else {
+        console.warn(`⚠️ Upload failed for file ${file.originalname || 'unknown'} in field "${field}"`);
       }
+    } catch (err) {
+      console.warn(`❌ Error uploading file "${file.originalname || 'unknown'}" in field "${field}":`, err.message);
     }
+  }
+}
 
     const profileImage = uploadedFiles.profileImage?.[0] || null;
     const coverImage = uploadedFiles.coverImage?.[0] || null;
@@ -492,6 +777,150 @@ export const createBusiness = async (req, res) => {
 
 
 
+
+// export const updateBusiness = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     // 1️⃣  Extract raw form-data values
+//     const {
+//       name,
+//       ownerName,
+//       phone,
+//       website,
+//       email,
+//       category: newCategory,     // in case of category change
+//       experience,
+//       description,
+//       services: rawServices,
+//       location: rawLocation,
+//       socialLinks: rawSocialLinks,
+//       businessHours: rawBusinessHours
+//     } = req.body;
+
+//     // 2️⃣  Parse JSON-stringified fields
+//     let location = {};
+//     let socialLinks = {};
+//     let businessHoursArr = [];
+//     let categoryData = {};
+//     let services = {};
+
+//     try { location = rawLocation ? JSON.parse(rawLocation) : {}; }        catch { return res.status(400).json({ message: 'Invalid JSON in location' }); }
+//     try { socialLinks = rawSocialLinks ? JSON.parse(rawSocialLinks) : {}; }catch { return res.status(400).json({ message: 'Invalid JSON in socialLinks' }); }
+//     try { businessHoursArr = rawBusinessHours ? JSON.parse(rawBusinessHours) : []; } catch { return res.status(400).json({ message: 'Invalid JSON in businessHours' }); }
+//     try { categoryData = req.body.categoryData ? JSON.parse(req.body.categoryData) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in categoryData' }); }
+//     try { services = rawServices ? JSON.parse(rawServices) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in services' }); }
+
+//     // 3️⃣  Fetch existing business
+//     const business = await Business.findById(id);
+//     if (!business) return res.status(404).json({ message: 'Business not found' });
+
+//     /* ------------------------------------------------------------------ */
+//     /* 4️⃣  Handle file uploads                                           */
+//     /* ------------------------------------------------------------------ */
+//     const { uploadToS3 } = await import('../middlewares/upload.js'); // ✅ dynamic import for ESM
+
+// const files = req.files || {};
+
+// if (files.profileImage?.length) {
+//   const url = await uploadToS3(files.profileImage[0], req);
+//   business.profileImage = url;
+// }
+
+// if (files.coverImage?.length) {
+//   const url = await uploadToS3(files.coverImage[0], req);
+//   business.coverImage = url;
+// }
+
+// if (files.certificateImages?.length) {
+//   const certUrls = await Promise.all(
+//     files.certificateImages.slice(0, 5).map(file => uploadToS3(file, req))
+//   );
+//   business.certificateImages = certUrls;
+// }
+
+// if (files.galleryImages?.length) {
+//   const galleryUrls = await Promise.all(
+//     files.galleryImages.slice(0, 10).map(file => uploadToS3(file, req))
+//   );
+//   business.galleryImages = galleryUrls;
+// }
+
+
+//     /* ------------------------------------------------------------------ */
+//     /* 5️⃣  Update scalar fields                                          */
+//     /* ------------------------------------------------------------------ */
+//     business.name        = name        ?? business.name;
+//     business.ownerName   = ownerName   ?? business.ownerName;
+//     business.phone       = phone       ?? business.phone;
+//     business.website     = website     ?? business.website;
+//     business.email       = email       ?? business.email;
+//     business.experience  = experience  ?? business.experience;
+//     business.description = description ?? business.description;
+
+//     /* ------------------------------------------------------------------ */
+//     /* 6️⃣  Update complex object fields                                  */
+//     /* ------------------------------------------------------------------ */
+//     if (Object.keys(location).length)      business.location    = location;
+//     if (Object.keys(socialLinks).length)   business.socialLinks = socialLinks;
+//     if (Object.keys(services).length)      business.services     = services;
+
+//     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
+//       business.businessHours = businessHoursArr.map(bh => ({
+//         day:   bh.day,
+//         open:  bh.open  || '',
+//         close: bh.close || ''
+//       }));
+//     }
+
+//     /* ------------------------------------------------------------------ */
+//     /* 7️⃣  Category Update (switch or same)                              */
+//     /* ------------------------------------------------------------------ */
+//     if (newCategory && newCategory !== business.category) {
+//       // ✨ Switch to a new category
+//       const newModelName = newCategory;
+//       const NewCategoryModel = categoryModels[newModelName];
+//       if (!NewCategoryModel) {
+//         return res.status(400).json({ message: `Invalid category "${newCategory}"` });
+//       }
+
+//       const newCatDoc = new NewCategoryModel(categoryData);
+//       await newCatDoc.save();
+
+//       business.category      = newCategory;
+//       business.categoryModel = newModelName;
+//       business.categoryRef   = newCatDoc._id;
+//     } else {
+//       // ✨ Update existing categoryData
+//       const CurrentCatModel = categoryModels[business.categoryModel];
+//       if (CurrentCatModel && Object.keys(categoryData).length && business.categoryRef) {
+//         const catDoc = await CurrentCatModel.findById(business.categoryRef);
+//         if (catDoc) {
+//           catDoc.set(categoryData);
+//           await catDoc.save();
+//         }
+//       }
+//     }
+
+//     /* ------------------------------------------------------------------ */
+//     /* 8️⃣  Save and respond                                              */
+//     /* ------------------------------------------------------------------ */
+//     const updatedBusiness = await business.save();
+
+//     res.status(200).json({
+//       message: '✅ Business listing updated successfully',
+//       business: updatedBusiness
+//     });
+//   } catch (error) {
+//     console.error('❌ Error updating business listing:', error);
+//     res.status(500).json({
+//       message: 'Server Error while updating business listing',
+//       error: error.message
+//     });
+//   }
+// };
+
+
 export const updateBusiness = async (req, res) => {
   try {
     const { id } = req.params;
@@ -532,7 +961,7 @@ export const updateBusiness = async (req, res) => {
     /* ------------------------------------------------------------------ */
     /* 4️⃣  Handle file uploads                                           */
     /* ------------------------------------------------------------------ */
-    const { uploadToS3 } = await import('../middlewares/upload.js'); // ✅ dynamic import for ESM
+    
 
 const files = req.files || {};
 
@@ -579,12 +1008,30 @@ if (files.galleryImages?.length) {
     if (Object.keys(socialLinks).length)   business.socialLinks = socialLinks;
     if (Object.keys(services).length)      business.services     = services;
 
+    // if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
+    //   business.businessHours = businessHoursArr.map(bh => ({
+    //     day:   bh.day,
+    //     open:  bh.open  || '',
+    //     close: bh.close || ''
+    //   }));
+
     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
-      business.businessHours = businessHoursArr.map(bh => ({
-        day:   bh.day,
-        open:  bh.open  || '',
-        close: bh.close || ''
-      }));
+  business.businessHours = businessHoursArr.map(bh => ({
+    day: bh.day || '',
+    isWorking: bh.isWorking ?? true,
+    is24Hour: bh.is24Hour ?? false,
+    is24HourClose: bh.is24HourClose ?? false,
+    shifts: Array.isArray(bh.shifts)
+      ? bh.shifts
+          .filter(shift => shift.open && shift.close)
+          .map(shift => ({
+            open: shift.open,
+            close: shift.close
+          }))
+      : []
+  }));
+
+
     }
 
     /* ------------------------------------------------------------------ */
@@ -633,9 +1080,6 @@ if (files.galleryImages?.length) {
     });
   }
 };
-
-
-
 
 export const getBusinessById = async (req, res) => {
   try {
@@ -1064,4 +1508,49 @@ export const businessCountByCategory = asyncHandler(async (req, res) => {
     console.error('❌ Error in category-wise count:', error.message);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
+});
+
+
+
+//delete with all things
+export const deleteBusinessListingById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // 1. Get business
+  const business = await Business.findById(id);
+  if (!business) {
+    return res.status(404).json({ message: 'Business listing not found.' });
+  }
+
+  // 2. Delete S3 images
+  const images = [
+    business.profileImage,
+    business.coverImage,
+    ...(business.certificateImages || []),
+    ...(business.galleryImages || [])
+  ];
+
+  for (const imgUrl of images) {
+    if (imgUrl) await deleteFromS3(imgUrl);
+  }
+
+  // 3. Delete category-specific data
+  const CategoryModel = categoryModels[business.category];
+  if (CategoryModel && business.categoryRef) {
+    await CategoryModel.findByIdAndDelete(business.categoryRef);
+  }
+
+  // 4. Delete leads
+  await Leads.deleteMany({ contact: business.email });
+
+  // 5. Delete related notifications
+  await Notification.deleteMany({ 'data.businessId': business._id });
+
+  // 6. Finally, delete the business itself
+  await Business.findByIdAndDelete(id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Business and all related data (category, leads, notifications, images) deleted successfully.'
+  });
 });

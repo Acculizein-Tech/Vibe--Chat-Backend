@@ -5,9 +5,12 @@ import {
   createOrder,
   verifyPayment,
   getPayments,
+  getPaymentsByUserId,
+  getAllVerifiedPayments
 } from "../controllers/paymentController.js";
 
 import { protect } from "../middlewares/auth.js";
+import roles from "../middlewares/roles.js";
 
 const router = express.Router();
 
@@ -15,6 +18,8 @@ const router = express.Router();
 router.post("/create-order", protect, createOrder);
 router.post("/verify", protect, verifyPayment);
 router.get("/history", protect, getPayments);
+router.get('/getuserpayments', protect, getPaymentsByUserId);
+router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments);
 
 // ✅ Razorpay Webhook (NO auth here, Razorpay server will send requests)
 router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {

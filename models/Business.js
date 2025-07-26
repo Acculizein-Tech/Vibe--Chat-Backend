@@ -57,29 +57,29 @@ lastPayment: {
     youtube: String,
     linkedin: String
   },
-  // businessHours: {
-  // monday: {
-  //   open: String,
-  //   close: String,
-  //   isOpen24Hours: { type: Boolean, default: false }
-  // },
-  // businessHours: {
-  //   monday: { open: String, close: String },
-  //   tuesday: { open: String, close: String },
-  //   wednesday: { open: String, close: String },
-  //   thursday: { open: String, close: String },
-  //   friday: { open: String, close: String },
-  //   saturday: { open: String, close: String },
-  //   sunday: { open: String, close: String },
-  //   // ...repeat for other days
-  // },
+
+  // businessHours: [
+  //   {
+  //     day: { type: String, required: true },
+  //     open: { type: String, default: "" },  // Use "HH:mm" format
+  //     close: { type: String, default: "" }  // Use "HH:mm" format
+  //   }
+  // ],
+
   businessHours: [
-    {
-      day: { type: String, required: true },
-      open: { type: String, default: "" },  // Use "HH:mm" format
-      close: { type: String, default: "" }  // Use "HH:mm" format
-    }
-  ],
+  {
+    day: { type: String, required: true },
+    isWorking: { type: Boolean, default: true },
+    is24Hour: { type: Boolean, default: false },
+    is24HourClose: { type: Boolean, default: false },
+    shifts: [
+      {
+        open: { type: String, default: "" }, // "HH:mm"
+        close: { type: String, default: "" }
+      }
+    ]
+  }
+],
    profileImage: { type: String }, // single file path or URL
    coverImage: { type: String }, // single file path or URL
 

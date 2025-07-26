@@ -24,6 +24,11 @@ const healthMedicalSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  GSTIN:{
+    type: String,
+    required: false,
+    default: ''
+  },
   consentGiven: {
     type: Boolean,
     default: false
@@ -31,23 +36,15 @@ const healthMedicalSchema = new mongoose.Schema({
   facilities: {
     PrivateRooms: { type: Boolean, default: false },
     AC: { type: Boolean, default: false },
-    Laundry: { type: Boolean, default: false },
-    WiFiAvailable: { type: Boolean, default: false },
-    CateringServicesAvailable: { type: Boolean, default: false },
-    PrivateDiningAndCabinsRooms: { type: Boolean, default: false },
-    KidsZoneAndFamilyFriendly: { type: Boolean, default: false },
-    ParkingFacility: { type: Boolean, default: false },
-    WheelchairAccess: { type: Boolean, default: false },
-    HygienicToolsAndDisposableItems: { type: Boolean, default: false },
-    SeparateMaleAndFemaleStaff: { type: Boolean, default: false },
+    Credit_Card_Payment: { type: Boolean, default: false },
+    UPI_Payment: { type: Boolean, default: false },
+    Catering_Services_Available: { type: Boolean, default: false },
+    Private_Dining_And_Cabins_Rooms: { type: Boolean, default: false },
+    Kids_Zone_And_Family_Friendly: { type: Boolean, default: false },
+    Parking_Facility: { type: Boolean, default: false },
+    Wheelchair_Access: { type: Boolean, default: false },
     WaitingArea: { type: Boolean, default: false },
-    LiveMusicAndDJAndBar: { type: Boolean, default: false },
-    IndoorSeatingAndOutdoorSeating: { type: Boolean, default: false },
-    RooftopAndGardenSeating: { type: Boolean, default: false },
-    PetFriendly: { type: Boolean, default: false },
-    InHouseDelivery: { type: Boolean, default: false },
-    RefundAndCancellationAvailable: { type: Boolean, default: false },
-    Memberships: { type: Boolean, default: false }
+    Ambulance: { type: Boolean, default: false },
   },
   extraFields: {
     type: Map,

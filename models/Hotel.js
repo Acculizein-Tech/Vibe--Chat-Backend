@@ -22,6 +22,11 @@ const hotelSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+    GSTIN:{
+    type: String,
+    required: false,
+    default: ''
+  },
   consentGiven: {
     type: Boolean,
     default: false
