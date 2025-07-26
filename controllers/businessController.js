@@ -698,7 +698,7 @@ const formattedBusinessHours = parsedBusinessHours.map(entry => ({
     await Business.findByIdAndUpdate(business._id, {
       $set: {
         lastPayment: payment._id,
-        paymentStatus: 'completed' // ✅ if you're tracking this status manually
+        paymentStatus: 'success' // ✅ if you're tracking this status manually
       }
     });
   }
