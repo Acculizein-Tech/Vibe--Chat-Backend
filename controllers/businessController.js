@@ -679,13 +679,31 @@ const formattedBusinessHours = parsedBusinessHours.map(entry => ({
     });
 
     // 🔗 Optional: If paid plan, update payment to link with business
+    // if (validPlan?.price > 0 && paymentId) {
+    //   await Payment.findOneAndUpdate(
+    //     { paymentId },
+    //     { $set: { business: business._id } },
+    //     { new: true }
+    //   );
+    // }
+    
     if (validPlan?.price > 0 && paymentId) {
-      await Payment.findOneAndUpdate(
-        { paymentId },
-        { $set: { business: business._id } },
-        { new: true }
-      );
-    }
+  const payment = await Payment.findOneAndUpdate(
+    { paymentId },
+    { $set: { business: business._id } },
+    { new: true }
+  );
+
+  if (payment) {
+    await Business.findByIdAndUpdate(business._id, {
+      $set: {
+        lastPayment: payment._id,
+        paymentStatus: 'completed' // ✅ if you're tracking this status manually
+      }
+    });
+  }
+}
+
 
     const categoryDoc = await CategoryModel.create({
       ...parsedCategoryData,
