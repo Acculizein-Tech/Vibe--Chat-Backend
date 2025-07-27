@@ -25,6 +25,7 @@ const beautySpaSchema = new mongoose.Schema({
     GSTIN:{
     type: String,
     required: false,
+    unique: true,
     default: ''
   },
   consentGiven: {
