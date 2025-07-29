@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const TravelesSchema = new mongoose.Schema({
+const TravelsSchema = new mongoose.Schema({
   speciality: {
     type: String,
     required: true
@@ -54,5 +54,5 @@ const TravelesSchema = new mongoose.Schema({
   }
 });
 
-const Traveles = mongoose.model('Traveles', TravelesSchema);
-export default Traveles;
+const Travels = mongoose.model('Travels', TravelsSchema);
+export default Travels;

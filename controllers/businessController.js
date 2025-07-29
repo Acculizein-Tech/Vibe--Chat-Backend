@@ -12,7 +12,11 @@ import Priceplan from '../models/Priceplan.js';
 import Payment from '../models/Payment.js';
 import Education from '../models/Education.js';
 import Garment from '../models/Garment.js'; 
-import Traveles from '../models/Traveles.js'; // Import Traveles model
+import Travels from '../models/Travels.js'; // Import Traveles model
+import Shoes from '../models/Shoes.js'; // Import Shoes model
+import Groceries from '../models/Groceries.js';
+import Models from '../models/Models.js';
+
 import mongoose from 'mongoose';
 import { uploadToS3 } from '../middlewares/upload.js';
 const categoryModels = {
@@ -21,7 +25,10 @@ const categoryModels = {
   BeautySpa: BeautySpa,
   Education: Education,
   Garment: Garment,
-  Traveles: Traveles
+  Travels: Travels,
+  Shoes: Shoes,
+  Groceries: Groceries,
+  Models: Models
 };
 
 
