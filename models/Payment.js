@@ -34,10 +34,12 @@ const paymentSchema = new mongoose.Schema({
 
   billingDetails: {
     businessName: String,
-    ownerName: String,
+    ownerName: String, 
     email: String,
     phone: Number,
     state: String, // e.g., UP, Delhi
+    category: String, // e.g., Individual, Business
+    address: String,
 
       // ✅ Newly Added Fields
   planName: { type: String }, 

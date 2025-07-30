@@ -19,7 +19,7 @@ router.post("/create-order", protect, createOrder);
 router.post("/verify", protect, verifyPayment);
 router.get("/history", protect, getPayments);
 router.get('/getuserpayments', protect, getPaymentsByUserId);
-router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments);
+router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments); 
 
 // ✅ Razorpay Webhook (NO auth here, Razorpay server will send requests)
 router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {

@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema({
     photo: { type: String },
     phone: String,
     avatar: String
-  },
+  }, 
   // Business-specific fields (nullable)
   // businessDetails: {
   //   name: String,

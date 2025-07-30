@@ -4,7 +4,7 @@ import asyncHandler from '../utils/asyncHandler.js';
 import sendEmail from '../utils/emailSender.js';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import Lead from '../models/Leads.js'; // Import Lead model
+import Lead from '../models/Leads.js'; // Import Lead  model
 import { notifyUser, notifyRole } from '../utils/sendNotification.js'; // Import notification functions
 
 // Helper: Generate JWT
