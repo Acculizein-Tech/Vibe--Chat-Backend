@@ -11,6 +11,7 @@ export const trackVisit = asyncHandler(async (req, res) => {
     // Get IP address
     let ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     if (ip?.startsWith('::ffff:')) ip = ip.replace('::ffff:', '');
+    console.log('IP Address:', ip); 
 
     // Get logged-in user (or null if guest)
     const userId = req.user?._id || null;
@@ -60,7 +61,7 @@ await Visit.create({
   }
 });
 
-
+ 
 // ✅ 2. Analytics for SuperAdmin
 // ✅ Enhanced Visit Analytics
 export const getVisitAnalytics = asyncHandler(async (req, res) => {
