@@ -27,3 +27,4 @@ router.get('/all', protect, roles('admin', 'superadmin'), getAllLeads);
 router.get('/lead-counts', protect, roles('superadmin'), getLeadCountsPerSalesUser);
 
 export default router;
+  

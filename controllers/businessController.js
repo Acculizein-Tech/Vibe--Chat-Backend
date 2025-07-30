@@ -16,6 +16,7 @@ import Travels from '../models/Travels.js'; // Import Traveles model
 import Shoes from '../models/Shoes.js'; // Import Shoes model
 import Groceries from '../models/Groceries.js';
 import Models from '../models/Models.js';
+import Insurance from '../models/Insurance.js';
 
 import mongoose from 'mongoose';
 import { uploadToS3 } from '../middlewares/upload.js';
@@ -27,6 +28,7 @@ const categoryModels = {
   Garment: Garment,
   Travels: Travels,
   Shoes: Shoes,
+  Insurance: Insurance,
   Groceries: Groceries,
   Models: Models
 };

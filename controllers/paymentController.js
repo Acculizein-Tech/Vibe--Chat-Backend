@@ -60,7 +60,8 @@ export const verifyPayment = asyncHandler(async (req, res) => {
         razorpay_payment_id,
         razorpay_signature
       },
-      business
+      business,
+      companyData 
     } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -105,6 +106,13 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       billingDetails: {
         ...business,
         currency: "INR",
+      },
+      companyData: {
+        companyName: companyData?.companyName,
+        companyAddress: companyData?.companyAddress,
+        companyPhone: companyData?.companyPhone,
+        companyEmail: companyData?.companyEmail,
+        gstin: companyData?.gstin
       }
     });
 

@@ -53,6 +53,7 @@ export const createPricePlan = async (req, res) => {
 };
 
 
+
 //get all price plans
 export const getAllPlans = async (req, res) => {
   try {

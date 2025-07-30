@@ -47,13 +47,18 @@ const paymentSchema = new mongoose.Schema({
   // paymentMode: { type: String },    
    
   },
-
-          // UPI, Card, Netbanking, etc.
-
-  createdAt: {
-    type: Date,
-    default: Date.now,
+  companyData:{
+    companyName: String,
+    companyAddress: String,
+    companyPhone: String,
+    companyEmail: String,
+    gstin: String, // GSTIN for tax purposes
   },
+
+  // UPI, Card, Netbanking, etc.
+
+}, {
+  timestamps: { createdAt: true, updatedAt: true }
 });
 
 export default mongoose.model("Payment", paymentSchema);
