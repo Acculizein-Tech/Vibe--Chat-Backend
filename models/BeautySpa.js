@@ -33,10 +33,10 @@ const beautySpaSchema = new mongoose.Schema({
   facilities: {
     PrivateRooms: { type: Boolean, default: false },
     AC: { type: Boolean, default: false },
-    Laundry: { type: Boolean, default: false },
+    manicure: { type: Boolean, default: false },
     WiFiAvailable: { type: Boolean, default: false },
-    CateringServicesAvailable: { type: Boolean, default: false },
-    PrivateDiningAndCabinsRooms: { type: Boolean, default: false },
+    pedicure: { type: Boolean, default: false },
+    hairSpaAndCutting: { type: Boolean, default: false },
     KidsZoneAndFamilyFriendly: { type: Boolean, default: false },
     ParkingFacility: { type: Boolean, default: false },
     WheelchairAccess: { type: Boolean, default: false },
