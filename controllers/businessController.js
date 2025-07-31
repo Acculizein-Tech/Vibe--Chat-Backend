@@ -310,15 +310,25 @@ export const createBusiness = async (req, res) => {
     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
 
+    // const registerNumber = parsedCategoryData?.registerNumber;
+    // if (!registerNumber) {
+    //   return res.status(400).json({ message: 'Registration number is required' });
+    // }
     const registerNumber = parsedCategoryData?.registerNumber;
-    if (!registerNumber) {
-      return res.status(400).json({ message: 'Registration number is required' });
-    }
 
-    const existingCategory = await CategoryModel.findOne({ registerNumber });
-    if (existingCategory) {
-      return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
-    }
+let existingCategory = null;
+if (registerNumber) {
+  existingCategory = await CategoryModel.findOne({ registerNumber });
+  if (existingCategory) {
+    return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
+  }
+}
+
+
+    // const existingCategory = await CategoryModel.findOne({ registerNumber });
+    // if (existingCategory) {
+    //   return res.status(409).json({ message: 'Duplicate registration number. Business not created.' });
+    // }
 
     // let parsedBusinessHours = Array.isArray(businessHours)
     //   ? businessHours

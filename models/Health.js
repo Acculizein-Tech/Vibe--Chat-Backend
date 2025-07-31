@@ -8,12 +8,12 @@ const healthMedicalSchema = new mongoose.Schema({
   },
   registerNumber: {
     type: String,
-    required: false,
+    
     default: ''
   },
   YearOfEstablishment: {
     type: String,
-    required: false,
+   
     default: ''
   },
   appointmentLink: {
