@@ -4,11 +4,11 @@ import mongoose from 'mongoose';
 const EducationSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+    
   },
   registerNumber: {
     type: String,
-    required: false,
+    
     default: ''
   },
   YearOfEstablishment: {
@@ -26,8 +26,7 @@ const EducationSchema = new mongoose.Schema({
   },
     GSTIN:{
     type: String,
-    required: false,
-    unique: true,
+   
   },
   consentGiven: {
     type: Boolean,

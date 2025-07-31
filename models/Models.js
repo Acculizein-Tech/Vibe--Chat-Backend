@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const ModelsSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+    
   },
   registerNumber: {
     type: String,
@@ -34,27 +34,57 @@ const ModelsSchema = new mongoose.Schema({
   },
   facilities: {
     // ✅ Newly added travel-related facilities
-   sponsoredContentPosts: { type: Boolean, default: false },
-    productEndorsements: { type: Boolean, default: false },
-    unboxingVideos: { type: Boolean, default: false },
-    tvCommercialAppearances: { type: Boolean, default: false },
-    brandAmbassadorRoles: { type: Boolean, default: false },
-    sponsoredSocialPosts: { type: Boolean, default: false },
-    instagramReelsCollaborations: { type: Boolean, default: false },
-    youtubeCollaborations: { type: Boolean, default: false },
-    eventHostingAttendance: { type: Boolean, default: false },
-    fashionShowAppearances: { type: Boolean, default: false },
-    giveawaysContestHosting: { type: Boolean, default: false },
-    swipeUpPromotionsStories: { type: Boolean, default: false },
-    affiliateLinkPromotions: { type: Boolean, default: false },
-    rampWalkRunwayModeling: { type: Boolean, default: false },
-    magazineFeaturesEditorials: { type: Boolean, default: false },
-    portfolioPhotoshootServices: { type: Boolean, default: false },
-    voiceOverNarrationWork: { type: Boolean, default: false },
-    fitnessInfluencerContent: { type: Boolean, default: false },
-    musicVideoAppearances: { type: Boolean, default: false },
-    regionalCampaignEngagements: { type: Boolean, default: false }
+   acting: { type: Boolean, default: false },
+  printShoot: { type: Boolean, default: false },
+  sareesShoot: { type: Boolean, default: false },
+  lehengaShoot: { type: Boolean, default: false },
+  rampShows: { type: Boolean, default: false },
+  designerShoot: { type: Boolean, default: false },
+  ethenicWears: { type: Boolean, default: false },
+  bikiniShoot: { type: Boolean, default: false },
+  lingerieShoots: { type: Boolean, default: false },
+  swimSuits: { type: Boolean, default: false },
+  calendarShoots: { type: Boolean, default: false },
+  musicAlbum: { type: Boolean, default: false },
+  tvSerial: { type: Boolean, default: false },
+  kissingScenes: { type: Boolean, default: false },
+  singing: { type: Boolean, default: false },
+  dancing: { type: Boolean, default: false },
+  anchoring: { type: Boolean, default: false },
+  webSeries: { type: Boolean, default: false },
+  indianWear: { type: Boolean, default: false },
+  skirt: { type: Boolean, default: false },
+  shorts: { type: Boolean, default: false },
+  bold: { type: Boolean, default: false },
+  topless: { type: Boolean, default: false },
+  nude: { type: Boolean, default: false },
+  semiNude: { type: Boolean, default: false },
+  bodyPainting: { type: Boolean, default: false },
+  compromise: { type: Boolean, default: false },
+  adjustments: { type: Boolean, default: false },
+  anyAllergiesToDust: { type: Boolean, default: false },
+  passport: { type: Boolean, default: false },
+  tattoo: { type: Boolean, default: false },
+  outStationShoot: { type: Boolean, default: false },
+  outCountryShoot: { type: Boolean, default: false }
   },
+
+ // ✅ Separate model form fields
+  height: { type: String, default: '' }, // e.g., "5'8\""
+  weight: { type: String, default: '' }, // in kg or lbs
+  bust: { type: String, default: '' }, // fullest part of chest
+  skinTone: { type: String, default: '' }, // below chest
+  waist: { type: String, default: '' }, // natural waist
+  hairColour: { type: String, default: '' }, // just below bust
+  shoeSize: { type: String, default: '' }, // above hips
+  hips: { type: String, default: '' }, // widest part of hips
+  bodyType: { type: String, default: '' }, // upper thigh
+  maritalStatus: { type: String, default: '' }, // calf
+  presentProfession: { type: String, default: '' }, // shoulders
+  education: { type: String, default: '' },
+  hobbies: { type: String, default: '' }, // bicep
+  language: { type: String, default: '' }, // language skills
+
   extraFields: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,

@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const GarmentSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+   
   },
   registerNumber: {
     type: String,
@@ -26,8 +26,7 @@ const GarmentSchema = new mongoose.Schema({
   },
     GSTIN:{
     type: String,
-    required: false,
-    unique: true,
+  
     default: ''
   },
   consentGiven: {

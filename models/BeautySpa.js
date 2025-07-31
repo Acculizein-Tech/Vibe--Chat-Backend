@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const beautySpaSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+   
   },
   registerNumber: {
     type: String,
@@ -24,8 +24,6 @@ const beautySpaSchema = new mongoose.Schema({
   },
     GSTIN:{
     type: String,
-    required: false,
-    unique: true,
     default: ''
   },
   consentGiven: {

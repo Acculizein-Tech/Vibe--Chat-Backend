@@ -290,6 +290,7 @@ export const createBusiness = async (req, res) => {
       socialLinks,
       businessHours,
       category,
+       // ✅ NEW: subcategory for more granularity
       experience,
       description,
       referralCode,
@@ -733,7 +734,8 @@ export const updateBusiness = async (req, res) => {
       phone,
       website,
       email,
-      category: newCategory,     // in case of category change
+      category: newCategory,  
+      subCategory: newSubCategory,  // ✅ NEW: subcategory for more granularity
       experience,
       description,
       services: rawServices,
@@ -1186,6 +1188,8 @@ export const searchBusinesses = async (req, res) => {
         { name: keywordRegex },
         { description: keywordRegex },
         { category: keywordRegex },
+        { speciality: keywordRegex },
+        { services: keywordRegex },
         { categoryModel: keywordRegex }
       ],
       ...(location ? { 'location.city': locationRegex } : {})
@@ -1198,6 +1202,8 @@ export const searchBusinesses = async (req, res) => {
           { name: keywordRegex },
           { description: keywordRegex },
           { category: keywordRegex },
+            { speciality: keywordRegex },
+        { services: keywordRegex },
           { categoryModel: keywordRegex }
         ]
       });

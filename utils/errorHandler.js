@@ -33,7 +33,7 @@ const errorHandler = (err, req, res, next) => {
     // Mongoose validation error
     return res.status(400).json({
       status: 'fail',
-      message: 'Validation Error',
+      message: 'Password length must be at least 8 characters',
       errors: Object.values(err.errors).map(el => el.message)
     });
   }

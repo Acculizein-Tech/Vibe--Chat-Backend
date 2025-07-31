@@ -10,6 +10,9 @@ const businessSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     ownerName: String,
+    gender: {
+      type: String,
+    },
     // ✅ ADD THIS
     owner: {
       type: mongoose.Schema.Types.ObjectId,
@@ -41,13 +44,12 @@ const businessSchema = new mongoose.Schema(
         lng: Number,
       },
     },
-    experience: { type: String, require: true },
-    description: { type: String, require: true },
-    phone: { type: Number, required: true },
+    experience: { type: String },
+    description: { type: String },
+    phone: { type: Number },
     website: String,
     email: {
       type: String,
-      required: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Invalid email"],
     },
     socialLinks: {
@@ -64,6 +66,7 @@ const businessSchema = new mongoose.Schema(
       zepto: String,
       blinkit: String,
       meesho: String,
+      myntra: String,
     },
 
     // businessHours: [
@@ -125,6 +128,7 @@ const businessSchema = new mongoose.Schema(
     revenue: { type: Number, default: 0 },
 
     category: { type: String, required: true }, // e.g., 'health-medical'
+    // subCategory: { type: String, required: true }, // e.g., 'hospital', 'clinic', 'spa', 'salon'
     categoryRef: {
       type: mongoose.Schema.Types.ObjectId,
       refPath: "categoryModel",

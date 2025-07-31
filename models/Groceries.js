@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const GroceriesSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+    
   },
   registerNumber: {
     type: String,

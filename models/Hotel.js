@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const hotelSchema = new mongoose.Schema({
   speciality: {
     type: String,
-    required: true
+   
   },
   registerNumber: {
     type: String,
@@ -24,8 +24,7 @@ const hotelSchema = new mongoose.Schema({
   },
     GSTIN:{
     type: String,
-    required: false,
-    unique: true,
+   
     default: ''
   },
   consentGiven: {

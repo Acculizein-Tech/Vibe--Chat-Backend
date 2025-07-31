@@ -23,7 +23,9 @@ const pricePlanSchema = new mongoose.Schema(
     },
     duration: {
       type: String,
-      required: true
+     
+      
+      default: ''
     },
     features: {
       type: [featureSchema],
