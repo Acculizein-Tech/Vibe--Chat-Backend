@@ -230,7 +230,7 @@ export const login = asyncHandler(async (req, res) => {
     _id: user._id,
     email: user.email,
     role: user.role,
-    avatar: user.profile?.avatar || "",  // ✅ safely include avatar
+    avatar: user.profile?.avatar || "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",  // ✅ safely include avatar
     accessToken,
     refreshToken
   });
