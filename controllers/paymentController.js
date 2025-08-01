@@ -217,3 +217,26 @@ export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
     payments,
   });
 });
+
+
+//live rozorpay webhook details of payment
+
+
+export const getAllPayments = async (req, res) => {
+  try {
+    const payments = await razorpay.payments.all({
+      count: 50, // max 100
+    });
+
+    res.status(200).json({
+      success: true,
+      data: payments.items,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch payments',
+      error: error.message,
+    });
+  }
+};

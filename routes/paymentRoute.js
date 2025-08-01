@@ -6,7 +6,8 @@ import {
   verifyPayment,
   getPayments,
   getPaymentsByUserId,
-  getAllVerifiedPayments
+  getAllVerifiedPayments,
+  getAllPayments
 } from "../controllers/paymentController.js";
 
 import { protect } from "../middlewares/auth.js";
@@ -21,32 +22,34 @@ router.get("/history", protect, getPayments);
 router.get('/getuserpayments', protect, getPaymentsByUserId);
 router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments); 
 
+router.get('/all', protect, roles('superadmin'), getAllPayments);
+
 // ✅ Razorpay Webhook (NO auth here, Razorpay server will send requests)
-router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
-  const secret = "mywebhooksecret"; // same as in Razorpay dashboard webhook config
+// router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
+//   const secret = "mywebhooksecret"; // same as in Razorpay dashboard webhook config
 
-  const signature = req.headers["x-razorpay-signature"];
-  const body = req.body;
+//   const signature = req.headers["x-razorpay-signature"];
+//   const body = req.body;
 
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(JSON.stringify(body))
-    .digest("hex");
+//   const expectedSignature = crypto
+//     .createHmac("sha256", secret)
+//     .update(JSON.stringify(body))
+//     .digest("hex");
 
-  if (expectedSignature === signature) {
-    console.log("✅ Webhook verified:", body.event);
+//   if (expectedSignature === signature) {
+//     console.log("✅ Webhook verified:", body.event);
 
-    // Optional: Add event-specific logic
-    // Example:
-    // if (body.event === "payment.captured") {
-    //   const paymentData = body.payload.payment.entity;
-    //   // Store in DB, update status, etc.
-    // }
+//     // Optional: Add event-specific logic
+//     // Example:
+//     // if (body.event === "payment.captured") {
+//     //   const paymentData = body.payload.payment.entity;
+//     //   // Store in DB, update status, etc.
+//     // }
 
-    return res.status(200).json({ success: true, received: true });
-  } else {
-    return res.status(400).json({ success: false, message: "Invalid webhook signature" });
-  }
-});
+//     return res.status(200).json({ success: true, received: true });
+//   } else {
+//     return res.status(400).json({ success: false, message: "Invalid webhook signature" });
+//   }
+// });
 
 export default router;
