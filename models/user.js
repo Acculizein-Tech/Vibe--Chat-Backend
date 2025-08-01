@@ -32,6 +32,9 @@ const userSchema = new mongoose.Schema({
   default: null
 },
 
+phone: {
+    type: Number,
+  },
   city: { type: String },
   state: { type: String },
   country: { type: String },  
@@ -40,7 +43,7 @@ const userSchema = new mongoose.Schema({
   refreshTokens: [String],
   profile: {
     photo: { type: String },
-    phone: String,
+
     avatar: String
   }, 
   // Business-specific fields (nullable)

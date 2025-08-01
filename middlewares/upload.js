@@ -4,7 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-
+import sharp from 'sharp';
 dotenv.config();
 
 // Initialize S3 Client
@@ -83,53 +83,85 @@ const getS3KeyPrefix = (req, file) => {
 /**
  * Upload single file to S3 and return a pre-signed URL
  */
+// export const uploadToS3 = async (file, req) => {
+//   const folder = getS3KeyPrefix(req, file);
+//   const key = `${folder}/${file.filename}`;
+//   const fileStream = fs.createReadStream(file.path);
+
+//   const uploadParams = {
+//     Bucket: process.env.AWS_BUCKET_NAME,
+//     Key: key,
+//     Body: fileStream,
+//     ContentType: file.mimetype,
+//   };
+
+//   // await s3.send(new PutObjectCommand(uploadParams));
+
+//   // // Remove local file after upload
+//   // fs.unlinkSync(file.path);
+//     try {
+//     await s3.send(new PutObjectCommand(uploadParams));
+//     fs.unlinkSync(file.path);
+//   } catch (err) {
+//     console.error(`❌ Failed to upload "${file.filename}" to S3:`, err.message);
+//     return null;
+//   }
+
+//   // // Generate pre-signed URL (valid for 1 hour)
+//   // const getCommand = new GetObjectCommand({
+//   //   Bucket: process.env.AWS_BUCKET_NAME,
+//   //   Key: key,
+//   // });
+
+//   // const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
+
+//   // return signedUrl;
+
+//     try {
+//     const getCommand = new GetObjectCommand({
+//       Bucket: process.env.AWS_BUCKET_NAME,
+//       Key: key,
+//     });
+//     const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
+//     return signedUrl;
+//   } catch (err) {
+//     console.error(`⚠️ Failed to generate signed URL for "${file.filename}":`, err.message);
+//     return null;
+//   }
+// };
+
 export const uploadToS3 = async (file, req) => {
   const folder = getS3KeyPrefix(req, file);
-  const key = `${folder}/${file.filename}`;
-  const fileStream = fs.createReadStream(file.path);
+  const baseFileName = path.parse(file.filename).name; // remove extension
+  const key = `${folder}/${baseFileName}.webp`;
 
-  const uploadParams = {
-    Bucket: process.env.AWS_BUCKET_NAME,
-    Key: key,
-    Body: fileStream,
-    ContentType: file.mimetype,
-  };
+  try {
+    // Convert image to webp buffer using sharp
+    const webpBuffer = await sharp(file.path)
+      .webp({ quality: 80 }) // adjust quality if needed
+      .toBuffer();
 
-  // await s3.send(new PutObjectCommand(uploadParams));
-
-  // // Remove local file after upload
-  // fs.unlinkSync(file.path);
-    try {
-    await s3.send(new PutObjectCommand(uploadParams));
-    fs.unlinkSync(file.path);
-  } catch (err) {
-    console.error(`❌ Failed to upload "${file.filename}" to S3:`, err.message);
-    return null;
-  }
-
-  // // Generate pre-signed URL (valid for 1 hour)
-  // const getCommand = new GetObjectCommand({
-  //   Bucket: process.env.AWS_BUCKET_NAME,
-  //   Key: key,
-  // });
-
-  // const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
-
-  // return signedUrl;
-
-    try {
-    const getCommand = new GetObjectCommand({
+    const uploadParams = {
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
-    });
-    const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
-    return signedUrl;
-  } catch (err) {
-    console.error(`⚠️ Failed to generate signed URL for "${file.filename}":`, err.message);
-    return null;
-  }
+      Body: webpBuffer,
+      ContentType: 'image/webp',
+      // ACL: 'public-read', // Make public
+    };
+
+    await s3.send(new PutObjectCommand(uploadParams));
+    fs.unlinkSync(file.path); // remove temp file
+
+    // Return permanent public URL
+    const publicUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    return publicUrl;
+  }  catch (err) {
+  console.error(`❌ Upload failed for "${file.filename}":`, err.message);
+  console.error("❌ Full error:", err);
+
+  console.error(err); // <-- ADD THIS LINE for full error trace
+  return null;
+}
 };
 
 export default upload;
-
-

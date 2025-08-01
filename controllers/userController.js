@@ -77,7 +77,7 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
-    const { email, phone, zip } = req.body;
+    const { fullName, email, phone, city, state, country, zipCode } = req.body;
 
     let avatarUrl = '';
 
@@ -88,13 +88,17 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
 
     const updatedFields = {
+      fullName, 
       email,
       phone,
-      zip,
+      city,
+      state,
+      country,
+      zipCode,
     };
 
     if (avatarUrl) {
-      updatedFields['profile.avatar'] = avatarUrl;
+      updatedFields['profile'] = { avatar: avatarUrl };
     }
 
     const updatedUser = await User.findByIdAndUpdate(
