@@ -20,6 +20,7 @@ import Insurance from '../models/Insurance.js';
 import RealEstate from '../models/RealEstate.js';
 import Loan from '../models/Loan.js';
 import Gym from '../models/Gym.js'; // Import Gym model
+import Jeweller from '../models/Jeweller.js'; // Import Jeweller model
 
 import mongoose from 'mongoose';
 import { uploadToS3 } from '../middlewares/upload.js';
@@ -36,7 +37,8 @@ const categoryModels = {
   Models: Models,
   RealEstate: RealEstate,
   Loan: Loan,
-  Gym: Gym
+  Gym: Gym,
+  Jeweller: Jeweller // Add Jeweller model here
 };
 
 

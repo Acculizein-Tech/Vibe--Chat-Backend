@@ -73,7 +73,7 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 //   });
 // });
 
-//update the password
+//update the password  
 
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
@@ -97,6 +97,23 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       zipCode,
     };
 
+     // ❌ Check for spaces in phone number
+    if (phone && phone.includes(' ')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number should not contain spaces. Please enter a valid phone number like +919876543210',
+      });
+    }
+
+    // ✅ Allow + in the beginning of phone for country code
+    const phoneRegex = /^\+?[0-9]{10,15}$/;
+    if (phone && !phoneRegex.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format. Please enter a valid number like +919876543210',
+      });
+    }
+
     if (avatarUrl) {
       updatedFields['profile'] = { avatar: avatarUrl };
     }
@@ -105,7 +122,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       req.params.id,
       { $set: updatedFields },
       { new: true }
-    );
+    );    
 
     res.status(200).json({
       success: true,

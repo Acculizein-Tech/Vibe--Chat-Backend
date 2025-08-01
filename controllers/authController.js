@@ -228,6 +228,7 @@ export const login = asyncHandler(async (req, res) => {
 
   res.json({
     _id: user._id,
+    fullName: user.fullName,
     email: user.email,
     role: user.role,
     avatar: user.profile?.avatar || "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",  // ✅ safely include avatar
@@ -357,8 +358,44 @@ export const logout = asyncHandler(async (req, res) => {
 //resend otp
 // @desc    Resend OTP to email (if not verified)
 // @route   POST /api/auth/resend-otp
+// export const resendOTP = asyncHandler(async (req, res) => {
+//   const { email } = req.body;
+
+//   const user = await User.findOne({ email });
+
+//   if (!user) {
+//     res.status(404);
+//     throw new Error('User not found');
+//   }
+
+//   if (user.isVerified) {
+//     res.status(400);
+//     throw new Error('User already verified');
+//   }
+
+//   const otp = generateOTP();
+//   const otpExpires = Date.now() + 10 * 60 * 1000;
+
+//   user.emailVerifyOTP = otp;
+//   user.emailVerifyExpires = otpExpires;
+//   await user.save();
+
+//   await sendEmail({
+//     to: user.email,
+//     subject: 'Resend Email Verification OTP',
+//     text: `Your new OTP is: ${otp}`
+//   });
+
+//   res.json({ message: 'New OTP sent to your email' });
+// });
+
 export const resendOTP = asyncHandler(async (req, res) => {
   const { email } = req.body;
+
+  if (!email) {
+    res.status(400);
+    throw new Error('Email is required');
+  }
 
   const user = await User.findOne({ email });
 
@@ -367,26 +404,50 @@ export const resendOTP = asyncHandler(async (req, res) => {
     throw new Error('User not found');
   }
 
+  // 🚫 Already verified user should never be here
   if (user.isVerified) {
-    res.status(400);
-    throw new Error('User already verified');
+    return res.status(409).json({
+      success: false,
+      message: 'User already verified. Please login instead.',
+    });
   }
 
-  const otp = generateOTP();
-  const otpExpires = Date.now() + 10 * 60 * 1000;
+  const now = Date.now();
+
+  // 🕒 Check if existing OTP is still valid
+  if (user.emailVerifyExpires && user.emailVerifyExpires > now) {
+    const msLeft = user.emailVerifyExpires - now;
+    const secondsLeft = Math.floor(msLeft / 1000);
+    const minutes = Math.floor(secondsLeft / 60);
+    const seconds = secondsLeft % 60;
+
+    return res.status(429).json({
+      success: false,
+      message: `OTP already sent. Please wait ${minutes > 0 ? `${minutes} minute(s)` : ''}${seconds > 0 ? ` ${seconds} second(s)` : ''} before requesting again.`,
+    });
+  }
+
+  // ✅ Generate new OTP & update expiry
+  const otp = generateOTP(); // e.g., '872349'
+  const otpExpires = now + 10 * 60 * 1000; // 10 minutes from now
 
   user.emailVerifyOTP = otp;
   user.emailVerifyExpires = otpExpires;
   await user.save();
 
+  // 📧 Send email
   await sendEmail({
     to: user.email,
-    subject: 'Resend Email Verification OTP',
-    text: `Your new OTP is: ${otp}`
+    subject: 'Your Verification OTP',
+    text: `Your OTP is: ${otp}\n\nIt is valid for 10 minutes.`,
   });
 
-  res.json({ message: 'New OTP sent to your email' });
+  res.status(200).json({
+    success: true,
+    message: 'A new OTP has been sent to your email.',
+  });
 });
+
 
 
 //reset password
@@ -398,9 +459,9 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new Error('Email and password are required');
   }
 
-  if (password.length < 12) {
+  if (password.length < 8) {
     res.status(400);
-    throw new Error('Password must be at least 12 characters long');
+    throw new Error('Password must be at least 8 characters long');
   }
 
   const user = await User.findOne({ email });
