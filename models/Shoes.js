@@ -25,8 +25,6 @@ const ShoesSchema = new mongoose.Schema({
   },
   GSTIN: {
     type: String,
-    required: false,
-    default: ''
   },
   consentGiven: {
     type: Boolean,

@@ -314,11 +314,47 @@ export const handleError = (error, res) => {
 // @desc    Get all business listings created by the current user
 // @route   GET /api/user/listings
 // @access  Private
+// export const getUserListings = asyncHandler(async (req, res) => {
+//   const userId = req.user._id;
+
+//   try {
+//     const listings = await Business.find({ owner: userId })
+//       .select('-__v') // optional: exclude Mongoose version key
+//       .populate('categoryRef') // optional: load category info if needed
+//       .sort({ createdAt: -1 }); // newest first
+
+//     if (!listings.length) {
+//       return res.status(200).json({
+//         status: 'success',
+//         message: 'No business listings found for this user.',
+//         listings: [],
+//       });
+//     }
+
+//     res.status(200).json({
+//       status: 'success',
+//       total: listings.length,
+//       listings,
+//     });
+//   } catch (error) {
+//     console.error('❌ Error fetching user listings:', error);
+//     res.status(500).json({
+//       status: 'error',
+//       message: 'Failed to fetch business listings.',
+//       error: error.message,
+//     });
+//   }
+// });
+
+
 export const getUserListings = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   try {
-    const listings = await Business.find({ owner: userId })
+    const listings = await Business.find({ 
+        owner: userId, 
+        isDeleted: false // ✅ Only fetch non-deleted listings
+      })
       .select('-__v') // optional: exclude Mongoose version key
       .populate('categoryRef') // optional: load category info if needed
       .sort({ createdAt: -1 }); // newest first

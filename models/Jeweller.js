@@ -8,43 +8,32 @@ const JewellerSchema = new mongoose.Schema({
   },
   registerNumber: {
     type: String,
-    
-    default: ''
   },
   YearOfEstablishment: {
     type: String,
-   
-    default: ''
   },
   appointmentLink: {
     type: String,
-    default: ''
   },
   affiliation: {
     type: String,
-    default: ''
   },
   GSTIN:{
     type: String,
-
-    default: ''
   },
   consentGiven: {
     type: Boolean,
     default: false
   },
   facilities: {
-    PrivateRooms: { type: Boolean, default: false },
-    AC: { type: Boolean, default: false },
-    Credit_Card_Payment: { type: Boolean, default: false },
-    UPI_Payment: { type: Boolean, default: false },
-    Catering_Services_Available: { type: Boolean, default: false },
-    Private_Dining_And_Cabins_Rooms: { type: Boolean, default: false },
-    Kids_Zone_And_Family_Friendly: { type: Boolean, default: false },
+    Custom_Jewellery_Design: { type: Boolean, default: false },
+    Repair_Polishing: { type: Boolean, default: false },
+    Gold_Silver_Purchase_Exchange: { type: Boolean, default: false },
+    Old_Gold_Silver_Evaluation_Buyback: { type: Boolean, default: false },
+    EMI_Facility: { type: Boolean, default: false },
     Parking_Facility: { type: Boolean, default: false },
     Wheelchair_Access: { type: Boolean, default: false },
     WaitingArea: { type: Boolean, default: false },
-    Ambulance: { type: Boolean, default: false },
   },
   extraFields: {
     type: Map,

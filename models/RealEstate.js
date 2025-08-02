@@ -26,8 +26,6 @@ const RealEstateSchema = new mongoose.Schema({
   },
   GSTIN:{
     type: String,
-
-    default: ''
   },
   consentGiven: {
     type: Boolean,

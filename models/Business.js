@@ -109,6 +109,11 @@ const businessSchema = new mongoose.Schema(
         message: "galleryImages exceeds the limit of 10",
       },
     },
+    isDeleted: {
+  type: Boolean,
+  default: false
+},
+
     // ✅ Newly added services field (as requested)
    services: {
   // Hotel services
@@ -277,6 +282,7 @@ const businessSchema = new mongoose.Schema(
       },
     ],
   },
+  
   {
     timestamps: true,
     toJSON: { virtuals: true },

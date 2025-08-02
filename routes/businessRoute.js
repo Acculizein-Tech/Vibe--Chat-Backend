@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById } from '../controllers/businessController.js';
+import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness } from '../controllers/businessController.js';
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
@@ -11,7 +11,7 @@ const mediaFields = upload.fields([
   { name: 'profileImage', maxCount: 1 },
   { name: 'coverImage', maxCount: 1 },
   { name: 'certificateImages', maxCount: 5 }, // ✅ fixed field name
-  { name: 'galleryImages', maxCount: 10 }
+  { name: 'galleryImages', maxCount: 10 }   
 ]);
 
 router.post('/business', protect, mediaFields, createBusiness);
@@ -25,7 +25,8 @@ router.get('/search', searchBusinesses);
 router.get('/count', businessCountByCategory);
 // 🛡️ Protected route for logged-in sales users
 router.get('/sales/listings', protect, getBusinessBySalesId);
-router.delete('/deleteBusiness/:id', protect, roles('superadmin'), deleteBusinessListingById);
+router.delete('/deleteBusiness/:id', protect, roles('superadmin', 'customer'), deleteBusinessListingById);
 
+router.delete('/softgo/:id', protect, roles('customer'), softDeleteBusiness);
 
 export default router;

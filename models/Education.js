@@ -8,8 +8,6 @@ const EducationSchema = new mongoose.Schema({
   },
   registerNumber: {
     type: String,
-    
-    default: ''
   },
   YearOfEstablishment: {
     type: String,
@@ -26,7 +24,6 @@ const EducationSchema = new mongoose.Schema({
   },
     GSTIN:{
     type: String,
-   
   },
   consentGiven: {
     type: Boolean,
