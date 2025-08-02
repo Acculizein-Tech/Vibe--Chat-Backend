@@ -1004,47 +1004,10 @@ export const getBusinessById = async (req, res) => {
 
 
 //get all businesses
-// export const getAllBusinesses = async (req, res) => {
-//   try {
-//     // ✅ Fetch all businesses with categoryRef
-//     const businesses = await Business.find().lean(); // lean = plain object for merging
-
-//     // 🧠 Fetch category details for each business
-//     const businessesWithCategoryDetails = await Promise.all(
-//       businesses.map(async (business) => {
-//         const CategoryModel = categoryModels[business.categoryModel];
-//         let categoryDetails = {};
-
-//         if (CategoryModel && business.categoryRef) {
-//           const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
-//           if (categoryDoc) {
-//             categoryDetails = categoryDoc;
-//           }
-//         }
-
-//         return {
-//           ...business,
-//           categoryDetails // or rename to 'categoryData' if preferred
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: 'Businesses fetched successfully',
-//       businesses: businessesWithCategoryDetails
-//     });
-//   } catch (error) {
-//     console.error('Error fetching businesses:', error);
-//     res.status(500).json({
-//       message: 'Server error while fetching businesses',
-//       error: error.message
-//     });
-//   }
-// };
 export const getAllBusinesses = async (req, res) => {
   try {
-    // ✅ Fetch all non-deleted businesses with categoryRef
-    const businesses = await Business.find({ isDeleted: false }).lean(); // lean = plain object for merging
+    // ✅ Fetch all businesses with categoryRef
+    const businesses = await Business.find().lean(); // lean = plain object for merging
 
     // 🧠 Fetch category details for each business
     const businessesWithCategoryDetails = await Promise.all(
@@ -1078,6 +1041,43 @@ export const getAllBusinesses = async (req, res) => {
     });
   }
 };
+// export const getAllBusinesses = async (req, res) => {
+//   try {
+//     // ✅ Fetch all non-deleted businesses with categoryRef
+//     const businesses = await Business.find({ isDeleted: false }).lean(); // lean = plain object for merging
+
+//     // 🧠 Fetch category details for each business
+//     const businessesWithCategoryDetails = await Promise.all(
+//       businesses.map(async (business) => {
+//         const CategoryModel = categoryModels[business.categoryModel];
+//         let categoryDetails = {};
+
+//         if (CategoryModel && business.categoryRef) {
+//           const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
+//           if (categoryDoc) {
+//             categoryDetails = categoryDoc;
+//           }
+//         }
+
+//         return {
+//           ...business,
+//           categoryDetails // or rename to 'categoryData' if preferred
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       message: 'Businesses fetched successfully',
+//       businesses: businessesWithCategoryDetails
+//     });
+//   } catch (error) {
+//     console.error('Error fetching businesses:', error);
+//     res.status(500).json({
+//       message: 'Server error while fetching businesses',
+//       error: error.message
+//     });
+//   }
+// };
 
 
 
