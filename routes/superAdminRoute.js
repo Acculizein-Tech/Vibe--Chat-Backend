@@ -18,7 +18,7 @@ router.get('/users', protect, roles('superadmin', "admin"), getAllUsers);
 // ✅ New route: Get all business listings
 router.get('/businesses', protect, roles('superadmin', 'admin'), getAllBusinessListings);
 router.put('/updateUser/:id', protect, roles('superadmin', 'admin'), updateUserProfile);
-router.delete('/deleteBusiness/:id', protect, roles('superadmin'), deleteBusinessListingById);
+router.delete('/deleteBusiness/:id', protect, roles('superadmin','customer'), deleteBusinessListingById);
 router.post('/AddnewUser', protect, upload.single('userImage'), roles('superadmin','admin'), addNewUser);
 router.delete('/deleteUser/:id', protect, roles('superadmin'), deleteUserById);
 router.post(
