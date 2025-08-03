@@ -21,6 +21,8 @@ import RealEstate from '../models/RealEstate.js';
 import Loan from '../models/Loan.js';
 import Gym from '../models/Gym.js'; // Import Gym model
 import Jeweller from '../models/Jeweller.js'; // Import Jeweller model
+import ToyShop from '../models/ToyShop.js'; // Import ToyShop model
+import ElectronicShop from '../models/ElectronicShop.js'; // Import ElectronicShop model
 import Notification from '../models/Notification.js';
 
 import mongoose from 'mongoose';
@@ -39,7 +41,9 @@ const categoryModels = {
   RealEstate: RealEstate,
   Loan: Loan,
   Gym: Gym,
-  Jeweller: Jeweller // Add Jeweller model here
+  Jeweller: Jeweller, // Add Jeweller model here
+  ToyShop: ToyShop, // Add ToyShop model here
+  ElectronicShop: ElectronicShop // Add ElectronicShop model here
 };
 
 
@@ -1041,6 +1045,9 @@ export const getAllBusinesses = async (req, res) => {
     });
   }
 };
+
+
+
 // export const getAllBusinesses = async (req, res) => {
 //   try {
 //     // ✅ Fetch all non-deleted businesses with categoryRef
@@ -1454,5 +1461,5 @@ export const softDeleteBusiness = asyncHandler(async (req, res) => {
 
   res.status(200).json({ message: "Business listing is deleted" });
   // res.status(200).json({ message: "Business listing hidden (soft deleted)" });
-});
+}); 
 
