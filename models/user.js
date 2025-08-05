@@ -53,8 +53,11 @@ phone: {
   // },
   emailVerifyOTP: String,
 emailVerifyExpires: Date,
+emailResendBlock: Date, // 🟢 Add this line
+
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
+
 
 }, { timestamps: true });
 

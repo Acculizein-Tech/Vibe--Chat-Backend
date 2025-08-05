@@ -19,6 +19,17 @@ const businessSchema = new mongoose.Schema(
       ref: "User",
       required: true, // ensures every listing is tied to a user
     },
+    aadhaarNumber: {
+  type: String,
+  validate: {
+    validator: function (v) {
+      return /^\d{12}$/.test(v); // Validates 12-digit number
+    },
+    message: 'Aadhaar number must be a 12-digit numeric value',
+  },
+  required: true, // Required field
+  trim: true,
+},
     plan: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Priceplan",
@@ -109,6 +120,11 @@ const businessSchema = new mongoose.Schema(
         message: "galleryImages exceeds the limit of 10",
       },
     },
+    aadhaarImages: {
+  front: { type: String, required: [true, 'Aadhaar front image is required'] },
+  back: { type: String, required: [true, 'Aadhaar back image is required'] }
+},
+
     isDeleted: {
   type: Boolean,
   default: false
@@ -240,7 +256,16 @@ const businessSchema = new mongoose.Schema(
   healthClub: { type: Boolean, default: false },
   weightTrainingCenter: { type: Boolean, default: false },
   cardioTrainingCenter: { type: Boolean, default: false },
-  strengthTrainingFacility: { type: Boolean, default: false }
+  strengthTrainingFacility: { type: Boolean, default: false },
+  fashionModelShoots: { type: Boolean, default: false },
+babyFamilyPortraits: { type: Boolean, default: false },
+productCatalogShoots: { type: Boolean, default: false },
+corporateEventPhotography: { type: Boolean, default: false },
+},
+
+customService: {
+  type: String,
+  trim: true
 },
 
     salesExecutive: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

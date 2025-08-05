@@ -10,6 +10,9 @@ const mediaFields = upload.fields([
   { name: 'certificateImages', maxCount: 5 },
   { name: 'galleryImages', maxCount: 10 },
   { name: 'eventsImage', maxCount: 1 },
+  { name: 'aadhaarFront', maxCount: 1 },  // ✅ Aadhaar front photo
+  { name: 'aadhaarBack', maxCount: 1 },   // ✅ Aadhaar back photo
+
   { name: 'others', maxCount: 5 } // ✅ New field
 
 ]);

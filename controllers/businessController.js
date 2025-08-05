@@ -23,6 +23,7 @@ import Gym from '../models/Gym.js'; // Import Gym model
 import Jeweller from '../models/Jeweller.js'; // Import Jeweller model
 import ToyShop from '../models/ToyShop.js'; // Import ToyShop model
 import ElectronicShop from '../models/ElectronicShop.js'; // Import ElectronicShop model
+import Photography from '../models/Photography.js'; // Import Photography model
 import Notification from '../models/Notification.js';
 
 import mongoose from 'mongoose';
@@ -43,7 +44,8 @@ const categoryModels = {
   Gym: Gym,
   Jeweller: Jeweller, // Add Jeweller model here
   ToyShop: ToyShop, // Add ToyShop model here
-  ElectronicShop: ElectronicShop // Add ElectronicShop model here
+  ElectronicShop: ElectronicShop, // Add ElectronicShop model here
+  Photography: Photography // Default model for generic business listings
 };
 
 
@@ -476,12 +478,590 @@ const categoryModels = {
 //   }
 // };
 
+// export const createBusiness = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       ownerName,
+//       owner,
+//       location,
+//       phone,
+//       website,
+//       email,
+//       socialLinks,
+//       businessHours,
+//       category,
+//       experience,
+//       description,
+//       referralCode,
+//       services,
+//       categoryData,
+//       planId,
+//       paymentId
+//     } = req.body;
+
+//     const CategoryModel = categoryModels[category];
+//     if (!CategoryModel) {
+//       return res.status(400).json({ message: 'Invalid category model' });
+//     }
+
+//     const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+//     const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
+//     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
+//     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
+
+//     // 🧹 Remove empty GSTIN to avoid MongoDB duplicate "" index error
+//     if (parsedCategoryData?.GSTIN === '') {
+//       delete parsedCategoryData.GSTIN;
+//     }
+
+//     let parsedBusinessHours = [];
+//     try {
+//       parsedBusinessHours = Array.isArray(businessHours)
+//         ? businessHours
+//         : JSON.parse(businessHours || '[]');
+//     } catch (err) {
+//       return res.status(400).json({ message: 'Invalid businessHours format' });
+//     }
+
+//     const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+//       day: entry.day || '',
+//       isWorking: entry.isWorking ?? true,
+//       is24Hour: entry.is24Hour ?? false,
+//       is24HourClose: entry.is24HourClose ?? false,
+//       shifts: Array.isArray(entry.shifts)
+//         ? entry.shifts.filter(shift => shift.open && shift.close).map(shift => ({
+//             open: shift.open,
+//             close: shift.close
+//           }))
+//         : []
+//     }));
+
+//     // 🖼️ Upload Files to S3
+//     const files = req.files || {};
+//     const uploadedFiles = {};
+//     for (const field in files) {
+//       uploadedFiles[field] = [];
+//       for (const file of files[field]) {
+//         try {
+//           const s3Url = await uploadToS3(file, req);
+//           if (s3Url) {
+//             uploadedFiles[field].push(s3Url);
+//           } else {
+//             console.warn(`⚠️ Upload failed for ${file.originalname || 'unknown'}`);
+//           }
+//         } catch (err) {
+//           console.warn(`❌ Upload error for ${file.originalname || 'unknown'}:`, err.message);
+//         }
+//       }
+//     }
+
+//     const profileImage = uploadedFiles.profileImage?.[0] || null;
+//     const coverImage = uploadedFiles.coverImage?.[0] || null;
+//     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+//     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+//     // 🎯 Assign sales executive
+//     let salesExecutive = null;
+//     if (referralCode) {
+//       const refUser = await User.findOne({ referralCode });
+//       if (!refUser) {
+//         return res.status(400).json({ message: 'Invalid referral code' });
+//       }
+//       salesExecutive = refUser._id;
+//     }
+
+//     if (!salesExecutive) {
+//       const salesUsers = await User.find({ role: 'sales' });
+//       if (salesUsers.length > 0) {
+//         const randomIndex = Math.floor(Math.random() * salesUsers.length);
+//         salesExecutive = salesUsers[randomIndex]._id;
+//       }
+//     }
+
+//     // ✅ Validate Plan
+//     const cleanPlanId = typeof planId === 'string'
+//       ? planId.trim().replace(/^["']|["']$/g, '')
+//       : planId;
+
+//     let validPlan = null;
+//     if (cleanPlanId) {
+//       if (!mongoose.Types.ObjectId.isValid(cleanPlanId)) {
+//         return res.status(400).json({ message: 'Invalid plan ID format' });
+//       }
+
+//       const plan = await Priceplan.findById(cleanPlanId);
+//       if (!plan) {
+//         return res.status(400).json({ message: 'Plan not found' });
+//       }
+
+//       validPlan = plan;
+
+//       if (plan.price > 0) {
+//         if (!paymentId) {
+//           return res.status(400).json({ message: 'Payment ID is required for paid plans' });
+//         }
+
+//         const payment = await Payment.findOne({ paymentId });
+//         if (!payment || payment.status !== 'success') {
+//           return res.status(400).json({ message: 'Payment not found or not verified' });
+//         }
+//       }
+//     }
+
+//     // 🏢 Create Business
+//     const business = await Business.create({
+//       name,
+//       ownerName,
+//       owner,
+//       location: parsedLocation,
+//       phone,
+//       website,
+//       email,
+//       socialLinks: parsedSocialLinks,
+//       businessHours: formattedBusinessHours,
+//       experience,
+//       description,
+//       profileImage,
+//       coverImage,
+//       certificateImages,
+//       galleryImages,
+//       category,
+//       categoryModel: category,
+//       services: parsedServices,
+//       salesExecutive,
+//       plan: validPlan?._id || null
+//     });
+
+//     // 💳 Link Payment
+//     if (validPlan?.price > 0 && paymentId) {
+//       const payment = await Payment.findOneAndUpdate(
+//         { paymentId },
+//         { $set: { business: business._id } },
+//         { new: true }
+//       );
+
+//       if (payment) {
+//         await Business.findByIdAndUpdate(business._id, {
+//           $set: {
+//             lastPayment: payment._id,
+//             paymentStatus: 'success'
+//           }
+//         });
+//       }
+//     }
+
+//     // 📄 Create Category Document
+//     let categoryDoc = null;
+//     try {
+//       categoryDoc = await CategoryModel.create({
+//         ...parsedCategoryData,
+//         business: business._id
+//       });
+
+//       await Business.findByIdAndUpdate(business._id, {
+//         $set: { categoryRef: categoryDoc._id }
+//       });
+//     } catch (err) {
+//       console.error('❌ Category model creation failed. Rolling back business:', err.message);
+//       await Business.findByIdAndDelete(business._id);
+//       return res.status(500).json({
+//         message: 'Failed to create business details. Please ensure GSTIN or other fields are unique.',
+//         error: err.message
+//       });
+//     }
+
+//     // 🧾 Create Lead
+//     try {
+//       const user = await User.findById(owner).select('fullName email');
+//       if (user) {
+//         await Leads.create({
+//           name: user.fullName,
+//           contact: user.email,
+//           businessType: category,
+//           status: 'Interested',
+//           notes: 'Business listed on website',
+//           salesUser: salesExecutive || null,
+//           followUpDate: new Date(Date.now() + 2 * 60 * 1000)
+//         });
+//       }
+//     } catch (leadErr) {
+//       console.warn('⚠️ Lead creation failed:', leadErr.message);
+//     }
+
+//     // 🔔 Notify sales, admin, superadmin
+//     if (salesExecutive) {
+//       await notifyUser({
+//         userId: salesExecutive,
+//         type: 'NEW_BUSINESS_BY_REFERRAL',
+//         title: '📢 New Business Listed',
+//         message: `A new business "${name}" was listed by your referred user.`,
+//         data: {
+//           businessId: business._id,
+//           businessName: name,
+//           userId: owner,
+//           redirectPath: `/sales/business/${business._id}`
+//         }
+//       });
+//     }
+
+//     await Promise.all([
+//       notifyRole({
+//         role: 'admin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/admin/business/${business._id}`
+//         }
+//       }),
+//       notifyRole({
+//         role: 'superadmin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/superadmin/business/${business._id}`
+//         }
+//       })
+//     ]);
+
+//     const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
+
+//     res.status(201).json({
+//       message: 'Business created successfully',
+//       business: finalBusiness
+//     });
+//   } catch (error) {
+//     console.error('❌ Error creating business:', error);
+
+//     if (error.code === 11000 && error.keyPattern?.GSTIN) {
+//       return res.status(409).json({
+//         message: 'Duplicate GSTIN detected. Please enter a unique GSTIN or leave it blank.'
+//       });
+//     }
+//       // ❌ Mongoose ValidationError (e.g. Invalid email format)
+//   if (error.name === 'ValidationError') {
+//     const allErrors = Object.values(error.errors).map(err => err.message);
+//     return res.status(400).json({
+//       message: allErrors[0] || 'Validation error occurred',
+//     });
+//   }
+
+//     res.status(500).json({
+//       message: 'Something went wrong. Please try again later',
+//       error: error.message
+//     });
+//   }
+// };
+
+// export const createBusiness = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       ownerName,
+//       owner,
+//       aadhaarNumber,
+//       location,
+//       phone,
+//       website,
+//       email,
+//       socialLinks,
+//       businessHours,
+//       category,
+//       experience,
+//       description,
+//       referralCode,
+//       services,
+//       categoryData,
+//       planId,
+//       paymentId
+//     } = req.body;
+
+//     const CategoryModel = categoryModels[category];
+//     if (!CategoryModel) {
+//       return res.status(400).json({ message: 'Invalid category model' });
+//     }
+
+//     const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+//     const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
+//     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
+//     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
+
+//     // 🧹 Remove empty GSTIN to avoid MongoDB duplicate "" index error
+//     if (parsedCategoryData?.GSTIN === '') {
+//       delete parsedCategoryData.GSTIN;
+//     }
+
+//     let parsedBusinessHours = [];
+//     try {
+//       parsedBusinessHours = Array.isArray(businessHours)
+//         ? businessHours
+//         : JSON.parse(businessHours || '[]');
+//     } catch (err) {
+//       return res.status(400).json({ message: 'Invalid businessHours format' });
+//     }
+
+//     const formattedBusinessHours = parsedBusinessHours.map(entry => ({
+//       day: entry.day || '',
+//       isWorking: entry.isWorking ?? true,
+//       is24Hour: entry.is24Hour ?? false,
+//       is24HourClose: entry.is24HourClose ?? false,
+//       shifts: Array.isArray(entry.shifts)
+//         ? entry.shifts.filter(shift => shift.open && shift.close).map(shift => ({
+//             open: shift.open,
+//             close: shift.close
+//           }))
+//         : []
+//     }));
+
+//     // 🖼️ Upload Files to S3
+//     const files = req.files || {};
+//     const uploadedFiles = {};
+//     for (const field in files) {
+//       uploadedFiles[field] = [];
+//       for (const file of files[field]) {
+//         try {
+//           const s3Url = await uploadToS3(file, req);
+//           if (s3Url) {
+//             uploadedFiles[field].push(s3Url);
+//           } else {
+//             console.warn(`⚠️ Upload failed for ${file.originalname || 'unknown'}`);
+//           }
+//         } catch (err) {
+//           console.warn(`❌ Upload error for ${file.originalname || 'unknown'}:`, err.message);
+//         }
+//       }
+//     }
+
+//     const profileImage = uploadedFiles.profileImage?.[0] || null;
+//     const coverImage = uploadedFiles.coverImage?.[0] || null;
+//     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+//     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+//     // 🎯 Assign sales executive
+//     let salesExecutive = null;
+//     if (referralCode) {
+//       const refUser = await User.findOne({ referralCode });
+//       if (!refUser) {
+//         return res.status(400).json({ message: 'Invalid referral code' });
+//       }
+//       salesExecutive = refUser._id;
+//     }
+
+//     if (!salesExecutive) {
+//       const salesUsers = await User.find({ role: 'sales' });
+//       if (salesUsers.length > 0) {
+//         const randomIndex = Math.floor(Math.random() * salesUsers.length);
+//         salesExecutive = salesUsers[randomIndex]._id;
+//       }
+//     }
+
+//     // ✅ Validate Plan
+//     const cleanPlanId = typeof planId === 'string'
+//       ? planId.trim().replace(/^["']|["']$/g, '')
+//       : planId;
+
+//     let validPlan = null;
+//     if (cleanPlanId) {
+//       if (!mongoose.Types.ObjectId.isValid(cleanPlanId)) {
+//         return res.status(400).json({ message: 'Invalid plan ID format' });
+//       }
+
+//       const plan = await Priceplan.findById(cleanPlanId);
+//       if (!plan) {
+//         return res.status(400).json({ message: 'Plan not found' });
+//       }
+
+//       validPlan = plan;
+
+//       if (plan.price > 0) {
+//         if (!paymentId) {
+//           return res.status(400).json({ message: 'Payment ID is required for paid plans' });
+//         }
+
+//         const payment = await Payment.findOne({ paymentId });
+//         if (!payment || payment.status !== 'success') {
+//           return res.status(400).json({ message: 'Payment not found or not verified' });
+//         }
+//       }
+//     }
+
+//     // 🏢 Create Business
+//     const business = await Business.create({
+//       name,
+//       ownerName,
+//       owner,
+//       location: parsedLocation,
+//       phone,
+//       website,
+//       email,
+//       socialLinks: parsedSocialLinks,
+//       businessHours: formattedBusinessHours,
+//       experience,
+//       description,
+//       profileImage,
+//       coverImage,
+//       certificateImages,
+//       galleryImages,
+//       category,
+//       categoryModel: category,
+//       services: parsedServices,
+//       salesExecutive,
+//       plan: validPlan?._id || null
+//     });
+
+//     // 💳 Link Payment
+//     if (validPlan?.price > 0 && paymentId) {
+//       const payment = await Payment.findOneAndUpdate(
+//         { paymentId },
+//         { $set: { business: business._id } },
+//         { new: true }
+//       );
+
+//       if (payment) {
+//         await Business.findByIdAndUpdate(business._id, {
+//           $set: {
+//             lastPayment: payment._id,
+//             paymentStatus: 'success'
+//           }
+//         });
+//       }
+//     }
+
+//     // 📄 Create Category Document
+//     let categoryDoc = null;
+//     try {
+//       categoryDoc = await CategoryModel.create({
+//         ...parsedCategoryData,
+//         business: business._id
+//       });
+
+//       await Business.findByIdAndUpdate(business._id, {
+//         $set: { categoryRef: categoryDoc._id }
+//       });
+//     } catch (err) {
+//       console.error('❌ Category model creation failed. Rolling back business:', err.message);
+//       await Business.findByIdAndDelete(business._id);
+//       return res.status(500).json({
+//         message: 'Failed to create business details. Please ensure GSTIN or other fields are unique.',
+//         error: err.message
+//       });
+//     }
+
+//     // 🧾 Create Lead
+//     try {
+//       const user = await User.findById(owner).select('fullName email');
+//       if (user) {
+//         await Leads.create({
+//           name: user.fullName,
+//           contact: user.email,
+//           businessType: category,
+//           status: 'Interested',
+//           notes: 'Business listed on website',
+//           salesUser: salesExecutive || null,
+//           followUpDate: new Date(Date.now() + 2 * 60 * 1000)
+//         });
+//       }
+//     } catch (leadErr) {
+//       console.warn('⚠️ Lead creation failed:', leadErr.message);
+//     }
+
+//     // 🔔 Notify sales, admin, superadmin
+//     if (salesExecutive) {
+//       await notifyUser({
+//         userId: salesExecutive,
+//         type: 'NEW_BUSINESS_BY_REFERRAL',
+//         title: '📢 New Business Listed',
+//         message: `A new business "${name}" was listed by your referred user.`,
+//         data: {
+//           businessId: business._id,
+//           businessName: name,
+//           userId: owner,
+//           redirectPath: `/sales/business/${business._id}`
+//         }
+//       });
+//     }
+
+//     await Promise.all([
+//       notifyRole({
+//         role: 'admin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/admin/business/${business._id}`
+//         }
+//       }),
+//       notifyRole({
+//         role: 'superadmin',
+//         type: 'NEW_BUSINESS_LISTED',
+//         title: '🆕 Business Listing Submitted',
+//         message: salesExecutive
+//           ? `"${name}" has been listed and assigned to a sales executive.`
+//           : `"${name}" has been listed but not yet assigned to any sales executive.`,
+//         data: {
+//           businessId: business._id,
+//           ownerId: owner,
+//           assignedTo: salesExecutive || null,
+//           redirectPath: `/superadmin/business/${business._id}`
+//         }
+//       })
+//     ]);
+
+//     const finalBusiness = await Business.findById(business._id).populate('salesExecutive');
+
+//     res.status(201).json({
+//       message: 'Business created successfully',
+//       business: finalBusiness
+//     });
+//   } catch (error) {
+//     console.error('❌ Error creating business:', error);
+
+//     if (error.code === 11000 && error.keyPattern?.GSTIN) {
+//       return res.status(409).json({
+//         message: 'Duplicate GSTIN detected. Please enter a unique GSTIN or leave it blank.'
+//       });
+//     }
+//       // ❌ Mongoose ValidationError (e.g. Invalid email format)
+//   if (error.name === 'ValidationError') {
+//     const allErrors = Object.values(error.errors).map(err => err.message);
+//     return res.status(400).json({
+//       message: allErrors[0] || 'Validation error occurred',
+//     });
+//   }
+
+//     res.status(500).json({
+//       message: 'Something went wrong. Please try again later',
+//       error: error.message
+//     });
+//   }
+// };
+
 export const createBusiness = async (req, res) => {
   try {
     const {
       name,
       ownerName,
       owner,
+      aadhaarNumber,
+      customService,
+      gender,
       location,
       phone,
       website,
@@ -508,7 +1088,14 @@ export const createBusiness = async (req, res) => {
     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
 
-    // 🧹 Remove empty GSTIN to avoid MongoDB duplicate "" index error
+    // Aadhaar validation
+    if (aadhaarNumber && !/^\d{12}$/.test(aadhaarNumber)) {
+      return res.status(400).json({
+        message: 'Please enter a valid 12-digit Aadhaar number',
+      });
+    }
+
+    // 🧹 Remove empty GSTIN
     if (parsedCategoryData?.GSTIN === '') {
       delete parsedCategoryData.GSTIN;
     }
@@ -558,6 +1145,9 @@ export const createBusiness = async (req, res) => {
     const coverImage = uploadedFiles.coverImage?.[0] || null;
     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+
+    const aadhaarFront = uploadedFiles.aadhaarFront?.[0] || null;
+    const aadhaarBack = uploadedFiles.aadhaarBack?.[0] || null;
 
     // 🎯 Assign sales executive
     let salesExecutive = null;
@@ -611,7 +1201,14 @@ export const createBusiness = async (req, res) => {
     const business = await Business.create({
       name,
       ownerName,
+      gender,
       owner,
+      aadhaarNumber,
+      aadhaarImages: {
+        front: aadhaarFront,
+        back: aadhaarBack,
+      },
+      customService: customService || null,
       location: parsedLocation,
       phone,
       website,
@@ -749,14 +1346,19 @@ export const createBusiness = async (req, res) => {
       });
     }
 
+    if (error.name === 'ValidationError') {
+      const allErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        message: allErrors[0] || 'Validation error occurred',
+      });
+    }
+
     res.status(500).json({
-      message: 'Server Error',
+      message: 'Something went wrong. Please try again later',
       error: error.message
     });
   }
 };
-
-
 
 
 
