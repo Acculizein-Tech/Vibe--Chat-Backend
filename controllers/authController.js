@@ -404,32 +404,19 @@ export const resendOTP = asyncHandler(async (req, res) => {
     throw new Error('User not found');
   }
 
-  // 🚫 Already verified user should never be here
-  if (user.isVerified) {
-    return res.status(409).json({
-      success: false,
-      message: 'User already verified. Please login instead.',
-    });
-  }
-
   const now = Date.now();
 
-  // 🕒 Check if existing OTP is still valid
+  // 🕒 If resend attempted before 30 seconds passed
   if (user.emailVerifyExpires && user.emailVerifyExpires > now) {
-    const msLeft = user.emailVerifyExpires - now;
-    const secondsLeft = Math.floor(msLeft / 1000);
-    const minutes = Math.floor(secondsLeft / 60);
-    const seconds = secondsLeft % 60;
-
     return res.status(429).json({
       success: false,
-      message: `OTP already sent. Please wait ${minutes > 0 ? `${minutes} minute(s)` : ''}${seconds > 0 ? ` ${seconds} second(s)` : ''} before requesting again.`,
+      message: 'OTP already sent. Please wait 30 seconds for new OTP.',
     });
   }
 
-  // ✅ Generate new OTP & update expiry
+  // ✅ Generate new OTP & set 30s resend cooldown
   const otp = generateOTP(); // e.g., '872349'
-  const otpExpires = now + 10 * 60 * 1000; // 10 minutes from now
+  const otpExpires = now + 30 * 1000; // 30 seconds cooldown
 
   user.emailVerifyOTP = otp;
   user.emailVerifyExpires = otpExpires;
@@ -439,7 +426,7 @@ export const resendOTP = asyncHandler(async (req, res) => {
   await sendEmail({
     to: user.email,
     subject: 'Your Verification OTP',
-    text: `Your OTP is: ${otp}\n\nIt is valid for 10 minutes.`,
+    text: `Your OTP is: ${otp}\n\nPlease use this OTP within 10 minutes.`,
   });
 
   res.status(200).json({
@@ -447,6 +434,68 @@ export const resendOTP = asyncHandler(async (req, res) => {
     message: 'A new OTP has been sent to your email.',
   });
 });
+
+
+
+// export const resendOTP = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+
+//     if (!email) {
+//       return res.status(400).json({ success: false, message: 'Email is required' });
+//     }
+
+//     const user = await User.findOne({ email });
+
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+
+//     const now = Date.now();
+
+//     // ⏱ Prevent resend within cooldown (58 sec)
+//     if (user.emailVerifyExpires && user.emailVerifyExpires > now) {
+//       const msLeft = user.emailVerifyExpires - now;
+//       const secondsLeft = Math.ceil(msLeft / 1000);
+
+//       return res.status(429).json({
+//         success: false,
+//         message: `OTP already sent. Please wait ${secondsLeft} second(s) before requesting again.`,
+//       });
+//     }
+
+//     // 🔁 Generate and store new OTP
+//     const otp = generateOTP();
+//     const otpExpires = now + 58 * 1000;
+
+//     user.emailVerifyOTP = otp;
+//     user.emailVerifyExpires = otpExpires;
+//     await user.save();
+
+//     // ✅ Respond immediately (do not await email)
+//     res.status(200).json({
+//       success: true,
+//       message: 'A new OTP is being sent to your email.',
+//     });
+
+//     // 📧 Send email in background
+//     sendEmail({
+//       to: user.email,
+//       subject: 'Your Verification OTP',
+//       text: `Your OTP is: ${otp}\n\nIt is valid for 58 seconds.`,
+//     }).catch((err) => {
+//       console.error('Email send failed (resendOTP):', err);
+//       // Optional: log to DB or retry queue
+//     });
+
+//   } catch (error) {
+//     console.error('Error in resendOTP:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Something went wrong. Please try again later.',
+//     });
+//   }
+// };
 
 
 
