@@ -406,6 +406,54 @@ export const logout = asyncHandler(async (req, res) => {
 // });
 
 
+// export const resendOTP = asyncHandler(async (req, res) => {
+//   const { email } = req.body;
+
+//   if (!email) {
+//     res.status(400);
+//     throw new Error('Email is required');
+//   }
+
+//   const user = await User.findOne({ email });
+
+//   if (!user) {
+//     res.status(404);
+//     throw new Error('User not found');
+//   }
+
+//   const now = Date.now();
+
+//   // 🛑 Block resend if within 30 seconds cooldown
+//   if (user.emailResendBlock && user.emailResendBlock > now) {
+//     return res.status(429).json({
+//       success: false,
+//       message: 'OTP already sent. Please wait 30 seconds before requesting again.',
+//     });
+//   }
+
+//   // ✅ Generate new OTP
+//   const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+//   // Update OTP + expiry + cooldown
+//   user.emailVerifyOTP = otp;
+//   user.emailVerifyExpires = now + 10 * 60 * 1000;   // OTP valid for 10 min
+//   user.emailResendBlock = now + 30 * 1000;          // Resend blocked for 30 sec
+//   await user.save();
+
+//   // 📧 Send OTP to email
+//   await sendEmail({
+//     to: user.email,
+//     subject: 'Your New OTP',
+//     text: `Your new OTP is: ${otp}\n\nIt is valid for 10 minutes.`,
+//   });
+
+//   res.status(200).json({
+//     success: true,
+//     message: 'A new OTP has been sent to your email.',
+//   });
+// });
+
+// resendOTP.js
 export const resendOTP = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
@@ -423,7 +471,7 @@ export const resendOTP = asyncHandler(async (req, res) => {
 
   const now = Date.now();
 
-  // 🛑 Block resend if within 30 seconds cooldown
+  // 🛑 Cooldown check
   if (user.emailResendBlock && user.emailResendBlock > now) {
     return res.status(429).json({
       success: false,
@@ -431,16 +479,20 @@ export const resendOTP = asyncHandler(async (req, res) => {
     });
   }
 
-  // ✅ Generate new OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // Update OTP + expiry + cooldown
+  // ✨ Update all relevant OTP fields
   user.emailVerifyOTP = otp;
-  user.emailVerifyExpires = now + 10 * 60 * 1000;   // OTP valid for 10 min
-  user.emailResendBlock = now + 30 * 1000;          // Resend blocked for 30 sec
+  user.emailVerifyExpires = now + 10 * 60 * 1000;
+
+  user.resetPasswordOTP = otp;
+  user.resetPasswordExpires = now + 10 * 60 * 1000;
+
+  user.emailResendBlock = now + 30 * 1000;
+
   await user.save();
 
-  // 📧 Send OTP to email
+  // 📧 Send email
   await sendEmail({
     to: user.email,
     subject: 'Your New OTP',
@@ -452,6 +504,7 @@ export const resendOTP = asyncHandler(async (req, res) => {
     message: 'A new OTP has been sent to your email.',
   });
 });
+
 
 
 //reset password

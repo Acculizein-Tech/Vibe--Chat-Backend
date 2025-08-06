@@ -4,7 +4,8 @@ import {
   updateReview,
   deleteReview,
   getBusinessReviews,
-  getAllReviews
+  getAllReviews,
+  replyToReview
 } from '../controllers/reviewController.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
@@ -16,6 +17,9 @@ router.post('/:businessId', protect, createReview);
 
 // PUT /api/reviews/:reviewId
 router.put('/:reviewId', protect, updateReview);
+
+router.post('/reply/:reviewId', protect, replyToReview);  //for replying to a review
+
 
 // DELETE /api/reviews/:reviewId
 router.delete('/:reviewId', protect, deleteReview);

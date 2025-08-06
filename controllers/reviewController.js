@@ -202,3 +202,60 @@ export const getAllReviews = asyncHandler(async (req, res) => {
     });
   }
 });
+
+
+
+// 💬 Reply to a Review
+// 💬 Reply to a Review (with populated user info)
+export const replyToReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { comment } = req.body;
+
+    if (!comment || comment.trim() === '') {
+      return res.status(400).json({ message: 'Reply comment is required' });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ message: 'Review not found' });
+    }
+
+    const reply = {
+      user: req.user._id,
+      comment
+    };
+
+    review.replies.push(reply);
+    await review.save();
+
+    // 🔁 Refetch review with populated reply users
+    const populatedReview = await Review.findById(reviewId).populate(
+      'replies.user',
+      'fullName profile.avatar'
+    );
+
+    const formattedReplies = populatedReview.replies.map(r => ({
+      _id: r._id,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      user: {
+        _id: r.user._id,
+        fullName: r.user.fullName,
+        avatar: r.user.profile?.avatar || null
+      }
+    }));
+
+    res.status(201).json({
+      message: 'Reply added successfully',
+      replies: formattedReplies
+    });
+  } catch (error) {
+    console.error('❌ Error replying to review:', error);
+    res.status(500).json({
+      error: 'Server Error',
+      message: error.message
+    });
+  }
+};
+
