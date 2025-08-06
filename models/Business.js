@@ -27,7 +27,7 @@ const businessSchema = new mongoose.Schema(
     },
     message: 'Aadhaar number must be a 12-digit numeric value',
   },
-  required: true, // Required field
+ // Required field
   trim: true,
 },
     plan: {
@@ -115,20 +115,20 @@ const businessSchema = new mongoose.Schema(
       type: [String],
       validate: {
         validator: function (val) {
-          return val.length <= 10;
+            return val.length <= 10;
+          },
+          message: "galleryImages exceeds the limit of 10",
+          },
         },
-        message: "galleryImages exceeds the limit of 10",
-      },
-    },
-    aadhaarImages: {
-  front: { type: String, required: [true, 'Aadhaar front image is required'] },
-  back: { type: String, required: [true, 'Aadhaar back image is required'] }
-},
+        aadhaarImages: {
+          front: { type: String },
+          back: { type: String }
+        },
 
-    isDeleted: {
-  type: Boolean,
-  default: false
-},
+        isDeleted: {
+          type: Boolean,
+          default: false
+        },
 
     // ✅ Newly added services field (as requested)
    services: {
