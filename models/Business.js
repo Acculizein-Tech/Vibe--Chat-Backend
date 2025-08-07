@@ -263,37 +263,21 @@ passengerTransport: {
   default: false
 },
 
-Goods : {
+goodsLogistics : {
   type: Boolean,
   default: false
 },
 
-Logistics : {
+emergencyTransport : {
   type: Boolean,
   default: false
 },
 
-EmergencyTransport: {
+luxuryWeddingVip: {
   type: Boolean,
   default: false
 },
-Luxury : {
-  type: Boolean,
-  default: false
-},
-Wedding : {
-  type: Boolean,
-  default: false
-},
-VIP : {
-  type: Boolean,
-  default: false
-},
-Construction  : {
-  type: Boolean,
-  default: false
-},
-UtilityVehicles : {
+constructionUtilityVehicles : {
   type: Boolean,
   default: false
 },
