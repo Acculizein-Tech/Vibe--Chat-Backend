@@ -13,7 +13,9 @@ const mediaFields = upload.fields([
   { name: 'certificateImages', maxCount: 5 }, // ✅ fixed field name
   { name: 'galleryImages', maxCount: 10 },
 { name: 'aadhaarFront', maxCount: 1 },
-{ name: 'aadhaarBack', maxCount: 1 }
+{ name: 'aadhaarBack', maxCount: 1 },
+ { name: 'driverPhoto', maxCount: 1 },       // ✅ New: Driver Photo
+  { name: 'licenseCopy', maxCount: 1 },
 ]);
 
 router.post('/business', protect, mediaFields, createBusiness);

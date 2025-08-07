@@ -12,7 +12,8 @@ const mediaFields = upload.fields([
   { name: 'eventsImage', maxCount: 1 },
   { name: 'aadhaarFront', maxCount: 1 },  // ✅ Aadhaar front photo
   { name: 'aadhaarBack', maxCount: 1 },   // ✅ Aadhaar back photo
-
+   { name: 'driverPhoto', maxCount: 1 },       // ✅ New: Driver Photo
+  { name: 'licenseCopy', maxCount: 1 },       // ✅ New: License Copy
   { name: 'others', maxCount: 5 } // ✅ New field
 
 ]);

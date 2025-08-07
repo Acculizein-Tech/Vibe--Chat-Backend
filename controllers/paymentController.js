@@ -52,6 +52,86 @@ export const createOrder = asyncHandler(async (req, res) => {
 
 // ✅ Step 2: Verify & Save Payment
 // ✅ Step 2: Verify & Save Payment
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay: {
+//         razorpay_order_id,
+//         razorpay_payment_id,
+//         razorpay_signature
+//       },
+//       business,
+//       companyData 
+//     } = req.body;
+
+//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Missing payment credentials"
+//       });
+//     }
+
+//     const generated_signature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
+
+//     if (generated_signature !== razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Invalid Razorpay signature"
+//       });
+//     }
+
+//     // ✅ GST Calculation logic
+//     const amount = business.planPrice || 0;
+//     const baseAmount = parseFloat((amount / 1.18).toFixed(2));
+//     const gstAmount = parseFloat((amount - baseAmount).toFixed(2));
+//     const isUP = (business.state || "").toLowerCase() === "uttar pradesh";
+
+//     const payment = await Payment.create({
+//       user: req.user._id,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       amount,
+//       baseAmount,
+//       tax: {
+//         cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         igst: isUP ? 0 : gstAmount,
+//       },
+//       isUP,
+//       status: "success",
+//       billingDetails: {
+//         ...business,
+//         currency: "INR",
+//       },
+//       companyData: {
+//         companyName: companyData?.companyName,
+//         companyAddress: companyData?.companyAddress,
+//         companyPhone: companyData?.companyPhone,
+//         companyEmail: companyData?.companyEmail,
+//         gstin: companyData?.gstin
+//       }
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Payment verified and stored successfully",
+//       data: payment
+//     });
+
+//   } catch (err) {
+//     console.error("Error verifying payment:", err);
+//     return res.status(500).json({
+//       status: "fail",
+//       message: "Internal Server Error",
+//       error: err.message
+//     });
+//   }
+// });
+
 export const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const {
@@ -64,6 +144,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       companyData 
     } = req.body;
 
+    // Step 1: Validate Razorpay credentials
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
         status: "fail",
@@ -83,12 +164,32 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       });
     }
 
-    // ✅ GST Calculation logic
+    // Step 2: Calculate GST
     const amount = business.planPrice || 0;
     const baseAmount = parseFloat((amount / 1.18).toFixed(2));
     const gstAmount = parseFloat((amount - baseAmount).toFixed(2));
     const isUP = (business.state || "").toLowerCase() === "uttar pradesh";
 
+    // Step 3: Generate invoice number in format BZ/01/25-26
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+    const fyEnd = fyStart + 1;
+    const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd.toString().slice(-2)}`;
+
+    let counter = await InvoiceCounter.findOne({ financialYear });
+    if (!counter) {
+      counter = await InvoiceCounter.create({ financialYear, sequence: 1 });
+    } else {
+      counter.sequence += 1;
+      await counter.save();
+    }
+
+    const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+    const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+    // Step 4: Save payment to DB
     const payment = await Payment.create({
       user: req.user._id,
       orderId: razorpay_order_id,
@@ -101,6 +202,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
         igst: isUP ? 0 : gstAmount,
       },
+      invoiceNumber,
       isUP,
       status: "success",
       billingDetails: {
@@ -116,9 +218,11 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       }
     });
 
+    // Step 5: Send response
     return res.status(200).json({
       status: "success",
       message: "Payment verified and stored successfully",
+      invoiceNumber,
       data: payment
     });
 

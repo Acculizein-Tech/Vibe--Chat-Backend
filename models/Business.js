@@ -47,6 +47,7 @@ const businessSchema = new mongoose.Schema(
     },
     location: {
       address: String,
+      addressLink: String,
       pincode: String,
       city: String,
       state: String,
@@ -79,15 +80,9 @@ const businessSchema = new mongoose.Schema(
       meesho: String,
       myntra: String,
     },
-
-    // businessHours: [
-    //   {
-    //     day: { type: String, required: true },
-    //     open: { type: String, default: "" },  // Use "HH:mm" format
-    //     close: { type: String, default: "" }  // Use "HH:mm" format
-    //   }
-    // ],
-
+   area: {
+      type: String
+    },
     businessHours: [
       {
         day: { type: String, required: true },
@@ -261,6 +256,27 @@ const businessSchema = new mongoose.Schema(
 babyFamilyPortraits: { type: Boolean, default: false },
 productCatalogShoots: { type: Boolean, default: false },
 corporateEventPhotography: { type: Boolean, default: false },
+
+//VehicleBooking
+individualDriver:{
+  type: Boolean,
+  default: false
+},
+
+fleetOwner: {
+  type: Boolean,
+  default: false
+},
+
+travelAgencyLogisticsCompany: {
+  type: Boolean,
+  default: false
+},
+
+emergencyServiceProvider: {
+  type: Boolean,
+  default: false
+},
 },
 
 customService: {

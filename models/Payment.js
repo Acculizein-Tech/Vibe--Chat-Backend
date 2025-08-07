@@ -23,7 +23,7 @@ const paymentSchema = new mongoose.Schema({
     sgst: { type: Number, default: 0 },
     igst: { type: Number, default: 0 },
   },
-
+  invoiceNumber: { type: String}, // Unique invoice number for tracking
   isUP: { type: Boolean },
 
   status: {

@@ -46,11 +46,7 @@ phone: {
 
     avatar: String
   }, 
-  // Business-specific fields (nullable)
-  // businessDetails: {
-  //   name: String,
-  //   licenseNumber: String
-  // },
+ 
   emailVerifyOTP: String,
 emailVerifyExpires: Date,
 emailResendBlock: Date, // 🟢 Add this line

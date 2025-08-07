@@ -80,6 +80,10 @@ const getS3KeyPrefix = (req, file) => {
     folder = 'aadhaar/front';
   } else if (file.fieldname === 'aadhaarBack') {
     folder = 'aadhaar/back';
+  }else if (file.fieldname === 'driverPhoto') {
+    folder = 'driver/photo';
+  } else if (file.fieldname === 'licenseCopy') {
+    folder = 'driver/license';
   }
 
   return folder;
