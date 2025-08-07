@@ -44,12 +44,6 @@ const VehicleBookingSchema = new mongoose.Schema({
   },
   typeOfOperator: {
     type: String,
-    enum: [
-      'Individual Driver',
-      'Fleet Owner',
-      'Travel Agency / Logistics Company',
-      'Emergency Service Provider'
-    ]
   },
   facilities: {
   autoRickshaw: { type: Boolean, default: false },

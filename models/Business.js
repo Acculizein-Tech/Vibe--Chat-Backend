@@ -258,22 +258,42 @@ productCatalogShoots: { type: Boolean, default: false },
 corporateEventPhotography: { type: Boolean, default: false },
 
 //VehicleBooking
-individualDriver:{
+passengerTransport: {
   type: Boolean,
   default: false
 },
 
-fleetOwner: {
+Goods : {
   type: Boolean,
   default: false
 },
 
-travelAgencyLogisticsCompany: {
+Logistics : {
   type: Boolean,
   default: false
 },
 
-emergencyServiceProvider: {
+EmergencyTransport: {
+  type: Boolean,
+  default: false
+},
+Luxury : {
+  type: Boolean,
+  default: false
+},
+Wedding : {
+  type: Boolean,
+  default: false
+},
+VIP : {
+  type: Boolean,
+  default: false
+},
+Construction  : {
+  type: Boolean,
+  default: false
+},
+UtilityVehicles : {
   type: Boolean,
   default: false
 },
