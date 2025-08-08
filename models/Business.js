@@ -35,6 +35,7 @@ const businessSchema = new mongoose.Schema(
       ref: "Priceplan",
       default: null,
     },
+    
     paymentStatus: {
       type: String,
       enum: ["pending", "success", "failed"],

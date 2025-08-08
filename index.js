@@ -141,7 +141,7 @@ app.use("/invoices", express.static(path.join(path.resolve(), "invoices")));
 
 
 // ✅ Serve static files from 'uploads' folder
-app.use('/uploads', express.static(path.join(path.resolve(), 'uploads')));
+// app.use('/uploads', express.static(path.join(path.resolve(), 'uploads')));
 // Error handling
 app.use(errorHandler);
 
