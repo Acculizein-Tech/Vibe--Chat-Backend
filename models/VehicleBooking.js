@@ -6,8 +6,8 @@ const driverSchema = new mongoose.Schema({
   licenseValidity: Date,
   experienceYears: Number,
   languagesKnown: [String],
-  uniformProvided: { type: Boolean, default: false },
-  backgroundVerified: { type: Boolean, default: false },
+  uniformProvided: { type: String },
+  backgroundVerified: { type: String },
   driverPhoto: String,
   licenseCopy: String
 }, { _id: false });
