@@ -1,10 +1,12 @@
+//upload.js
+
 import multer from 'multer';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+
 dotenv.config();
 
 // Initialize S3 Client
@@ -30,11 +32,13 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter logic
+// File filter logic (allow all common image types)
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  // const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
-  const imageTypes = ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.bmp', '.tiff', '.svg'];
+  const imageTypes = [
+    '.jpg', '.jpeg', '.png', '.webp', '.avif',
+    '.gif', '.bmp', '.tiff', '.svg' , '.jfif'
+  ];
   const pdfTypes = ['.pdf'];
 
   if (file.fieldname === 'certificateImages') {
@@ -43,30 +47,31 @@ const fileFilter = (req, file, cb) => {
       : cb(new Error('Only PDF files are allowed for certificateImages'));
   }
 
-  const allowedImageFields = ['profileImage', 'coverImage', 'galleryImages', 'bannerImage', 'others'];
+  const allowedImageFields = [
+    'profileImage', 'coverImage', 'galleryImages',
+    'bannerImage', 'others'
+  ];
   if (allowedImageFields.includes(file.fieldname)) {
     return imageTypes.includes(ext)
       ? cb(null, true)
       : cb(new Error(`Only image files are allowed for ${file.fieldname}`));
   }
 
-  cb(null, true); // allow other types if needed
+  cb(null, true);
 };
 
 const upload = multer({ storage, fileFilter });
 
-/**
- * Get correct S3 folder path based on request
- */
+// Get correct S3 folder path
 const getS3KeyPrefix = (req, file) => {
   let folder = 'others';
 
   if (file.fieldname === 'profileImage') {
-    if (req.baseUrl.includes('/user')) {
-      folder = 'profile-user';
-    } else if (req.baseUrl.includes('/business')) {
-      folder = 'profile-business';
-    }
+    folder = req.baseUrl.includes('/user')
+      ? 'profile-user'
+      : req.baseUrl.includes('/business')
+        ? 'profile-business'
+        : folder;
   } else if (file.fieldname === 'coverImage') {
     folder = 'cover-image';
   } else if (file.fieldname === 'certificateImages') {
@@ -75,12 +80,11 @@ const getS3KeyPrefix = (req, file) => {
     folder = 'gallery-images';
   } else if (file.fieldname === 'eventsImage') {
     folder = 'events-photo';
-  }
-  else if (file.fieldname === 'aadhaarFront') {
+  } else if (file.fieldname === 'aadhaarFront') {
     folder = 'aadhaar/front';
   } else if (file.fieldname === 'aadhaarBack') {
     folder = 'aadhaar/back';
-  }else if (file.fieldname === 'driverPhoto') {
+  } else if (file.fieldname === 'driverPhoto') {
     folder = 'driver/photo';
   } else if (file.fieldname === 'licenseCopy') {
     folder = 'driver/license';
@@ -89,88 +93,57 @@ const getS3KeyPrefix = (req, file) => {
   return folder;
 };
 
-/**
- * Upload single file to S3 and return a pre-signed URL
- */
-// export const uploadToS3 = async (file, req) => {
-//   const folder = getS3KeyPrefix(req, file);
-//   const key = `${folder}/${file.filename}`;
-//   const fileStream = fs.createReadStream(file.path);
-
-//   const uploadParams = {
-//     Bucket: process.env.AWS_BUCKET_NAME,
-//     Key: key,
-//     Body: fileStream,
-//     ContentType: file.mimetype,
-//   };
-
-//   // await s3.send(new PutObjectCommand(uploadParams));
-
-//   // // Remove local file after upload
-//   // fs.unlinkSync(file.path);
-//     try {
-//     await s3.send(new PutObjectCommand(uploadParams));
-//     fs.unlinkSync(file.path);
-//   } catch (err) {
-//     console.error(`❌ Failed to upload "${file.filename}" to S3:`, err.message);
-//     return null;
-//   }
-
-//   // // Generate pre-signed URL (valid for 1 hour)
-//   // const getCommand = new GetObjectCommand({
-//   //   Bucket: process.env.AWS_BUCKET_NAME,
-//   //   Key: key,
-//   // });
-
-//   // const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
-
-//   // return signedUrl;
-
-//     try {
-//     const getCommand = new GetObjectCommand({
-//       Bucket: process.env.AWS_BUCKET_NAME,
-//       Key: key,
-//     });
-//     const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 604800 }); // 1 week
-//     return signedUrl;
-//   } catch (err) {
-//     console.error(`⚠️ Failed to generate signed URL for "${file.filename}":`, err.message);
-//     return null;
-//   }
-// };
-
+// Upload and convert images
 export const uploadToS3 = async (file, req) => {
   const folder = getS3KeyPrefix(req, file);
-  const baseFileName = path.parse(file.filename).name; // remove extension
+  const baseFileName = path.parse(file.filename).name;
   const key = `${folder}/${baseFileName}.webp`;
+  const ext = path.extname(file.originalname).toLowerCase();
 
   try {
-    // Convert image to webp buffer using sharp
-    const webpBuffer = await sharp(file.path)
-      .webp({ quality: 80 }) // adjust quality if needed
-      .toBuffer();
+    let webpBuffer;
 
-    const uploadParams = {
+    if (ext === '.gif') {
+      // Convert animated GIF → first frame WebP
+      webpBuffer = await sharp(file.path, { animated: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+    } else if (ext === '.svg') {
+      // Convert SVG → PNG → WebP
+      const pngBuffer = await sharp(file.path).png().toBuffer();
+      webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
+    } else {
+      // Other image formats
+      webpBuffer = await sharp(file.path)
+        .webp({ quality: 80 })
+        .toBuffer();
+    }
+
+    // Upload to S3
+    await s3.send(new PutObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
       Body: webpBuffer,
-      ContentType: 'image/webp',
-      // ACL: 'public-read', // Make public
+      ContentType: 'image/webp'
+    }));
+
+    // Delete temp file after processing
+    fs.unlink(file.path, () => {});
+
+    return {
+      success: true,
+      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
+      message: (ext === '.gif' || ext === '.svg')
+        ? 'Some images were optimized for faster loading.'
+        : undefined
     };
-
-    await s3.send(new PutObjectCommand(uploadParams));
-    fs.unlinkSync(file.path); // remove temp file
-
-    // Return permanent public URL
-    const publicUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-    return publicUrl;
-  }  catch (err) {
-  console.error(`❌ Upload failed for "${file.filename}":`, err.message);
-  console.error("❌ Full error:", err);
-
-  console.error(err); // <-- ADD THIS LINE for full error trace
-  return null;
-}
+  } catch (err) {
+    console.error(`❌ Upload failed for "${file.filename}":`, err.message);
+    return {
+      success: false,
+      message: 'We could not process one of your images. Please try again.'
+    };
+  }
 };
 
 export default upload;

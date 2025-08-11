@@ -1,14 +1,12 @@
 import mongoose from 'mongoose';
 
 const ModelsSchema = new mongoose.Schema({
-  speciality: {
+  speciality: {   
     type: String,
     
   },
   registerNumber: {
     type: String,
-    required: false,
-    default: ''
   },
   YearOfEstablishment: {
     type: String,
