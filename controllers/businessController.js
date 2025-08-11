@@ -26,7 +26,7 @@ import ElectronicShop from '../models/ElectronicShop.js'; // Import ElectronicSh
 import Photography from '../models/Photography.js'; // Import Photography model
 import Advocate from '../models/Advocate.js'; // Import Lawyer model
 import VehicleBooking from '../models/VehicleBooking.js'; // Import VehicleBooking model
-import Self from '../models/Self.js'; // Import Self model
+import PeepalBook from '../models/PeepalBook.js'; // Import Self model
 import Notification from '../models/Notification.js';
 
 import mongoose from 'mongoose';
@@ -51,7 +51,7 @@ const categoryModels = {
   Photography: Photography, // Default model for generic business listings
   Advocate: Advocate, // Add Advocate model here
   VehicleBooking: VehicleBooking, // Use VehicleBooking model for VehicleBooking category
-  Self: Self
+  PeepalBook: PeepalBook 
 };
 
 
