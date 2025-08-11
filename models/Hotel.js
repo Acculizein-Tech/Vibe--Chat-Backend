@@ -8,7 +8,7 @@ const hotelSchema = new mongoose.Schema({
   },
   registerNumber: {
     type: String,
-    default: ''
+  
   },
   YearOfEstablishment: {
     type: String,
