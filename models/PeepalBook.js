@@ -1,12 +1,13 @@
 import mongoose from 'mongoose';
 
 const PeepalBookSchema = new mongoose.Schema({
-  speciality: {   
+  speciality: {
     type: String,
     
   },
   registerNumber: {
     type: String,
+   
   },
   YearOfEstablishment: {
     type: String,
@@ -35,7 +36,7 @@ const PeepalBookSchema = new mongoose.Schema({
   freelance: { type: Boolean, default: false },
   },
 
- // ✅ Separate model form fields
+   // ✅ Separate model form fields
   height: { type: String, default: '' }, // e.g., "5'8\""
   weight: { type: String, default: '' }, // in kg or lbs
   bust: { type: String, default: '' }, // fullest part of chest
@@ -52,6 +53,10 @@ const PeepalBookSchema = new mongoose.Schema({
   language: { type: String, default: '' }, // language skills
   awards: { type: String, default: '' }, // awards and recognitions
 
+  hobbies: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {}
+},
 
   extraFields: {
     type: Map,

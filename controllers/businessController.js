@@ -26,7 +26,11 @@ import ElectronicShop from '../models/ElectronicShop.js'; // Import ElectronicSh
 import Photography from '../models/Photography.js'; // Import Photography model
 import Advocate from '../models/Advocate.js'; // Import Lawyer model
 import VehicleBooking from '../models/VehicleBooking.js'; // Import VehicleBooking model
-import PeepalBook from '../models/PeepalBook.js'; // Import Self model
+import PeepalBook from '../models/PeepalBook.js'; // 
+import Doctor from '../models/Doctor.js';
+import Cafe from '../models/Cafe.js';
+import Coaching from '../models/Coaching.js';
+import TentHouse from '../models/TentHouse.js'; // Import TentHouse model  
 import Notification from '../models/Notification.js';
 
 import mongoose from 'mongoose';
@@ -51,9 +55,12 @@ const categoryModels = {
   Photography: Photography, // Default model for generic business listings
   Advocate: Advocate, // Add Advocate model here
   VehicleBooking: VehicleBooking, // Use VehicleBooking model for VehicleBooking category
-  PeepalBook: PeepalBook 
+  PeepalBook: PeepalBook,
+  Doctor: Doctor,
+  Cafe: Cafe,
+  Coaching: Coaching,
+  TentHouse: TentHouse
 };
-
 
 
 
@@ -88,27 +95,27 @@ const categoryModels = {
 //       return res.status(400).json({ message: 'Invalid category model' });
 //     }
 
+//     // Parse incoming JSON strings
 //     const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
 //     const parsedSocialLinks = typeof socialLinks === 'string' ? JSON.parse(socialLinks) : socialLinks;
 //     const parsedServices = typeof services === 'string' ? JSON.parse(services) : services || {};
 //     const parsedCategoryData = typeof categoryData === 'string' ? JSON.parse(categoryData) : categoryData || {};
 
 //     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber)) {
-//       return res.status(400).json({
-//         message: 'Please enter a valid 12-digit Aadhaar number',
-//       });
+//       return res.status(400).json({ message: 'Please enter a valid 12-digit Aadhaar number' });
 //     }
 
 //     if (parsedCategoryData?.GSTIN === '') {
 //       delete parsedCategoryData.GSTIN;
 //     }
 
+//     // Validate businessHours
 //     let parsedBusinessHours = [];
 //     try {
 //       parsedBusinessHours = Array.isArray(businessHours)
 //         ? businessHours
 //         : JSON.parse(businessHours || '[]');
-//     } catch (err) {
+//     } catch {
 //       return res.status(400).json({ message: 'Invalid businessHours format' });
 //     }
 
@@ -125,30 +132,39 @@ const categoryModels = {
 //         : []
 //     }));
 
+//     // ================================
+//     // Parallel Image Upload Handling
+//     // ================================
 //     const files = req.files || {};
 //     const uploadedFiles = {};
-//     for (const field in files) {
-//       uploadedFiles[field] = [];
-//       for (const file of files[field]) {
-//         try {
-//           const s3Url = await uploadToS3(file, req);
-//           if (s3Url) {
-//             uploadedFiles[field].push(s3Url);
-//           }
-//         } catch (err) {
-//           console.warn(`Upload error for ${file.originalname || 'unknown'}:`, err.message);
-//         }
-//       }
-//     }
+
+//     await Promise.all(
+//       Object.keys(files).map(async field => {
+//         const fileUploads = await Promise.all(
+//           files[field].map(async file => {
+//             try {
+//               const result = await uploadToS3(file, req);
+//               // Always return a string to prevent Cast errors
+//               return typeof result === 'object' && result.url ? result.url : String(result || '');
+//             } catch (err) {
+//               console.warn(`Upload error for ${file.originalname || 'unknown'}:`, err.message);
+//               return null;
+//             }
+//           })
+//         );
+//         uploadedFiles[field] = fileUploads.filter(Boolean);
+//       })
+//     );
+//     // ================================
 
 //     const profileImage = uploadedFiles.profileImage?.[0] || null;
 //     const coverImage = uploadedFiles.coverImage?.[0] || null;
 //     const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
 //     const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
-
 //     const aadhaarFront = uploadedFiles.aadhaarFront?.[0] || null;
 //     const aadhaarBack = uploadedFiles.aadhaarBack?.[0] || null;
 
+//     // Sales executive handling
 //     let salesExecutive = null;
 //     if (referralCode) {
 //       const refUser = await User.findOne({ referralCode });
@@ -157,15 +173,14 @@ const categoryModels = {
 //       }
 //       salesExecutive = refUser._id;
 //     }
-
 //     if (!salesExecutive) {
 //       const salesUsers = await User.find({ role: 'sales' });
 //       if (salesUsers.length > 0) {
-//         const randomIndex = Math.floor(Math.random() * salesUsers.length);
-//         salesExecutive = salesUsers[randomIndex]._id;
+//         salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
 //       }
 //     }
 
+//     // Plan validation
 //     const cleanPlanId = typeof planId === 'string'
 //       ? planId.trim().replace(/^['"]|['"]$/g, '')
 //       : planId;
@@ -175,19 +190,15 @@ const categoryModels = {
 //       if (!mongoose.Types.ObjectId.isValid(cleanPlanId)) {
 //         return res.status(400).json({ message: 'Invalid plan ID format' });
 //       }
-
 //       const plan = await Priceplan.findById(cleanPlanId);
 //       if (!plan) {
 //         return res.status(400).json({ message: 'Plan not found' });
 //       }
-
 //       validPlan = plan;
-
 //       if (plan.price > 0) {
 //         if (!paymentId) {
 //           return res.status(400).json({ message: 'Payment ID is required for paid plans' });
 //         }
-
 //         const payment = await Payment.findOne({ paymentId });
 //         if (!payment || payment.status !== 'success') {
 //           return res.status(400).json({ message: 'Payment not found or not verified' });
@@ -195,16 +206,14 @@ const categoryModels = {
 //       }
 //     }
 
+//     // Create business entry
 //     const business = await Business.create({
 //       name,
 //       ownerName,
 //       gender,
 //       owner,
 //       aadhaarNumber,
-//       aadhaarImages: {
-//         front: aadhaarFront,
-//         back: aadhaarBack,
-//       },
+//       aadhaarImages: { front: aadhaarFront, back: aadhaarBack },
 //       customService: customService || null,
 //       location: parsedLocation,
 //       phone,
@@ -226,61 +235,47 @@ const categoryModels = {
 //       plan: validPlan?._id || null
 //     });
 
+//     // Payment update
 //     if (validPlan?.price > 0 && paymentId) {
 //       const payment = await Payment.findOneAndUpdate(
 //         { paymentId },
 //         { $set: { business: business._id } },
 //         { new: true }
 //       );
-
 //       if (payment) {
 //         await Business.findByIdAndUpdate(business._id, {
-//           $set: {
-//             lastPayment: payment._id,
-//             paymentStatus: 'success'
-//           }
+//           $set: { lastPayment: payment._id, paymentStatus: 'success' }
 //         });
 //       }
 //     }
 
-//     // Add VehicleBooking image support if applicable
-//     // if (category === 'VehicleBooking') {
-//     //   const driverPhoto = uploadedFiles.driverPhoto?.[0] || null;
-//     //   const licenseCopy = uploadedFiles.licenseCopy?.[0] || null;
-
-//     //   if (driverPhoto) parsedCategoryData.driverPhoto = driverPhoto;
-//     //   if (licenseCopy) parsedCategoryData.licenseCopy = licenseCopy;
-//     // }
+//     // Vehicle booking driver docs
 //     if (category === 'VehicleBooking') {
-//   const driverPhoto = uploadedFiles.driverPhoto?.[0] || null;
-//   const licenseCopy = uploadedFiles.licenseCopy?.[0] || null;
+//       const driverPhoto = uploadedFiles.driverPhoto?.[0] || null;
+//       const licenseCopy = uploadedFiles.licenseCopy?.[0] || null;
+//       if (parsedCategoryData.drivers?.length > 0) {
+//         parsedCategoryData.drivers[0].driverPhoto = driverPhoto;
+//         parsedCategoryData.drivers[0].licenseCopy = licenseCopy;
+//       }
+//     }
 
-//   // Ensure drivers array exists and at least one driver is present
-//   if (parsedCategoryData.drivers && parsedCategoryData.drivers.length > 0) {
-//     parsedCategoryData.drivers[0].driverPhoto = driverPhoto;
-//     parsedCategoryData.drivers[0].licenseCopy = licenseCopy;
-//   }
-// }
-
-
-//     let categoryDoc = null;
+//     // Create category details
 //     try {
-//       categoryDoc = await CategoryModel.create({
+//       const categoryDoc = await CategoryModel.create({
 //         ...parsedCategoryData,
 //         business: business._id
 //       });
-
 //       await Business.findByIdAndUpdate(business._id, {
 //         $set: { categoryRef: categoryDoc._id }
 //       });
-//     } catch (err) {
+//     } catch {
 //       await Business.findByIdAndDelete(business._id);
 //       return res.status(500).json({
-//         message: 'Failed to create business details. Please ensure GSTIN or other fields are unique.',
-//         error: err.message
+//         message: 'Failed to create business details. Please ensure GSTIN or other fields are unique.'
 //       });
 //     }
 
+//     // Create lead for sales exec
 //     try {
 //       const user = await User.findById(owner).select('fullName email');
 //       if (user) {
@@ -298,6 +293,7 @@ const categoryModels = {
 //       console.warn('Lead creation failed:', leadErr.message);
 //     }
 
+//     // Notifications
 //     if (salesExecutive) {
 //       await notifyUser({
 //         userId: salesExecutive,
@@ -358,24 +354,182 @@ const categoryModels = {
 //         message: 'Duplicate GSTIN detected. Please enter a unique GSTIN or leave it blank.'
 //       });
 //     }
-
 //     if (error.name === 'ValidationError') {
 //       const allErrors = Object.values(error.errors).map(err => err.message);
-//       return res.status(400).json({
-//         message: allErrors[0] || 'Validation error occurred',
-//       });
+//       return res.status(400).json({ message: allErrors[0] || 'Validation error occurred' });
+//     }
+//     res.status(500).json({ message: 'Something went wrong. Please try again later' });
+//   }
+// };
+
+
+// export const updateBusiness = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     // 1️⃣  Extract raw form-data values
+//     const {
+//       name,
+//       ownerName,
+//       phone,
+//       website,
+//       email,
+//       category: newCategory,  
+//       subCategory: newSubCategory,  // ✅ NEW: subcategory for more granularity
+//       experience,
+//       description,
+//       services: rawServices,
+//       location: rawLocation,
+//       socialLinks: rawSocialLinks,
+//       businessHours: rawBusinessHours
+//     } = req.body;
+
+//     // 2️⃣  Parse JSON-stringified fields
+//     let location = {};
+//     let socialLinks = {};
+//     let businessHoursArr = [];
+//     let categoryData = {};
+//     let services = {};
+
+//     try { location = rawLocation ? JSON.parse(rawLocation) : {}; }        catch { return res.status(400).json({ message: 'Invalid JSON in location' }); }
+//     try { socialLinks = rawSocialLinks ? JSON.parse(rawSocialLinks) : {}; }catch { return res.status(400).json({ message: 'Invalid JSON in socialLinks' }); }
+//     try { businessHoursArr = rawBusinessHours ? JSON.parse(rawBusinessHours) : []; } catch { return res.status(400).json({ message: 'Invalid JSON in businessHours' }); }
+//     try { categoryData = req.body.categoryData ? JSON.parse(req.body.categoryData) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in categoryData' }); }
+//     try { services = rawServices ? JSON.parse(rawServices) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in services' }); }
+
+//     // 3️⃣  Fetch existing business
+//     const business = await Business.findById(id);
+//     if (!business) return res.status(404).json({ message: 'Business not found' });
+
+//     /* ------------------------------------------------------------------ */
+//     /* 4️⃣  Handle file uploads                                           */
+//     /* ------------------------------------------------------------------ */
+    
+
+// const files = req.files || {};
+
+// if (files.profileImage?.length) {
+//   const url = await uploadToS3(files.profileImage[0], req);
+//   business.profileImage = url;
+// }
+
+// if (files.coverImage?.length) {
+//   const url = await uploadToS3(files.coverImage[0], req);
+//   business.coverImage = url;
+// }
+
+// if (files.certificateImages?.length) {
+//   const certUrls = await Promise.all(
+//     files.certificateImages.slice(0, 5).map(file => uploadToS3(file, req))
+//   );
+//   business.certificateImages = certUrls;
+// }
+
+// if (files.galleryImages?.length) {
+//   const galleryUrls = await Promise.all(
+//     files.galleryImages.slice(0, 10).map(file => uploadToS3(file, req))
+//   );
+//   business.galleryImages = galleryUrls;
+// }
+
+
+//     /* ------------------------------------------------------------------ */
+//     /* 5️⃣  Update scalar fields                                          */
+//     /* ------------------------------------------------------------------ */
+//     business.name        = name        ?? business.name;
+//     business.ownerName   = ownerName   ?? business.ownerName;
+//     business.phone       = phone       ?? business.phone;
+//     business.website     = website     ?? business.website;
+//     business.email       = email       ?? business.email;
+//     business.experience  = experience  ?? business.experience;
+//     business.description = description ?? business.description;
+
+//     /* ------------------------------------------------------------------ */
+//     /* 6️⃣  Update complex object fields                                  */
+//     /* ------------------------------------------------------------------ */
+//     if (Object.keys(location).length)      business.location    = location;
+//     if (Object.keys(socialLinks).length)   business.socialLinks = socialLinks;
+//     if (Object.keys(services).length)      business.services     = services;
+
+//     // if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
+//     //   business.businessHours = businessHoursArr.map(bh => ({
+//     //     day:   bh.day,
+//     //     open:  bh.open  || '',
+//     //     close: bh.close || ''
+//     //   }));
+
+//     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
+//   business.businessHours = businessHoursArr.map(bh => ({
+//     day: bh.day || '',
+//     isWorking: bh.isWorking ?? true,
+//     is24Hour: bh.is24Hour ?? false,
+//     is24HourClose: bh.is24HourClose ?? false,
+//     shifts: Array.isArray(bh.shifts)
+//       ? bh.shifts
+//           .filter(shift => shift.open && shift.close)
+//           .map(shift => ({
+//             open: shift.open,
+//             close: shift.close
+//           }))
+//       : []
+//   }));
+
+
 //     }
 
+//     /* ------------------------------------------------------------------ */
+//     /* 7️⃣  Category Update (switch or same)                              */
+//     /* ------------------------------------------------------------------ */
+//     if (newCategory && newCategory !== business.category) {
+//       // ✨ Switch to a new category
+//       const newModelName = newCategory;
+//       const NewCategoryModel = categoryModels[newModelName];
+//       if (!NewCategoryModel) {
+//         return res.status(400).json({ message: `Invalid category "${newCategory}"` });
+//       }
+
+//       const newCatDoc = new NewCategoryModel(categoryData);
+//       await newCatDoc.save();
+
+//       business.category      = newCategory;
+//       business.categoryModel = newModelName;
+//       business.categoryRef   = newCatDoc._id;
+//     } else {
+//       // ✨ Update existing categoryData
+//       const CurrentCatModel = categoryModels[business.categoryModel];
+//       if (CurrentCatModel && Object.keys(categoryData).length && business.categoryRef) {
+//         const catDoc = await CurrentCatModel.findById(business.categoryRef);
+//         if (catDoc) {
+//           catDoc.set(categoryData);
+//           await catDoc.save();
+//         }
+//       }
+//     }
+
+//     /* ------------------------------------------------------------------ */
+//     /* 8️⃣  Save and respond                                              */
+//     /* ------------------------------------------------------------------ */
+//     const updatedBusiness = await business.save();
+
+//     res.status(200).json({
+//       message: '✅ Business listing updated successfully',
+//       business: updatedBusiness
+//     });
+//   } catch (error) {
+//     console.error('❌ Error updating business listing:', error);
 //     res.status(500).json({
-//       message: 'Something went wrong. Please try again later',
+//       message: 'Server Error while updating business listing',
 //       error: error.message
 //     });
 //   }
 // };
 
+
+//update
+
+
+
 //createbusiness
-
-
 
 export const createBusiness = async (req, res) => {
   try {
@@ -676,19 +830,20 @@ export const createBusiness = async (req, res) => {
 };
 
 
+
 // export const updateBusiness = async (req, res) => {
 //   try {
 //     const { id } = req.params;
 
-//     // 1️⃣  Extract raw form-data values
+//     // 1️⃣ Extract raw form-data values
 //     const {
 //       name,
 //       ownerName,
 //       phone,
 //       website,
 //       email,
-//       category: newCategory,  
-//       subCategory: newSubCategory,  // ✅ NEW: subcategory for more granularity
+//       category: newCategory,
+//       subCategory: newSubCategory,
 //       experience,
 //       description,
 //       services: rawServices,
@@ -697,118 +852,108 @@ export const createBusiness = async (req, res) => {
 //       businessHours: rawBusinessHours
 //     } = req.body;
 
-//     // 2️⃣  Parse JSON-stringified fields
-//     let location = {};
-//     let socialLinks = {};
-//     let businessHoursArr = [];
-//     let categoryData = {};
-//     let services = {};
+//     // 2️⃣ Parse JSON-stringified fields safely
+//     const safeParse = (val, fallback) => {
+//       try {
+//         return val ? JSON.parse(val) : fallback;
+//       } catch {
+//         return res.status(400).json({ message: `Invalid JSON in field` });
+//       }
+//     };
 
-//     try { location = rawLocation ? JSON.parse(rawLocation) : {}; }        catch { return res.status(400).json({ message: 'Invalid JSON in location' }); }
-//     try { socialLinks = rawSocialLinks ? JSON.parse(rawSocialLinks) : {}; }catch { return res.status(400).json({ message: 'Invalid JSON in socialLinks' }); }
-//     try { businessHoursArr = rawBusinessHours ? JSON.parse(rawBusinessHours) : []; } catch { return res.status(400).json({ message: 'Invalid JSON in businessHours' }); }
-//     try { categoryData = req.body.categoryData ? JSON.parse(req.body.categoryData) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in categoryData' }); }
-//     try { services = rawServices ? JSON.parse(rawServices) : {}; } catch { return res.status(400).json({ message: 'Invalid JSON in services' }); }
+//     let location = safeParse(rawLocation, {});
+//     let socialLinks = safeParse(rawSocialLinks, {});
+//     let businessHoursArr = safeParse(rawBusinessHours, []);
+//     let categoryData = safeParse(req.body.categoryData, {});
+//     let services = safeParse(rawServices, {});
 
-//     // 3️⃣  Fetch existing business
+//     // 3️⃣ Fetch existing business
 //     const business = await Business.findById(id);
-//     if (!business) return res.status(404).json({ message: 'Business not found' });
-
-//     /* ------------------------------------------------------------------ */
-//     /* 4️⃣  Handle file uploads                                           */
-//     /* ------------------------------------------------------------------ */
-    
-
-// const files = req.files || {};
-
-// if (files.profileImage?.length) {
-//   const url = await uploadToS3(files.profileImage[0], req);
-//   business.profileImage = url;
-// }
-
-// if (files.coverImage?.length) {
-//   const url = await uploadToS3(files.coverImage[0], req);
-//   business.coverImage = url;
-// }
-
-// if (files.certificateImages?.length) {
-//   const certUrls = await Promise.all(
-//     files.certificateImages.slice(0, 5).map(file => uploadToS3(file, req))
-//   );
-//   business.certificateImages = certUrls;
-// }
-
-// if (files.galleryImages?.length) {
-//   const galleryUrls = await Promise.all(
-//     files.galleryImages.slice(0, 10).map(file => uploadToS3(file, req))
-//   );
-//   business.galleryImages = galleryUrls;
-// }
-
-
-//     /* ------------------------------------------------------------------ */
-//     /* 5️⃣  Update scalar fields                                          */
-//     /* ------------------------------------------------------------------ */
-//     business.name        = name        ?? business.name;
-//     business.ownerName   = ownerName   ?? business.ownerName;
-//     business.phone       = phone       ?? business.phone;
-//     business.website     = website     ?? business.website;
-//     business.email       = email       ?? business.email;
-//     business.experience  = experience  ?? business.experience;
-//     business.description = description ?? business.description;
-
-//     /* ------------------------------------------------------------------ */
-//     /* 6️⃣  Update complex object fields                                  */
-//     /* ------------------------------------------------------------------ */
-//     if (Object.keys(location).length)      business.location    = location;
-//     if (Object.keys(socialLinks).length)   business.socialLinks = socialLinks;
-//     if (Object.keys(services).length)      business.services     = services;
-
-//     // if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
-//     //   business.businessHours = businessHoursArr.map(bh => ({
-//     //     day:   bh.day,
-//     //     open:  bh.open  || '',
-//     //     close: bh.close || ''
-//     //   }));
-
-//     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
-//   business.businessHours = businessHoursArr.map(bh => ({
-//     day: bh.day || '',
-//     isWorking: bh.isWorking ?? true,
-//     is24Hour: bh.is24Hour ?? false,
-//     is24HourClose: bh.is24HourClose ?? false,
-//     shifts: Array.isArray(bh.shifts)
-//       ? bh.shifts
-//           .filter(shift => shift.open && shift.close)
-//           .map(shift => ({
-//             open: shift.open,
-//             close: shift.close
-//           }))
-//       : []
-//   }));
-
-
+//     if (!business) {
+//       return res.status(404).json({ message: 'Business not found' });
 //     }
 
 //     /* ------------------------------------------------------------------ */
-//     /* 7️⃣  Category Update (switch or same)                              */
+//     /* 4️⃣ Handle file uploads (store only .url)                          */
+//     /* ------------------------------------------------------------------ */
+//     const files = req.files || {};
+
+//     const uploadSingle = async (file) => {
+//       const result = await uploadToS3(file, req);
+//       return result?.url || null;
+//     };
+
+//     if (files.profileImage?.length) {
+//       const url = await uploadSingle(files.profileImage[0]);
+//       if (url) business.profileImage = url;
+//     }
+
+//     if (files.coverImage?.length) {
+//       const url = await uploadSingle(files.coverImage[0]);
+//       if (url) business.coverImage = url;
+//     }
+
+//     if (files.certificateImages?.length) {
+//       const certUrls = (await Promise.all(
+//         files.certificateImages.slice(0, 5).map(uploadSingle)
+//       )).filter(Boolean);
+//       if (certUrls.length) business.certificateImages = certUrls;
+//     }
+
+//     if (files.galleryImages?.length) {
+//       const galleryUrls = (await Promise.all(
+//         files.galleryImages.slice(0, 10).map(uploadSingle)
+//       )).filter(Boolean);
+//       if (galleryUrls.length) business.galleryImages = galleryUrls;
+//     }
+
+//     /* ------------------------------------------------------------------ */
+//     /* 5️⃣ Update scalar fields                                           */
+//     /* ------------------------------------------------------------------ */
+//     business.name = name ?? business.name;
+//     business.ownerName = ownerName ?? business.ownerName;
+//     business.phone = phone ?? business.phone;
+//     business.website = website ?? business.website;
+//     business.email = email ?? business.email;
+//     business.experience = experience ?? business.experience;
+//     business.description = description ?? business.description;
+
+//     /* ------------------------------------------------------------------ */
+//     /* 6️⃣ Update complex object fields                                   */
+//     /* ------------------------------------------------------------------ */
+//     if (Object.keys(location).length) business.location = location;
+//     if (Object.keys(socialLinks).length) business.socialLinks = socialLinks;
+//     if (Object.keys(services).length) business.services = services;
+
+//     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
+//       business.businessHours = businessHoursArr.map(bh => ({
+//         day: bh.day || '',
+//         isWorking: bh.isWorking ?? true,
+//         is24Hour: bh.is24Hour ?? false,
+//         is24HourClose: bh.is24HourClose ?? false,
+//         shifts: Array.isArray(bh.shifts)
+//           ? bh.shifts
+//               .filter(shift => shift.open && shift.close)
+//               .map(shift => ({ open: shift.open, close: shift.close }))
+//           : []
+//       }));
+//     }
+
+//     /* ------------------------------------------------------------------ */
+//     /* 7️⃣ Category Update (switch or same)                               */
 //     /* ------------------------------------------------------------------ */
 //     if (newCategory && newCategory !== business.category) {
-//       // ✨ Switch to a new category
 //       const newModelName = newCategory;
 //       const NewCategoryModel = categoryModels[newModelName];
 //       if (!NewCategoryModel) {
 //         return res.status(400).json({ message: `Invalid category "${newCategory}"` });
 //       }
-
 //       const newCatDoc = new NewCategoryModel(categoryData);
 //       await newCatDoc.save();
-
-//       business.category      = newCategory;
+//       business.category = newCategory;
 //       business.categoryModel = newModelName;
-//       business.categoryRef   = newCatDoc._id;
+//       business.categoryRef = newCatDoc._id;
 //     } else {
-//       // ✨ Update existing categoryData
 //       const CurrentCatModel = categoryModels[business.categoryModel];
 //       if (CurrentCatModel && Object.keys(categoryData).length && business.categoryRef) {
 //         const catDoc = await CurrentCatModel.findById(business.categoryRef);
@@ -820,7 +965,7 @@ export const createBusiness = async (req, res) => {
 //     }
 
 //     /* ------------------------------------------------------------------ */
-//     /* 8️⃣  Save and respond                                              */
+//     /* 8️⃣ Save and respond                                               */
 //     /* ------------------------------------------------------------------ */
 //     const updatedBusiness = await business.save();
 
@@ -828,15 +973,15 @@ export const createBusiness = async (req, res) => {
 //       message: '✅ Business listing updated successfully',
 //       business: updatedBusiness
 //     });
+
 //   } catch (error) {
 //     console.error('❌ Error updating business listing:', error);
 //     res.status(500).json({
-//       message: 'Server Error while updating business listing',
+//       message: 'Something went wrong while updating the business.',
 //       error: error.message
 //     });
 //   }
 // };
-
 
 //update
 
@@ -998,8 +1143,6 @@ export const updateBusiness = async (req, res) => {
 
 
 
-
-
 export const getBusinessById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1125,48 +1268,8 @@ export const getAllBusinesses = async (req, res) => {
 
 
 
-// export const getAllBusinesses = async (req, res) => {
-//   try {
-//     // ✅ Fetch all non-deleted businesses with categoryRef
-//     const businesses = await Business.find({ isDeleted: false }).lean(); // lean = plain object for merging
-
-//     // 🧠 Fetch category details for each business
-//     const businessesWithCategoryDetails = await Promise.all(
-//       businesses.map(async (business) => {
-//         const CategoryModel = categoryModels[business.categoryModel];
-//         let categoryDetails = {};
-
-//         if (CategoryModel && business.categoryRef) {
-//           const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
-//           if (categoryDoc) {
-//             categoryDetails = categoryDoc;
-//           }
-//         }
-
-//         return {
-//           ...business,
-//           categoryDetails // or rename to 'categoryData' if preferred
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: 'Businesses fetched successfully',
-//       businesses: businessesWithCategoryDetails
-//     });
-//   } catch (error) {
-//     console.error('Error fetching businesses:', error);
-//     res.status(500).json({
-//       message: 'Server error while fetching businesses',
-//       error: error.message
-//     });
-//   }
-// };
 
 
-
-//get user view
-// 🔥 Analytics API for business owner's dashboard
 export const getUserBusinessViewsAnalytics = asyncHandler(async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1326,78 +1429,6 @@ export const getBusinessId = async (req, res) => {
   }
 };
 
-//api for search businesses according to location and category, or any keyword which is in business model database.
-
-// export const searchBusinesses = async (req, res) => {
-//   try {
-//     const { keyword = '', location = '' } = req.query;
-
-//     if (!keyword && !location) {
-//       return res.status(400).json({ message: 'Please provide keyword or location' });
-//     }
-
-//     const keywordRegex = new RegExp(keyword, 'i');
-//     const locationRegex = new RegExp(location, 'i');
-
-//     // ✅ STEP 1: Direct Business search
-//     let results = await Business.find({
-//       $or: [
-//         { name: keywordRegex },
-//         { description: keywordRegex },
-//         { category: keywordRegex },
-//         { speciality: keywordRegex },
-//         { services: keywordRegex },
-//         { categoryModel: keywordRegex }
-//       ],
-//       ...(location ? { 'location.city': locationRegex } : {})
-//     });
-
-//     // ✅ STEP 2: If no results, drop location filter
-//     if (results.length === 0) {
-//       results = await Business.find({
-//         $or: [
-//           { name: keywordRegex },
-//           { description: keywordRegex },
-//           { category: keywordRegex },
-//             { speciality: keywordRegex },
-//         { services: keywordRegex },
-//           { categoryModel: keywordRegex }
-//         ]
-//       });
-//     }
-
-//     // ✅ STEP 3: Search across all category models' `speciality`
-//     if (results.length === 0) {
-//       let businessIds = [];
-
-//       for (const [modelName, Model] of Object.entries(categoryModels)) {
-//         const matchedDocs = await Model.find({ speciality: keywordRegex }).select('business');
-
-//         const ids = matchedDocs
-//           .map(doc => doc.business)
-//           .filter(id => !!id); // remove undefined/null
-
-//         businessIds.push(...ids);
-//       }
-
-//       if (businessIds.length > 0) {
-//         results = await Business.find({
-//           _id: { $in: businessIds },
-//           ...(location ? { 'location.city': locationRegex } : {})
-//         });
-//       }
-//     }
-
-//     res.status(200).json({
-//       count: results.length,
-//       results
-//     });
-
-//   } catch (error) {
-//     console.error('Search Error:', error);
-//     res.status(500).json({ message: 'Server Error' });
-//   }
-// };
 
 export const searchBusinesses = async (req, res) => {
   try {

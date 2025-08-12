@@ -40,7 +40,7 @@ const GroceriesSchema = new mongoose.Schema({
   pantryCannedGoods: { type: Boolean, default: false },
   householdEssentialsToiletries: { type: Boolean, default: false },
   healthWellnessMedicine: { type: Boolean, default: false },
-  checkoutSelfCheckout: { type: Boolean, default: false },
+  checkoutCheckout: { type: Boolean, default: false },
   onlineOrderingDelivery: { type: Boolean, default: false },
   loyaltyDiscountPrograms: { type: Boolean, default: false },
   inventoryStockManagement: { type: Boolean, default: false },

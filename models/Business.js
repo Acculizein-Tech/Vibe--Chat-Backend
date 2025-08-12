@@ -258,6 +258,15 @@ babyFamilyPortraits: { type: Boolean, default: false },
 productCatalogShoots: { type: Boolean, default: false },
 corporateEventPhotography: { type: Boolean, default: false },
 
+//TentHOuse
+Individual: { type: Boolean, default: false },
+Agency: { type: Boolean, default: false },
+EventCompanyWedding: { type: Boolean, default: false },
+EventCompanyCorporateEvents: { type: Boolean, default: false },
+EventCompanyBirthday: { type: Boolean, default: false },
+EventCompanyReligiousEvents: { type: Boolean, default: false },
+
+
 //VehicleBooking
 passengerTransport: {
   type: Boolean,
