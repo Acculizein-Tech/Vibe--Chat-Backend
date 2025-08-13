@@ -28,60 +28,211 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 });
 
 // @desc    Update user profile
+// export const updateUserProfile = asyncHandler(async (req, res) => {
+//   try {
+//     const { fullName, email, phone, city, state, country, zipCode } = req.body;
+
+//     let avatarUrl = '';
+
+//     // Agar image bheji hai to S3 pr upload karo
+//     if (req.file) {
+//       const s3Url = await uploadToS3(req.file, req); // returns full URL
+//       avatarUrl = s3Url;
+//     }
+
+//     const updatedFields = {
+//       fullName, 
+//       email,
+//       phone,
+//       city,
+//       state,
+//       country,
+//       zipCode,
+//     };
+
+//      // ❌ Check for spaces in phone number
+//     if (phone && phone.includes(' ')) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Phone number should not contain spaces. Please enter a valid phone number like +919876543210',
+//       });
+//     }
+
+//     // ✅ Allow + in the beginning of phone for country code
+//     const phoneRegex = /^\+?[0-9]{10,15}$/;
+//     if (phone && !phoneRegex.test(phone)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid phone number format. Please enter a valid number like +919876543210',
+//       });
+//     }
+
+//     // if (avatarUrl) {
+//     //   updatedFields['profile'] = { avatar: avatarUrl };
+//     // }
+//     if (avatarUrl) {
+//   updatedFields['profile.avatar'] = avatarUrl; // sirf avatar field update karega
+// }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       req.params.id,
+//       { $set: updatedFields },
+//       { new: true }
+//     );    
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Profile updated successfully',
+//       data: updatedUser,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to update profile',
+//       error: err.message,
+//     });
+//   }
+// });
+
+// export const updateUserProfile = asyncHandler(async (req, res) => {
+//   try {
+//     const { fullName, email, phone, city, state, country, zipCode } = req.body;
+
+//     // ✅ Validation: Phone number space check
+//     if (phone && phone.includes(' ')) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Phone number should not contain spaces. Example: +919876543210',
+//       });
+//     }
+
+//     // ✅ Validation: Allow + in beginning & length 10-15
+//     const phoneRegex = /^\+?[0-9]{10,15}$/;
+//     if (phone && !phoneRegex.test(phone)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid phone number. Example: +919876543210',
+//       });
+//     }
+
+//     // ✅ Prepare updated fields
+//     const updatedFields = {
+//       fullName: fullName?.trim(),
+//       email: email?.trim(),
+//       phone,
+//       city: city?.trim(),
+//       state: state?.trim(),
+//       country: country?.trim(),
+//       zipCode: zipCode?.trim(),
+//     };
+
+//     // ✅ Agar avatar file aayi hai to S3 pr upload
+//     // if (req.file) {
+//     //   const s3Url = await uploadToS3(req.file, req);
+//     //   updatedFields["profile.avatar"] = s3Url; // ✅ Dot notation se nested field update
+//     // }
+//     if (req.file) {
+//   const s3Result = await uploadToS3(req.file, req);
+//   updatedFields["profile.avatar"] = s3Result.url; // only string, no object
+// }
+
+
+//     // ✅ Update & return latest user
+//     const updatedUser = await User.findByIdAndUpdate(
+//       req.params.id,
+//       { $set: updatedFields },
+//       { new: true, runValidators: true }
+//     );
+
+//     if (!updatedUser) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'User not found',
+//       });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Profile updated successfully',
+//       data: updatedUser,
+//     });
+
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to update profile',
+//       error: err.message,
+//     });
+//   }
+// });
+
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
     const { fullName, email, phone, city, state, country, zipCode } = req.body;
 
-    let avatarUrl = '';
-
-    // Agar image bheji hai to S3 pr upload karo
-    if (req.file) {
-      const s3Url = await uploadToS3(req.file, req); // returns full URL
-      avatarUrl = s3Url;
-    }
-
-    const updatedFields = {
-      fullName, 
-      email,
-      phone,
-      city,
-      state,
-      country,
-      zipCode,
-    };
-
-     // ❌ Check for spaces in phone number
+    // ✅ Phone number space check
     if (phone && phone.includes(' ')) {
       return res.status(400).json({
         success: false,
-        message: 'Phone number should not contain spaces. Please enter a valid phone number like +919876543210',
+        message: 'Phone number should not contain spaces. Example: +919876543210',
       });
     }
 
-    // ✅ Allow + in the beginning of phone for country code
+    // ✅ Phone number format check
     const phoneRegex = /^\+?[0-9]{10,15}$/;
     if (phone && !phoneRegex.test(phone)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid phone number format. Please enter a valid number like +919876543210',
+        message: 'Invalid phone number. Example: +919876543210',
       });
     }
 
-    if (avatarUrl) {
-      updatedFields['profile'] = { avatar: avatarUrl };
-    }
+    // ✅ Prepare updated fields (without avatar for now)
+    const updatedFields = {
+      fullName: fullName?.trim(),
+      email: email?.trim(),
+      phone,
+      city: city?.trim(),
+      state: state?.trim(),
+      country: country?.trim(),
+      zipCode: zipCode?.trim(),
+    };
 
+    // ✅ Update user immediately in DB
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       { $set: updatedFields },
-      { new: true }
-    );    
+      { new: true, runValidators: true }
+    );
 
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // ✅ Respond to client immediately (within 1–2 sec)
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
       data: updatedUser,
     });
+
+    // ✅ Handle avatar upload in background (non-blocking)
+    if (req.file) {
+      try {
+        const s3Result = await uploadToS3(req.file, req);
+        await User.findByIdAndUpdate(
+          req.params.id,
+          { $set: { "profile.avatar": s3Result.url } },
+          { new: true }
+        );
+      } catch (uploadErr) {
+        console.error("S3 upload failed:", uploadErr.message);
+      }
+    }
+
   } catch (err) {
     res.status(500).json({
       success: false,
@@ -90,8 +241,6 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     });
   }
 });
-
-
 
 
 

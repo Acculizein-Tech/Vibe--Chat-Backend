@@ -44,13 +44,13 @@ phone: {
   profile: {
     photo: { type: String },
 
-    avatar: String
-  }, 
- 
+    avatar: { type: String },
+  },
+
   emailVerifyOTP: String,
 emailVerifyExpires: Date,
 emailResendBlock: Date, // 🟢 Add this line
-
+ 
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
 

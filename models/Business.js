@@ -128,6 +128,7 @@ const businessSchema = new mongoose.Schema(
 
     // ✅ Newly added services field (as requested)
    services: {
+    doctor: { type: Boolean, default: false },
   passenger_transport: { type: Boolean, default: false },
   goods_logistics: { type: Boolean, default: false },
   emergency_transport: { type: Boolean, default: false },
@@ -154,11 +155,13 @@ const businessSchema = new mongoose.Schema(
   restaurents: { type: Boolean, default: false },
   unisex_salon: { type: Boolean, default: false },
   ladies_only: { type: Boolean, default: false },
+  men_salon: { type: Boolean, default: false },
   gents_only: { type: Boolean, default: false },
   spa: { type: Boolean, default: false },
   beauty_parlour: { type: Boolean, default: false },
   college: { type: Boolean, default: false },
-  coaching_institute: { type: Boolean, default: false },
+  coaching: { type: Boolean, default: false },
+  school: { type: Boolean, default: false },
   training_center: { type: Boolean, default: false },
   university: { type: Boolean, default: false },
   individual_lawyer: { type: Boolean, default: false },
@@ -170,7 +173,7 @@ const businessSchema = new mongoose.Schema(
   nursing_home: { type: Boolean, default: false },
   multispeciality_hospital: { type: Boolean, default: false },
   health_checkup_centre: { type: Boolean, default: false },
-  pharmacy_medical_store: { type: Boolean, default: false },
+  pharmacy: { type: Boolean, default: false },
   ayurvedic_store: { type: Boolean, default: false },
   homeopathy_store: { type: Boolean, default: false },
   surgical_equipment_supplier: { type: Boolean, default: false },
@@ -249,7 +252,13 @@ const businessSchema = new mongoose.Schema(
   event_company_wedding: { type: Boolean, default: false },
   event_company_corporate_events: { type: Boolean, default: false },
   event_company_birthday: { type: Boolean, default: false },
-  event_company_religious_events: { type: Boolean, default: false }
+  event_company_religious_events: { type: Boolean, default: false },
+  model: { type: Boolean, default: false },
+  influencer: { type: Boolean, default: false },
+  actor: { type: Boolean, default: false },
+  singer: { type: Boolean, default: false },
+  comedian: { type: Boolean, default: false },
+  dancer: { type: Boolean, default: false },
 },
 
     customService: {

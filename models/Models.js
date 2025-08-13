@@ -6,7 +6,7 @@ const ModelsSchema = new mongoose.Schema({
     
   },
   registerNumber: {
-    type: String,
+    type: String
   },
   YearOfEstablishment: {
     type: String,
@@ -22,7 +22,7 @@ const ModelsSchema = new mongoose.Schema({
     default: ''
   },
   GSTIN: {
-    type: String,
+    type: String
   },
   consentGiven: {
     type: Boolean,
@@ -80,6 +80,11 @@ const ModelsSchema = new mongoose.Schema({
   education: { type: String, default: '' },
   hobbies: { type: String, default: '' }, // bicep
   language: { type: String, default: '' }, // language skills
+
+   hobbies: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
 
   extraFields: {
     type: Map,
