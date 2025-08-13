@@ -20,22 +20,22 @@ const businessSchema = new mongoose.Schema(
       required: true, // ensures every listing is tied to a user
     },
     aadhaarNumber: {
-  type: String,
-  validate: {
-    validator: function (v) {
-      return /^\d{12}$/.test(v); // Validates 12-digit number
+      type: String,
+      validate: {
+        validator: function (v) {
+          return /^\d{12}$/.test(v); // Validates 12-digit number
+        },
+        message: "Aadhaar number must be a 12-digit numeric value",
+      },
+      // Required field
+      trim: true,
     },
-    message: 'Aadhaar number must be a 12-digit numeric value',
-  },
- // Required field
-  trim: true,
-},
     plan: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Priceplan",
       default: null,
     },
-    
+
     paymentStatus: {
       type: String,
       enum: ["pending", "success", "failed"],
@@ -81,8 +81,8 @@ const businessSchema = new mongoose.Schema(
       meesho: String,
       myntra: String,
     },
-   area: {
-      type: String
+    area: {
+      type: String,
     },
     businessHours: [
       {
@@ -111,192 +111,151 @@ const businessSchema = new mongoose.Schema(
       type: [String],
       validate: {
         validator: function (val) {
-            return val.length <= 10;
-          },
-          message: "galleryImages exceeds the limit of 10",
-          },
+          return val.length <= 10;
         },
-        aadhaarImages: {
-          front: { type: String },
-          back: { type: String }
-        },
+        message: "galleryImages exceeds the limit of 10",
+      },
+    },
+    aadhaarImages: {
+      front: { type: String },
+      back: { type: String },
+    },
 
-        isDeleted: {
-          type: Boolean,
-          default: false
-        },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
 
     // ✅ Newly added services field (as requested)
    services: {
-  // Hotel services
+  passenger_transport: { type: Boolean, default: false },
+  goods_logistics: { type: Boolean, default: false },
+  emergency_transport: { type: Boolean, default: false },
+  luxury_wedding_vip: { type: Boolean, default: false },
+  construction_utility_vehicles: { type: Boolean, default: false },
   hotel: { type: Boolean, default: false },
   cafe: { type: Boolean, default: false },
   restaurant: { type: Boolean, default: false },
   bar: { type: Boolean, default: false },
   lounge: { type: Boolean, default: false },
   bakery: { type: Boolean, default: false },
-  foodTruck: { type: Boolean, default: false },
-  threeStarHotel: { type: Boolean, default: false },
-  fourStarHotel: { type: Boolean, default: false },
-  fiveStarHotel: { type: Boolean, default: false },
-  sevenStarHotel: { type: Boolean, default: false },
-  luxuryHotel: { type: Boolean, default: false },
-  premiumHotel: { type: Boolean, default: false },
-  heritageHotel: { type: Boolean, default: false },
+  food_truck: { type: Boolean, default: false },
+  three_star_hotel: { type: Boolean, default: false },
+  four_star_hotel: { type: Boolean, default: false },
+  five_star_hotel: { type: Boolean, default: false },
+  seven_star_hotel: { type: Boolean, default: false },
+  luxury_hotel: { type: Boolean, default: false },
+  premium_hotel: { type: Boolean, default: false },
+  heritage_hotel: { type: Boolean, default: false },
   resort: { type: Boolean, default: false },
   lodge: { type: Boolean, default: false },
   villa: { type: Boolean, default: false },
   café: { type: Boolean, default: false },
   restaurents: { type: Boolean, default: false },
-
-  // BeautySpa services
-  unisexSalon: { type: Boolean, default: false },
-  ladiesOnly: { type: Boolean, default: false },
-  gentsOnly: { type: Boolean, default: false },
+  unisex_salon: { type: Boolean, default: false },
+  ladies_only: { type: Boolean, default: false },
+  gents_only: { type: Boolean, default: false },
   spa: { type: Boolean, default: false },
-  beautyParlour: { type: Boolean, default: false },
-
-  // Education
-  school: { type: Boolean, default: false },
+  beauty_parlour: { type: Boolean, default: false },
   college: { type: Boolean, default: false },
-  coachingInstitute: { type: Boolean, default: false },
-  trainingCenter: { type: Boolean, default: false },
+  coaching_institute: { type: Boolean, default: false },
+  training_center: { type: Boolean, default: false },
   university: { type: Boolean, default: false },
-
-  // Health services
-  clinic: { type: Boolean, default: false },
-  hospital: { type: Boolean, default: false },
-  diagnosticCentre: { type: Boolean, default: false },
-  nursingHome: { type: Boolean, default: false },
-  multispecialityHospital: { type: Boolean, default: false },
-  healthCheckupCentre: { type: Boolean, default: false },
-  pharmacyMedicalStore: { type: Boolean, default: false },
-  ayurvedicStore: { type: Boolean, default: false },
-  homeopathyStore: { type: Boolean, default: false },
-  surgicalEquipmentSupplier: { type: Boolean, default: false },
-  onlinePharmacy: { type: Boolean, default: false },
-  pathologyLab: { type: Boolean, default: false },
-  radiologyCentreXrayMriCt: { type: Boolean, default: false },
-  bloodTestingLab: { type: Boolean, default: false },
-  covidTestingCenter: { type: Boolean, default: false },
+  individual_lawyer: { type: Boolean, default: false },
+  law_firm: { type: Boolean, default: false },
+  legal_consultant: { type: Boolean, default: false },
+  clinic: { type: Boolean, default: true },
+  hospital: { type: Boolean, default: true },
+  diagnostic_centre: { type: Boolean, default: true },
+  nursing_home: { type: Boolean, default: false },
+  multispeciality_hospital: { type: Boolean, default: false },
+  health_checkup_centre: { type: Boolean, default: false },
+  pharmacy_medical_store: { type: Boolean, default: false },
+  ayurvedic_store: { type: Boolean, default: false },
+  homeopathy_store: { type: Boolean, default: false },
+  surgical_equipment_supplier: { type: Boolean, default: false },
+  online_pharmacy: { type: Boolean, default: false },
+  pathology_lab: { type: Boolean, default: false },
+  radiology_centre_xray_mri_ct: { type: Boolean, default: false },
+  blood_testing_lab: { type: Boolean, default: false },
+  covid_testing_center: { type: Boolean, default: false },
   naturopathy: { type: Boolean, default: false },
   acupuncture: { type: Boolean, default: false },
-  yogaTherapyCentre: { type: Boolean, default: false },
-  unaniClinic: { type: Boolean, default: false },
+  yoga_therapy_centre: { type: Boolean, default: false },
+  unani_clinic: { type: Boolean, default: false },
   other: { type: Boolean, default: false },
-
-  // Garment
-  retailStore: { type: Boolean, default: false },
+  retail_store: { type: Boolean, default: false },
   boutique: { type: Boolean, default: false },
   showroom: { type: Boolean, default: false },
   mart: { type: Boolean, default: false },
   franchise: { type: Boolean, default: false },
-  fashionHouse: { type: Boolean, default: false },
-
-  // Groceries
-  groceryStore: { type: Boolean, default: false },
+  fashion_house: { type: Boolean, default: false },
+  grocery_store: { type: Boolean, default: false },
   supermarket: { type: Boolean, default: false },
-  generalStore: { type: Boolean, default: false },
+  general_store: { type: Boolean, default: false },
   kirana: { type: Boolean, default: false },
   departmental: { type: Boolean, default: false },
-  organicStore: { type: Boolean, default: false },
-
-  // Shoes
-  retailShop: { type: Boolean, default: false },
+  organic_store: { type: Boolean, default: false },
+  retail_shop: { type: Boolean, default: false },
   wholesale: { type: Boolean, default: false },
   manufacturer: { type: Boolean, default: false },
-  brandOutlet: { type: Boolean, default: false },
+  brand_outlet: { type: Boolean, default: false },
   exporter: { type: Boolean, default: false },
-  eCommerce: { type: Boolean, default: false },
-  franchise: { type: Boolean, default: false },
-
-  // Travels
-  travelAgency: { type: Boolean, default: false },
-  tourOperator: { type: Boolean, default: false },
-  visaConsultant: { type: Boolean, default: false },
-  travelPortal: { type: Boolean, default: false },
-  adventureOrganizer: { type: Boolean, default: false },
-
-  // Insurance
-  individualAgent: { type: Boolean, default: false },
-  corporateAgency: { type: Boolean, default: false },
+  e_commerce: { type: Boolean, default: false },
+  travel_agency: { type: Boolean, default: false },
+  tour_operator: { type: Boolean, default: false },
+  visa_consultant: { type: Boolean, default: false },
+  travel_portal: { type: Boolean, default: false },
+  adventure_organizer: { type: Boolean, default: false },
+  individual_agent: { type: Boolean, default: false },
+  corporate_agency: { type: Boolean, default: false },
   broker: { type: Boolean, default: false },
-  insuranceCompany: { type: Boolean, default: false },
-  onlinePortal: { type: Boolean, default: false },
+  insurance_company: { type: Boolean, default: false },
+  online_portal: { type: Boolean, default: false },
   consultant: { type: Boolean, default: false },
-
-  // Real-Estate
-  realEstateAgency: { type: Boolean, default: false },
-  individualBroker: { type: Boolean, default: false },
+  real_estate_agency: { type: Boolean, default: false },
+  individual_broker: { type: Boolean, default: false },
   builder: { type: Boolean, default: false },
   developer: { type: Boolean, default: false },
-  propertyConsultant: { type: Boolean, default: false },
-
-  // Loan
-  LoanAgent: { type: Boolean, default: false },
-  NBFC: { type: Boolean, default: false },
-  BankRepresentative: { type: Boolean, default: false },
-  FinanceConsultant: { type: Boolean, default: false },
-  personalLoan: { type: Boolean, default: false },
-  homeLoan: { type: Boolean, default: false },
-  carLoan: { type: Boolean, default: false },
-  businessLoan: { type: Boolean, default: false },
-  educationLoan: { type: Boolean, default: false },
-  goldLoan: { type: Boolean, default: false },
+  property_consultant: { type: Boolean, default: false },
+  loan_agent: { type: Boolean, default: false },
+  n_bfc: { type: Boolean, default: false },
+  bank_representative: { type: Boolean, default: false },
+  finance_consultant: { type: Boolean, default: false },
+  personal_loan: { type: Boolean, default: false },
+  home_loan: { type: Boolean, default: false },
+  car_loan: { type: Boolean, default: false },
+  business_loan: { type: Boolean, default: false },
+  education_loan: { type: Boolean, default: false },
+  gold_loan: { type: Boolean, default: false },
   mortgage: { type: Boolean, default: false },
-  creditCards: { type: Boolean, default: false },
-
-  // Gym
+  credit_cards: { type: Boolean, default: false },
+  imitationjwellery: { type: Boolean, default: false },
   gym: { type: Boolean, default: false },
-  fitnessStudio: { type: Boolean, default: false },
-  healthClub: { type: Boolean, default: false },
-  weightTrainingCenter: { type: Boolean, default: false },
-  cardioTrainingCenter: { type: Boolean, default: false },
-  strengthTrainingFacility: { type: Boolean, default: false },
-  fashionModelShoots: { type: Boolean, default: false },
-babyFamilyPortraits: { type: Boolean, default: false },
-productCatalogShoots: { type: Boolean, default: false },
-corporateEventPhotography: { type: Boolean, default: false },
-
-//TentHOuse
-Individual: { type: Boolean, default: false },
-Agency: { type: Boolean, default: false },
-EventCompanyWedding: { type: Boolean, default: false },
-EventCompanyCorporateEvents: { type: Boolean, default: false },
-EventCompanyBirthday: { type: Boolean, default: false },
-EventCompanyReligiousEvents: { type: Boolean, default: false },
-
-
-//VehicleBooking
-passengerTransport: {
-  type: Boolean,
-  default: false
+  fitness_studio: { type: Boolean, default: false },
+  health_club: { type: Boolean, default: false },
+  weight_training_center: { type: Boolean, default: false },
+  cardio_training_center: { type: Boolean, default: false },
+  strength_training_facility: { type: Boolean, default: false },
+  retail: { type: Boolean, default: false },
+  home_appliances: { type: Boolean, default: false },
+  educational_toys: { type: Boolean, default: false },
+  fashion_model_shoots: { type: Boolean, default: false },
+  baby_family_portraits: { type: Boolean, default: false },
+  product_catalog_shoots: { type: Boolean, default: false },
+  corporate_event_photography: { type: Boolean, default: false },
+  individual: { type: Boolean, default: false },
+  agency: { type: Boolean, default: false },
+  event_company_wedding: { type: Boolean, default: false },
+  event_company_corporate_events: { type: Boolean, default: false },
+  event_company_birthday: { type: Boolean, default: false },
+  event_company_religious_events: { type: Boolean, default: false }
 },
 
-goodsLogistics : {
-  type: Boolean,
-  default: false
-},
-
-emergencyTransport : {
-  type: Boolean,
-  default: false
-},
-
-luxuryWeddingVip: {
-  type: Boolean,
-  default: false
-},
-constructionUtilityVehicles : {
-  type: Boolean,
-  default: false
-},
-},
-
-customService: {
-  type: String,
-  trim: true
-},
+    customService: {
+      type: String,
+      trim: true,
+    },
 
     salesExecutive: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     revenue: { type: Number, default: 0 },
@@ -337,7 +296,7 @@ customService: {
       },
     ],
   },
-  
+
   {
     timestamps: true,
     toJSON: { virtuals: true },
