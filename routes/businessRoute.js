@@ -23,7 +23,7 @@ router.put('/business/:id', protect, mediaFields, roles('superadmin', 'customer'
 // router.get('/business/:id', protect, getBusinessById);
 router.get('/businesses', getAllBusinesses)
 router.get('/byid/:id', getBusinessId);
-router.patch('/switch', protect, roles('superadmin', 'admin'), switchBusinessPlan);
+router.patch('/goPremium', protect, roles('superadmin', 'admin'), switchBusinessPlan);
 router.get('/views/analytics', protect, getUserBusinessViewsAnalytics);
 router.get('/search', searchBusinesses);
 router.get('/count', businessCountByCategory);

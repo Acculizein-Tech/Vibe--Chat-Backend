@@ -1195,36 +1195,41 @@ export const softDeleteBusiness = asyncHandler(async (req, res) => {
 
 //switch businesss plan id
 export const switchBusinessPlan = asyncHandler(async (req, res) => {
-  const { businessId, newPlanId } = req.body;
+  const { businessId } = req.body;
 
-  // 1️⃣ Validate inputs
-  if (!mongoose.Types.ObjectId.isValid(businessId) || !mongoose.Types.ObjectId.isValid(newPlanId)) {
-    return res.status(400).json({ message: "Invalid business ID or plan ID format." });
+  // 1️⃣ Validate businessId
+  if (!mongoose.Types.ObjectId.isValid(businessId)) {
+    return res.status(400).json({ message: "Invalid business ID format." });
   }
 
-  // 2️⃣ Check if plan exists
-  const planExists = await Plan.findById(newPlanId);
-  if (!planExists) {
-    return res.status(404).json({ message: "New plan not found." });
-  }
-
-  // 3️⃣ Update business in one atomic operation
-  const updatedBusiness = await Business.findByIdAndUpdate(
-    businessId,
-    { plan: newPlanId },
-    { new: true, runValidators: true }
-  );
-
-  if (!updatedBusiness) {
+  // 2️⃣ Check if business exists
+  const business = await Business.findById(businessId);
+  if (!business) {
     return res.status(404).json({ message: "Business not found." });
   }
 
-  // 4️⃣ Respond with success
+  // 3️⃣ Get new plan from .env
+  const newPlanId = process.env.GetPlan;
+  if (!mongoose.Types.ObjectId.isValid(newPlanId)) {
+    return res.status(500).json({ message: "Invalid plan ID in environment variable." });
+  }
+
+  // 4️⃣ Check if already Premium
+  if (business.plan?.toString() === newPlanId) {
+    return res.status(400).json({ message: "This business is already on the Premium plan." });
+  }
+
+  // 5️⃣ Update business plan atomically
+  business.plan = new mongoose.Types.ObjectId(newPlanId);
+  await business.save();
+
+  // 6️⃣ Response
   res.status(200).json({
-    message: "Business plan updated successfully.",
-    business: updatedBusiness,
+    message: "Business plan updated to Premium.",
+    business,
   });
 });
+
 
 
 //get business for pricing 
