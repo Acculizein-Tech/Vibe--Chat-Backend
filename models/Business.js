@@ -187,8 +187,9 @@ const businessSchema = new mongoose.Schema(
   yoga_therapy_centre: { type: Boolean, default: false },
   unani_clinic: { type: Boolean, default: false },
   other: { type: Boolean, default: false },
-  retail_store: { type: Boolean, default: false },
+  retail: { type: Boolean, default: false },
   boutique: { type: Boolean, default: false },
+  designer_studio: { type: Boolean, default: false },
   showroom: { type: Boolean, default: false },
   mart: { type: Boolean, default: false },
   franchise: { type: Boolean, default: false },
@@ -304,6 +305,12 @@ const businessSchema = new mongoose.Schema(
         },
       },
     ],
+    pricing: {
+  label: { type: String, trim: true }, // e.g., "Consultation Fee", "Per Hour", "Per Day"
+  amount: { type: Number, min: 0 },
+  currency: { type: String, default: "INR" }
+}
+
   },
 
   {

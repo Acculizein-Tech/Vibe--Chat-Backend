@@ -1225,3 +1225,45 @@ export const switchBusinessPlan = asyncHandler(async (req, res) => {
     business: updatedBusiness,
   });
 });
+
+
+//get business for pricing 
+// GET /api/business/my-businesses
+export const getMyBusinesses = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+
+    const businesses = await Business.find({ owner: userId }).select("_id name");
+    if (!businesses.length) {
+      return res.status(404).json({ message: "No businesses found" });
+    }
+
+    res.json(businesses);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+// PUT /api/business/:id/pricing
+export const updateBusinessPricing = async (req, res) => {
+  try {
+    const { id } = req.params; // business id
+    const { label, amount, currency } = req.body;
+    const userId = req.user._id; // from auth middleware
+
+    // Ensure business belongs to the logged-in user
+    const business = await Business.findOne({ _id: id, owner: userId });
+    if (!business) {
+      return res.status(404).json({ message: "Business not found or unauthorized" });
+    }
+
+    // Update pricing
+    business.pricing = { label, amount, currency };
+    await business.save();
+
+    res.json({ message: "Pricing updated successfully", pricing: business.pricing });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

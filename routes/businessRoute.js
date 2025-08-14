@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan } from '../controllers/businessController.js';
+import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan, getMyBusinesses, updateBusinessPricing } from '../controllers/businessController.js';
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
@@ -29,6 +29,9 @@ router.get('/search', searchBusinesses);
 router.get('/count', businessCountByCategory);
 // 🛡️ Protected route for logged-in sales users
 router.get('/sales/listings', protect, getBusinessBySalesId);
+
+router.get('/my-businesses', protect, roles('customer'), getMyBusinesses);  //pricing
+router.put('/update-pricing/:id', protect, roles('customer'), updateBusinessPricing);
 router.delete('/deleteBusiness/:id', protect, roles('superadmin', 'customer'), deleteBusinessListingById);
 
 router.delete('/softgo/:id', protect, roles('customer'), softDeleteBusiness);
