@@ -29,16 +29,9 @@ const TentHouseSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-   WeddingStageDecoration: { type: Boolean, default: false },
-  MandapLightingSetup: { type: Boolean, default: false },
-  BirthdayPartyDecoration: { type: Boolean, default: false },
-  CorporateEventSetup: { type: Boolean, default: false },
-  CateringTieupOptional: { type: Boolean, default: false },
-  ThemeBasedDecoration: { type: Boolean, default: false },
-  FlowerDecorationBalloonDecoration: { type: Boolean, default: false },
-  DJSoundSetup: { type: Boolean, default: false }
-
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

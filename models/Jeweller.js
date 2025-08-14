@@ -25,15 +25,9 @@ const JewellerSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    Custom_Jewellery_Design: { type: Boolean, default: false },
-    Repair_Polishing: { type: Boolean, default: false },
-    Gold_Silver_Purchase_Exchange: { type: Boolean, default: false },
-    Old_Gold_Silver_Evaluation_Buyback: { type: Boolean, default: false },
-    EMI_Facility: { type: Boolean, default: false },
-    Parking_Facility: { type: Boolean, default: false },
-    Wheelchair_Access: { type: Boolean, default: false },
-    WaitingArea: { type: Boolean, default: false },
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

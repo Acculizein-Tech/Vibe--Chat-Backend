@@ -29,17 +29,9 @@ const AdvocateSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    // ✅ Newly added travel-related facilities
-    civilLaw: { type: Boolean, default: false },
-  criminalLaw: { type: Boolean, default: false },
-  propertyRealEstateCases: { type: Boolean, default: false },
-  corporateCompanyLaw: { type: Boolean, default: false },
-  familyDivorceMatters: { type: Boolean, default: false },
-  taxationGstCases: { type: Boolean, default: false },
-  consumerCourtMatters: { type: Boolean, default: false },
-  iprTrademarkRegistration: { type: Boolean, default: false },
-  arbitrationLegalDrafting: { type: Boolean, default: false }
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

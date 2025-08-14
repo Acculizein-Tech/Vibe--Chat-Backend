@@ -31,18 +31,10 @@ const PhotographySchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-  weddingPhotography: { type: Boolean, default: false },
-  preWeddingShoots: { type: Boolean, default: false },
-  eventPhotography: { type: Boolean, default: false },
-  portraitPortfolioShoots: { type: Boolean, default: false },
-  productPhotography: { type: Boolean, default: false },
-  studioSessions: { type: Boolean, default: false },
-  droneAerialPhotography: { type: Boolean, default: false },
-  fashionPhotography: { type: Boolean, default: false },
-  candidPhotography: { type: Boolean, default: false },
-  commercialAdvertisingPhotography: { type: Boolean, default: false }
-},
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
+  },
 
   extraFields: {
     type: Map,

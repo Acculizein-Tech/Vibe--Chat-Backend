@@ -31,17 +31,9 @@ const LoanSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    onlineLoanApplication: { type: Boolean, default: false },
-  documentPickupFacility: { type: Boolean, default: false },
-  freeEligibilityCheck: { type: Boolean, default: false },
-  fastLoanDisbursal: { type: Boolean, default: false },
-  minimalDocumentationRequired: { type: Boolean, default: false },
-  balanceTransferOption: { type: Boolean, default: false },
-  topUpLoanFacility: { type: Boolean, default: false },
-  loanForLowCIBILScore: { type: Boolean, default: false },
-  emiCalculatorSupport: { type: Boolean, default: false },
-  doorstepServiceAvailable: { type: Boolean, default: false }
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

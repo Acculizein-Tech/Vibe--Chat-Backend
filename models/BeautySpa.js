@@ -29,26 +29,9 @@ const beautySpaSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    PrivateRooms: { type: Boolean, default: false },
-    AC: { type: Boolean, default: false },
-    manicure: { type: Boolean, default: false },
-    WiFiAvailable: { type: Boolean, default: false },
-    pedicure: { type: Boolean, default: false },
-    hairSpaAndCutting: { type: Boolean, default: false },
-    KidsZoneAndFamilyFriendly: { type: Boolean, default: false },
-    ParkingFacility: { type: Boolean, default: false },
-    WheelchairAccess: { type: Boolean, default: false },
-    HygienicToolsAndDisposableItems: { type: Boolean, default: false },
-    SeparateMaleAndFemaleStaff: { type: Boolean, default: false },
-    WaitingArea: { type: Boolean, default: false },
-    LiveMusicAndDJAndBar: { type: Boolean, default: false },
-    IndoorSeatingAndOutdoorSeating: { type: Boolean, default: false },
-    RooftopAndGardenSeating: { type: Boolean, default: false },
-    PetFriendly: { type: Boolean, default: false },
-    InHouseDelivery: { type: Boolean, default: false },
-    RefundAndCancellationAvailable: { type: Boolean, default: false },
-    Memberships: { type: Boolean, default: false }
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

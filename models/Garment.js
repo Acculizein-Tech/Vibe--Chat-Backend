@@ -30,20 +30,9 @@ const GarmentSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    Parking: { type: Boolean, default: false },
-  Credit_Card_Payment: { type: Boolean, default: false },
-  UPI_Payment: { type: Boolean, default: false },
-  Wheelchair_Access: { type: Boolean, default: false },
-  B2C: { type: Boolean, default: false },
-  B2B: { type: Boolean, default: false },
-  B2B_And_B2C: { type: Boolean, default: false },
-  Home_Delivery_Option: { type: Boolean, default: false },
-  Gift_Wrapping_Service: { type: Boolean, default: false },
-  Changing_Rooms: { type: Boolean, default: false },
-  Customer_Rest_Area: { type: Boolean, default: false },
-  Stock_Room_Back_Storage: { type: Boolean, default: false },
-  Lighting_Signage: { type: Boolean, default: false }
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

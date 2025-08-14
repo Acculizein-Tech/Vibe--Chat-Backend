@@ -31,16 +31,9 @@ const GymSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    acNonAC: { type: Boolean, default: false },
-  parkingFacility: { type: Boolean, default: false },
-  lockerRooms: { type: Boolean, default: false },
-  changingRoomsShowers: { type: Boolean, default: false },
-  steamSauna: { type: Boolean, default: false },
-  swimmingPoolIfAny: { type: Boolean, default: false },
-  personalTrainerDesk: { type: Boolean, default: false },
-  dietNutritionConsultation: { type: Boolean, default: false },
-  physiotherapySupportYesNo: { type: Boolean, default: false },
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

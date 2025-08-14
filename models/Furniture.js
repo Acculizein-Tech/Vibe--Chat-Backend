@@ -27,29 +27,10 @@ const FurnitureSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  facilities: {
-    // ✅ Newly added travel-related facilities
-    CustomOrdersAccepted: { type: Boolean, default: false },
-    CustomizedFurnitureOrders: { type: Boolean, default: false },
-    EMIOptionsAvailable: { type: Boolean, default: false },
-    FreeConsultation: { type: Boolean, default: false },
-    HomeDecorItemsLampsCurtainsWallArt: { type: Boolean, default: false },
-    HomeDeliveryAvailable: { type: Boolean, default: false },
-    InstallationAssemblySupport: { type: Boolean, default: false },
-    InteriorDesigningServices: { type: Boolean, default: false },
-    ModularKitchenWardrobes: { type: Boolean, default: false },
-    OfficeFurniture: { type: Boolean, default: false },
-    RenovationSpacePlanning: { type: Boolean, default: false },
-    WoodenFurnitureBedsSofasDiningTables: { type: Boolean, default: false },
-    courtPumps: { type: Boolean, default: false },
-    flatsShoes: { type: Boolean, default: false },
-    slidesSandals: { type: Boolean, default: false },
-    climbingOutdoor: { type: Boolean, default: false },
-    diabeticTherapeutic: { type: Boolean, default: false },
-    minimalistBarefoot: { type: Boolean, default: false },
-    rainWaterproof: { type: Boolean, default: false },
-    workSafetySteelToe: { type: Boolean, default: false },
-  },
+ facilities: {
+     type: mongoose.Schema.Types.Mixed,
+     default:{}
+   },
 
   furniture: {
     brandsAvailable: {

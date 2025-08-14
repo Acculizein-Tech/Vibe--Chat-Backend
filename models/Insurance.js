@@ -32,15 +32,9 @@ const InsuranceSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  facilities: {
-    healthInsurance: { type: Boolean, default: false },
-  motorInsurance: { type: Boolean, default: false },
-  homeInsurance: { type: Boolean, default: false },
-  travelInsurance: { type: Boolean, default: false },
-  commercialInsurance: { type: Boolean, default: false },
-  termLifeInsurance: { type: Boolean, default: false },
-  wholeLifePolicy: { type: Boolean, default: false },
-  pensionAnnuityPlans: { type: Boolean, default: false },
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
   extraFields: {
     type: Map,

@@ -28,41 +28,9 @@ const ModelsSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    // ✅ Newly added travel-related facilities
-   acting: { type: Boolean, default: false },
-  printShoot: { type: Boolean, default: false },
-  sareesShoot: { type: Boolean, default: false },
-  lehengaShoot: { type: Boolean, default: false },
-  rampShows: { type: Boolean, default: false },
-  designerShoot: { type: Boolean, default: false },
-  ethenicWears: { type: Boolean, default: false },
-  bikiniShoot: { type: Boolean, default: false },
-  lingerieShoots: { type: Boolean, default: false },
-  swimSuits: { type: Boolean, default: false },
-  calendarShoots: { type: Boolean, default: false },
-  musicAlbum: { type: Boolean, default: false },
-  tvSerial: { type: Boolean, default: false },
-  kissingScenes: { type: Boolean, default: false },
-  singing: { type: Boolean, default: false },
-  dancing: { type: Boolean, default: false },
-  anchoring: { type: Boolean, default: false },
-  webSeries: { type: Boolean, default: false },
-  indianWear: { type: Boolean, default: false },
-  skirt: { type: Boolean, default: false },
-  shorts: { type: Boolean, default: false },
-  bold: { type: Boolean, default: false },
-  topless: { type: Boolean, default: false },
-  nude: { type: Boolean, default: false },
-  semiNude: { type: Boolean, default: false },
-  bodyPainting: { type: Boolean, default: false },
-  compromise: { type: Boolean, default: false },
-  adjustments: { type: Boolean, default: false },
-  anyAllergiesToDust: { type: Boolean, default: false },
-  passport: { type: Boolean, default: false },
-  tattoo: { type: Boolean, default: false },
-  outStationShoot: { type: Boolean, default: false },
-  outCountryShoot: { type: Boolean, default: false }
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
 
  // ✅ Separate model form fields

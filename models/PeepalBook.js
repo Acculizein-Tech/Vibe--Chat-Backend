@@ -29,11 +29,9 @@ const PeepalBookSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  facilities: {
-    // ✅ Newly added travel-related facilities
-   partTime: { type: Boolean, default: false },
-  fullTime: { type: Boolean, default: false },
-  freelance: { type: Boolean, default: false },
+facilities: {
+    type: mongoose.Schema.Types.Mixed,
+    default:{}
   },
 
    // ✅ Separate model form fields
