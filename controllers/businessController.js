@@ -31,6 +31,8 @@ import Doctor from '../models/Doctor.js';
 import Cafe from '../models/Cafe.js';
 import Coaching from '../models/Coaching.js';
 import TentHouse from '../models/TentHouse.js'; // Import TentHouse model  
+import Furniture from '../models/Furniture.js'; // Import Furniture model
+import Hardware from '../models/Hardware.js'; // Import Hardware model
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
 
@@ -60,7 +62,9 @@ const categoryModels = {
   Doctor: Doctor,
   Cafe: Cafe,
   Coaching: Coaching,
-  TentHouse: TentHouse
+  TentHouse: TentHouse,
+  Furniture: Furniture,
+  Hardware: Hardware
 };
 
 
