@@ -6,7 +6,7 @@ import Payment from "../models/Payment.js";
 import path from "path";
 import { generateInvoicePDF } from "../utils/pdfInvoiceGenerator.js"; // ✅ Adjust path
 import Business from "../models/Business.js";
-
+import InvoiceCounter from "../models/InvoiceCounter.js"; // ✅ NEW IMPORT
 
 // ✅ GST Calculation
 const calculateGST = (amount, state) => {
@@ -51,104 +51,19 @@ export const createOrder = asyncHandler(async (req, res) => {
 });
 
 // ✅ Step 2: Verify & Save Payment
-// ✅ Step 2: Verify & Save Payment
-// export const verifyPayment = asyncHandler(async (req, res) => {
-//   try {
-//     const {
-//       razorpay: {
-//         razorpay_order_id,
-//         razorpay_payment_id,
-//         razorpay_signature
-//       },
-//       business,
-//       companyData 
-//     } = req.body;
-
-//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-//       return res.status(400).json({
-//         status: "fail",
-//         message: "Missing payment credentials"
-//       });
-//     }
-
-//     const generated_signature = crypto
-//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-//       .digest("hex");
-
-//     if (generated_signature !== razorpay_signature) {
-//       return res.status(400).json({
-//         status: "fail",
-//         message: "Invalid Razorpay signature"
-//       });
-//     }
-
-//     // ✅ GST Calculation logic
-//     const amount = business.planPrice || 0;
-//     const baseAmount = parseFloat((amount / 1.18).toFixed(2));
-//     const gstAmount = parseFloat((amount - baseAmount).toFixed(2));
-//     const isUP = (business.state || "").toLowerCase() === "uttar pradesh";
-
-//     const payment = await Payment.create({
-//       user: req.user._id,
-//       orderId: razorpay_order_id,
-//       paymentId: razorpay_payment_id,
-//       signature: razorpay_signature,
-//       amount,
-//       baseAmount,
-//       tax: {
-//         cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
-//         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
-//         igst: isUP ? 0 : gstAmount,
-//       },
-//       isUP,
-//       status: "success",
-//       billingDetails: {
-//         ...business,
-//         currency: "INR",
-//       },
-//       companyData: {
-//         companyName: companyData?.companyName,
-//         companyAddress: companyData?.companyAddress,
-//         companyPhone: companyData?.companyPhone,
-//         companyEmail: companyData?.companyEmail,
-//         gstin: companyData?.gstin
-//       }
-//     });
-
-//     return res.status(200).json({
-//       status: "success",
-//       message: "Payment verified and stored successfully",
-//       data: payment
-//     });
-
-//   } catch (err) {
-//     console.error("Error verifying payment:", err);
-//     return res.status(500).json({
-//       status: "fail",
-//       message: "Internal Server Error",
-//       error: err.message
-//     });
-//   }
-// });
-
 export const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const {
-      razorpay: {
-        razorpay_order_id,
-        razorpay_payment_id,
-        razorpay_signature
-      },
+      razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
       business,
-      companyData 
+      companyData,
     } = req.body;
 
     // Step 1: Validate Razorpay credentials
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
         status: "fail",
-        message: "Missing payment credentials"
+        message: "Missing payment credentials",
       });
     }
 
@@ -160,7 +75,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     if (generated_signature !== razorpay_signature) {
       return res.status(400).json({
         status: "fail",
-        message: "Invalid Razorpay signature"
+        message: "Invalid Razorpay signature",
       });
     }
 
@@ -178,13 +93,23 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     const fyEnd = fyStart + 1;
     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd.toString().slice(-2)}`;
 
-    let counter = await InvoiceCounter.findOne({ financialYear });
-    if (!counter) {
-      counter = await InvoiceCounter.create({ financialYear, sequence: 1 });
-    } else {
-      counter.sequence += 1;
-      await counter.save();
-    }
+    // let counter = await InvoiceCounter.findOne({ financialYear });
+    // if (!counter) {
+    //   counter = await InvoiceCounter.create({ financialYear, sequence: 1 });
+    // } else {
+    //   counter.sequence += 1;
+    //   await counter.save();
+    // }
+
+    // const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+    // const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+    // Step 3: Generate invoice number in format BZ/01/25-26 (Atomic)
+    const counter = await InvoiceCounter.findOneAndUpdate(
+      { financialYear },
+      { $inc: { sequence: 1 } },
+      { new: true, upsert: true }
+    );
 
     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
@@ -214,8 +139,8 @@ export const verifyPayment = asyncHandler(async (req, res) => {
         companyAddress: companyData?.companyAddress,
         companyPhone: companyData?.companyPhone,
         companyEmail: companyData?.companyEmail,
-        gstin: companyData?.gstin
-      }
+        gstin: companyData?.gstin,
+      },
     });
 
     // Step 5: Send response
@@ -223,27 +148,23 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       status: "success",
       message: "Payment verified and stored successfully",
       invoiceNumber,
-      data: payment
+      data: payment,
     });
-
   } catch (err) {
     console.error("Error verifying payment:", err);
     return res.status(500).json({
       status: "fail",
       message: "Internal Server Error",
-      error: err.message
+      error: err.message,
     });
   }
 });
 
-
-
-
-
-
 // ✅ Step 3: Get Payment History
 export const getPayments = asyncHandler(async (req, res) => {
-  const payments = await Payment.find().populate("user").sort({ createdAt: -1 });
+  const payments = await Payment.find()
+    .populate("user")
+    .sort({ createdAt: -1 });
 
   res.status(200).json({
     success: true,
@@ -253,10 +174,12 @@ export const getPayments = asyncHandler(async (req, res) => {
 });
 
 //get the payment data by user id
-export const getPaymentsByUserId = asyncHandler(async (req, res) => { 
+export const getPaymentsByUserId = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
-  const payments = await Payment.find({ user: userId }).populate("user").sort({ createdAt: -1 });
+  const payments = await Payment.find({ user: userId })
+    .populate("user")
+    .sort({ createdAt: -1 });
 
   if (!payments || payments.length === 0) {
     return res.status(404).json({
@@ -273,7 +196,7 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
 });
 
 // ✅ Step 4: Generate Invoice PDF
-// export const generateInvoice = asyncHandler(async (req, res) => { 
+// export const generateInvoice = asyncHandler(async (req, res) => {
 //   const { paymentId } = req.params;
 
 //   if (!paymentId) {
@@ -322,9 +245,7 @@ export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
   });
 });
 
-
 //live rozorpay webhook details of payment
-
 
 export const getAllPayments = async (req, res) => {
   try {
@@ -339,7 +260,7 @@ export const getAllPayments = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch payments',
+      message: "Failed to fetch payments",
       error: error.message,
     });
   }

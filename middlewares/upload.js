@@ -1,7 +1,7 @@
 //upload.js
 
 import multer from 'multer';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand  } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -92,6 +92,29 @@ const getS3KeyPrefix = (req, file) => {
 
   return folder;
 };
+
+
+// Helper to delete file from S3
+// export const deleteFromS3 = async (fileUrl) => {
+//   try {
+//     if (!fileUrl) return false;
+
+//     // Parse key safely
+//     const key = new URL(fileUrl).pathname.substring(1);
+
+//     await s3.send(new DeleteObjectCommand({
+//       Bucket: process.env.AWS_BUCKET_NAME,
+//       Key: key
+//     }));
+
+//     console.log(`🗑 Deleted from S3: ${key}`);
+//     return true;
+//   } catch (err) {
+//     console.error(`❌ Failed to delete from S3: ${fileUrl}`, err);
+//     return false;
+//   }
+// };
+
 
 // Upload and convert images
 export const uploadToS3 = async (file, req) => {

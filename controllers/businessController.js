@@ -33,6 +33,7 @@ import Coaching from '../models/Coaching.js';
 import TentHouse from '../models/TentHouse.js'; // Import TentHouse model  
 import Furniture from '../models/Furniture.js'; // Import Furniture model
 import Hardware from '../models/Hardware.js'; // Import Hardware model
+import EntertainmentEvents from  '../models/EntertainmentEvents.js'; // Import Movies model
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
 
@@ -64,7 +65,8 @@ const categoryModels = {
   Coaching: Coaching,
   TentHouse: TentHouse,
   Furniture: Furniture,
-  Hardware: Hardware
+  Hardware: Hardware,
+  EntertainmentEvents: EntertainmentEvents
 };
 
 
@@ -973,84 +975,212 @@ export const getBusinessId = async (req, res) => {
 };
 
 
+// export const searchBusinesses = async (req, res) => {
+//   try {
+//     const { keyword = '', location = '' } = req.query;
+
+//     if (!keyword && !location) {
+//       return res.status(400).json({ message: 'Please provide keyword or location' });
+//     }
+
+//     const keywordRegex = keyword ? new RegExp(keyword, 'i') : null;
+//     const locationRegex = location ? new RegExp(location, 'i') : null;
+
+//     let results = [];
+
+//     // STEP 1: Direct search in Business model
+//     const baseQuery = {
+//       ...(keyword && {
+//         $or: [
+//           { name: keywordRegex },
+//           { description: keywordRegex },
+//           { category: keywordRegex },
+//           { speciality: keywordRegex },
+//           { services: keywordRegex },
+//           { categoryModel: keywordRegex }
+//         ]
+//       }),
+//       ...(location && { 'location.city': locationRegex })
+//     };
+
+//     results = await Business.find(baseQuery);
+
+//     // STEP 2: Retry without location filter if nothing found
+//     if (results.length === 0 && keyword) {
+//       results = await Business.find({
+//         $or: [
+//           { name: keywordRegex },
+//           { description: keywordRegex },
+//           { category: keywordRegex },
+//           { speciality: keywordRegex },
+//           { services: keywordRegex },
+//           { categoryModel: keywordRegex }
+//         ]
+//       });
+//     }
+
+//     // STEP 3: Search in category-specific models' speciality field
+//     if (results.length === 0 && keyword) {
+//       let businessIds = new Set();
+
+//       for (const [modelName, Model] of Object.entries(categoryModels)) {
+//         const matchedDocs = await Model.find({ speciality: keywordRegex }).select('business');
+//         matchedDocs.forEach(doc => {
+//           if (doc.business) businessIds.add(doc.business.toString());
+//         });
+//       }
+
+//       if (businessIds.size > 0) {
+//         results = await Business.find({
+//           _id: { $in: Array.from(businessIds) },
+//           ...(location && { 'location.city': locationRegex })
+//         });
+//       }
+//     }
+
+//     res.status(200).json({
+//       count: results.length,
+//       results
+//     });
+
+//   } catch (error) {
+//     console.error('Search Error:', error);
+//     res.status(500).json({ message: 'Server Error' });
+//   }
+// };
+
+
+
+
+
+
+//get the business by current sales user id
+
+
+
 export const searchBusinesses = async (req, res) => {
   try {
-    const { keyword = '', location = '' } = req.query;
+    const { keyword = "", location = "" } = req.query;
 
     if (!keyword && !location) {
-      return res.status(400).json({ message: 'Please provide keyword or location' });
-    }
-
-    const keywordRegex = keyword ? new RegExp(keyword, 'i') : null;
-    const locationRegex = location ? new RegExp(location, 'i') : null;
-
-    let results = [];
-
-    // STEP 1: Direct search in Business model
-    const baseQuery = {
-      ...(keyword && {
-        $or: [
-          { name: keywordRegex },
-          { description: keywordRegex },
-          { category: keywordRegex },
-          { speciality: keywordRegex },
-          { services: keywordRegex },
-          { categoryModel: keywordRegex }
-        ]
-      }),
-      ...(location && { 'location.city': locationRegex })
-    };
-
-    results = await Business.find(baseQuery);
-
-    // STEP 2: Retry without location filter if nothing found
-    if (results.length === 0 && keyword) {
-      results = await Business.find({
-        $or: [
-          { name: keywordRegex },
-          { description: keywordRegex },
-          { category: keywordRegex },
-          { speciality: keywordRegex },
-          { services: keywordRegex },
-          { categoryModel: keywordRegex }
-        ]
+      return res.status(400).json({
+        status: "error",
+        message: "Please provide a keyword or location to search."
       });
     }
 
-    // STEP 3: Search in category-specific models' speciality field
-    if (results.length === 0 && keyword) {
-      let businessIds = new Set();
+    const keywordRegex = keyword ? new RegExp(keyword, "i") : null;
+    const locationRegex = location ? new RegExp(location, "i") : null;
 
-      for (const [modelName, Model] of Object.entries(categoryModels)) {
-        const matchedDocs = await Model.find({ speciality: keywordRegex }).select('business');
-        matchedDocs.forEach(doc => {
-          if (doc.business) businessIds.add(doc.business.toString());
-        });
-      }
+    const pipeline = [
+      // Convert services object to searchable array of keys
+      {
+        $addFields: {
+          serviceKeys: { $map: {
+            input: { $objectToArray: { $ifNull: ["$services", {}] } },
+            as: "svc",
+            in: "$$svc.k"
+          }}
+        }
+      },
 
-      if (businessIds.size > 0) {
-        results = await Business.find({
-          _id: { $in: Array.from(businessIds) },
-          ...(location && { 'location.city': locationRegex })
-        });
-      }
+      // Match stage
+      {
+        $match: {
+          $and: [
+            keyword
+              ? {
+                  $or: [
+                    { serviceKeys: keywordRegex }, // service key match
+                    { name: keywordRegex },
+                    { category: keywordRegex },
+                    { description: keywordRegex }
+                  ]
+                }
+              : {},
+            location
+              ? {
+                  $or: [
+                    { "location.city": locationRegex },
+                    { "location.state": locationRegex },
+                    { "location.pincode": locationRegex },
+                    { "location.address": locationRegex }
+                  ]
+                }
+              : {}
+          ]
+        }
+      },
+
+      // Add ranking score
+      {
+        $addFields: {
+          matchScore: {
+            $add: [
+              {
+                $cond: [{ $in: [keyword, "$serviceKeys"] }, 100, 0] // service key match = high priority
+              },
+              {
+                $cond: [{ $regexMatch: { input: "$name", regex: keywordRegex } }, 50, 0]
+              },
+              {
+                $cond: [{ $regexMatch: { input: "$category", regex: keywordRegex } }, 30, 0]
+              },
+              {
+                $cond: [{ $regexMatch: { input: "$description", regex: keywordRegex } }, 10, 0]
+              }
+            ]
+          }
+        }
+      },
+
+      // Sort by matchScore and optionally rating
+      { $sort: { matchScore: -1, rating: -1 } },
+
+      // Limit results
+      { $limit: 50 }
+    ];
+
+    let results = await Business.aggregate(pipeline);
+
+    // Fallback if no results
+    if (results.length === 0) {
+      results = await Business.find({})
+        .sort({ rating: -1 })
+        .limit(10)
+        .lean();
     }
 
-    res.status(200).json({
+    return res.status(200).json({
+      status: "success",
       count: results.length,
       results
     });
 
   } catch (error) {
-    console.error('Search Error:', error);
-    res.status(500).json({ message: 'Server Error' });
+    console.error("Search Error:", error);
+
+    const fallbackBusinesses = await Business.find({})
+      .sort({ rating: -1 })
+      .limit(5)
+      .lean();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Showing popular businesses due to a temporary issue",
+      count: fallbackBusinesses.length,
+      results: fallbackBusinesses
+    });
   }
 };
 
 
 
 
-//get the business by current sales user id
+
+
+
+
 export const getBusinessBySalesId = asyncHandler(async (req, res) => {
   const salesUserId = req.user._id;
 
