@@ -7,7 +7,8 @@ import {
   getPayments,   
   getPaymentsByUserId,
   getAllVerifiedPayments,
-  getAllPayments
+  getAllPayments,
+  getPaymentByPaymentId
 } from "../controllers/paymentController.js";
 
 import { protect } from "../middlewares/auth.js";
@@ -24,32 +25,6 @@ router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments
 
 router.get('/all', protect, roles('superadmin'), getAllPayments);
 
-// ✅ Razorpay Webhook (NO auth here, Razorpay server will send requests)
-// router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
-//   const secret = "mywebhooksecret"; // same as in Razorpay dashboard webhook config
-
-//   const signature = req.headers["x-razorpay-signature"];
-//   const body = req.body;
-
-//   const expectedSignature = crypto
-//     .createHmac("sha256", secret)
-//     .update(JSON.stringify(body))
-//     .digest("hex");
-
-//   if (expectedSignature === signature) {
-//     console.log("✅ Webhook verified:", body.event);
-
-//     // Optional: Add event-specific logic
-//     // Example:
-//     // if (body.event === "payment.captured") {
-//     //   const paymentData = body.payload.payment.entity;
-//     //   // Store in DB, update status, etc.
-//     // }
-
-//     return res.status(200).json({ success: true, received: true });
-//   } else {
-//     return res.status(400).json({ success: false, message: "Invalid webhook signature" });
-//   }
-// });
+router.get("/:paymentId", protect, roles('user', 'superadmin'), getPaymentByPaymentId);
 
 export default router;

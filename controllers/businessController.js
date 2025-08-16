@@ -34,6 +34,7 @@ import TentHouse from '../models/TentHouse.js'; // Import TentHouse model
 import Furniture from '../models/Furniture.js'; // Import Furniture model
 import Hardware from '../models/Hardware.js'; // Import Hardware model
 import EntertainmentEvents from  '../models/EntertainmentEvents.js'; // Import Movies model
+import DeliveryPickups from '../models/DeliveryPickups.js'; // Import DeliveryPickups model
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
 
@@ -66,7 +67,8 @@ const categoryModels = {
   TentHouse: TentHouse,
   Furniture: Furniture,
   Hardware: Hardware,
-  EntertainmentEvents: EntertainmentEvents
+  EntertainmentEvents: EntertainmentEvents,
+  DeliveryPickups: DeliveryPickups
 };
 
 
