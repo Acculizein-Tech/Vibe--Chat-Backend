@@ -25,6 +25,6 @@ router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments
 
 router.get('/all', protect, roles('superadmin'), getAllPayments);
 
-router.get("/:paymentId", protect, roles('user', 'superadmin'), getPaymentByPaymentId);
+router.get("/:paymentId", protect, roles('customer', 'superadmin'), getPaymentByPaymentId);
 
 export default router;
