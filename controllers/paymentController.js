@@ -271,36 +271,82 @@ export const getAllPayments = async (req, res) => {
 
 
 // GET Payment by Payment ID
+// export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
+//   try {
+//     const { paymentId } = req.params;
+
+//     if (!paymentId) {
+//       return res.status(400).json({ message: "Payment ID is required" });
+//     }
+
+//     // check payment in DB
+//     const payment = await Payment.findOne({ paymentId });
+
+//     if (!payment) {
+//       return res.status(404).json({ message: "Payment not found" });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: payment,
+//       companyDetails: {
+//         companyName: process.env.COMPANY_NAME || "",
+//         gstin: process.env.COMPANY_GSTIN || "",
+//         email: process.env.COMPANY_EMAIL || "info@acculizeintech.com",
+//         phone: process.env.COMPANY_PHONE || "",
+//         invoiceDate: payment.createdAt
+//           ? payment.createdAt.toISOString().split("T")[0] // yyyy-mm-dd
+//           : "",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching payment:", error.message);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// });
+
 export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
   try {
     const { paymentId } = req.params;
 
-    if (!paymentId) {
-      return res.status(400).json({ message: "Payment ID is required" });
+    // 1️⃣ Validate Payment ID
+    if (!paymentId || typeof paymentId !== "string") {
+      return res.status(400).json({ 
+        success: false,
+        message: "Valid Payment ID is required" 
+      });
     }
 
-    // check payment in DB
-    const payment = await Payment.findOne({ paymentId });
+    // 2️⃣ Fetch Payment
+    const payment = await Payment.findOne({ paymentId }).lean();
 
     if (!payment) {
-      return res.status(404).json({ message: "Payment not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Payment not found" 
+      });
     }
 
+    // 3️⃣ Prepare Response
     return res.status(200).json({
       success: true,
       data: payment,
       companyDetails: {
-        companyName: process.env.COMPANY_NAME || "",
-        gstin: process.env.COMPANY_GSTIN || "",
+        companyName: process.env.COMPANY_NAME || "Acculize Intech Pvt Ltd",
+        gstin: process.env.COMPANY_GSTIN || "22AAAAA0000A1Z5",
         email: process.env.COMPANY_EMAIL || "info@acculizeintech.com",
-        phone: process.env.COMPANY_PHONE || "",
-        invoiceDate: payment.createdAt
-          ? payment.createdAt.toISOString().split("T")[0] // yyyy-mm-dd
+        phone: process.env.COMPANY_PHONE || "+91-9999999999",
+        invoiceDate: payment?.createdAt
+          ? new Date(payment.createdAt).toISOString().split("T")[0] // yyyy-mm-dd
           : "",
       },
     });
   } catch (error) {
-    console.error("Error fetching payment:", error.message);
-    return res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Error fetching payment by ID:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Internal server error", 
+      error: error.message 
+    });
   }
 });

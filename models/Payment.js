@@ -42,6 +42,7 @@ const paymentSchema = new mongoose.Schema({
     state: String, // e.g., UP, Delhi
     category: String, // e.g., Individual, Business
     address: String,
+    userGst: String,
 
       // ✅ Newly Added Fields
   planName: { type: String }, 
