@@ -17,6 +17,8 @@ const paymentSchema = new mongoose.Schema({
 
   amount: { type: Number },
   baseAmount: { type: Number }, // amount before tax
+  totalAmount: { type: Number },
+
 
   tax: {
     cgst: { type: Number, default: 0 },
