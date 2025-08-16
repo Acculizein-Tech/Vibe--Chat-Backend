@@ -645,6 +645,15 @@ export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
     return res.status(200).json({
       success: true,
       data: payment,
+      companyDetails: {
+        companyName: process.env.COMPANY_NAME || "",
+        gstin: process.env.COMPANY_GSTIN || "",
+        email: process.env.COMPANY_EMAIL || "info@acculizeintech.com",
+        phone: process.env.COMPANY_PHONE || "",
+        invoiceDate: payment.createdAt
+          ? payment.createdAt.toISOString().split("T")[0] // yyyy-mm-dd
+          : "",
+      },
     });
   } catch (error) {
     console.error("Error fetching payment:", error.message);
