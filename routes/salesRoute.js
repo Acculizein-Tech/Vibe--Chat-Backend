@@ -2,10 +2,11 @@ import express from 'express';
 import { getSalesDashboardStats, getReferralLink } from '../controllers/salesController.js';
 const router = express.Router();
 import { protect } from '../middlewares/auth.js';
+import roles from '../middlewares/roles.js';
 
 // Requires authentication middleware to attach req.user
-router.get('/dashboard', getSalesDashboardStats);
-router.get('/referral-link', protect, getReferralLink);
+router.get('/dashboard', protect, getSalesDashboardStats);
+router.get('/referral-link', protect, roles('sales', 'superadmin', 'customer'), getReferralLink);
 
 export default router;
 

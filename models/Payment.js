@@ -43,6 +43,7 @@ const paymentSchema = new mongoose.Schema({
     category: String, // e.g., Individual, Business
     address: String,
     userGst: String,
+    address: String,
 
       // ✅ Newly Added Fields
   planName: { type: String }, 

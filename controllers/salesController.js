@@ -25,20 +25,21 @@ export const getSalesDashboardStats = async (req, res) => {
     res.status(500).json({ message: 'Error fetching dashboard', error: err.message });
   }
 };
+
+
+
 export const getReferralLink = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).lean();
 
-  if (!user || user.role !== 'sales') {
-    res.status(403);
-    throw new Error('Only sales users can access this route');
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
   }
 
   if (!user.referralCode) {
-    res.status(400);
-    throw new Error('Referral code not found for this sales user');
+    return res.status(400).json({ message: 'Referral code not found for this user' });
   }
 
-  const referralLink = `https://yourwebsite.com/register?ref=${user.referralCode}`;
+  const referralLink = `https://bizvility.com/register?ref=${user.referralCode}`;
 
   res.status(200).json({
     referralCode: user.referralCode,
@@ -46,6 +47,7 @@ export const getReferralLink = asyncHandler(async (req, res) => {
     message: 'Referral link generated successfully'
   });
 });
+
 
 // //get business by current user id
 // export const getBusinessByUserId = asyncHandler(async (req, res) => {

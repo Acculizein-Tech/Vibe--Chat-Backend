@@ -207,7 +207,7 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
       paidDate: p.createdAt.toISOString().split("T")[0],
       billTo: p.billingDetails?.businessName || "NA",
       email: p.billingDetails?.email || "NA",
-      status: p.status || "NA",
+      status: p.status || "NA", 
       address: p.billingDetails?.state || "NA",
       gstin: p.billingDetails?.gstin || "NA",
       price: p.baseAmount?.toFixed(2) || "0.00",
