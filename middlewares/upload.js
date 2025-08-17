@@ -78,7 +78,7 @@ const getS3KeyPrefix = (req, file) => {
     folder = 'certificates';
   } else if (file.fieldname === 'galleryImages') {
     folder = 'gallery-images';
-  } else if (file.fieldname === 'eventsImages') {
+  } else if (file.fieldname === 'eventImages') {
     folder = 'events-photo';
   } else if (file.fieldname === 'aadhaarFront') {
     folder = 'aadhaar/front';
