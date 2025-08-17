@@ -8,9 +8,9 @@ import roles from '../middlewares/roles.js';
 const router = express.Router();
 
 // Single file upload for bannerImage
-const bannerUpload = upload.single('eventImages');
+const bannerUpload = upload.single('coverImage');
 
-// 👤 Customer or Business
+// 👤 Customer or Business 
 router.post('/', protect, bannerUpload, createEvent);
 router.put('/:id', protect, bannerUpload, updateEvent);
 router.delete('/:id', protect, deleteEvent);
