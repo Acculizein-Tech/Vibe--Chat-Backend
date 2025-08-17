@@ -182,7 +182,7 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
 
   const payments = await Payment.find({ user: userId })
     .populate("user")
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 }); 
 
   if (!payments || payments.length === 0) {
     return res.status(404).json({
@@ -210,7 +210,7 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
       status: p.status || "NA",
       address: p.billingDetails?.state || "NA",
       gstin: p.billingDetails?.gstin || "NA",
-      price: p.amount?.toFixed(2) || "0.00",
+      price: p.baseAmount?.toFixed(2) || "0.00",
       cgst: p.tax?.cgst?.toFixed(2) || "0.00",
       sgst: p.tax?.sgst?.toFixed(2) || "0.00",
       igst: p.tax?.igst?.toFixed(2) || "0.00",
