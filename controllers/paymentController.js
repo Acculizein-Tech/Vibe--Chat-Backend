@@ -334,6 +334,7 @@ export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
       orderId: p.orderId,
       paymentId: p.paymentId,
       signature: p.signature,
+      invoiceNumber: p.invoiceNumber,
       amount: p.amount,
       baseAmount: p.baseAmount,
       isUP: p.isUP,
