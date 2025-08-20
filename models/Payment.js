@@ -15,6 +15,8 @@ const paymentSchema = new mongoose.Schema(
     paymentId: { type: String, required: true },
     signature: { type: String, required: true },
 
+    HSN: { type: String }, // Harmonized System Nomenclature for goods
+
     amount: { type: Number },
     baseAmount: { type: Number }, // amount before tax
     totalAmount: { type: Number },

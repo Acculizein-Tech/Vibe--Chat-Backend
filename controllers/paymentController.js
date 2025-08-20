@@ -115,6 +115,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
       signature: razorpay_signature,
+      HSN: process.env.BUSINESS_HSN, // Default HSN if not provided
       amount: totalAmount, // ✅ store final paid amount
       baseAmount,          // ₹ without GST
       totalAmount,         // ✅ Final Total stored in DB
@@ -229,10 +230,93 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
 
 
 //get the all verify payment details to superadmin
+// export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
+//   const payments = await Payment.find({ status: "success" })
+//     .populate("user")
+//     .sort({ createdAt: -1 });
+
+//   if (!payments || payments.length === 0) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "No verified payments found",
+//     });
+//   }
+
+//   res.status(200).json({
+//     success: true,
+//     count: payments.length,
+//     payments,
+//   });
+// });
+
+
+// export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
+//   const payments = await Payment.find({ status: "success" })
+//     .populate({
+//       path: "user",
+//       select: "profile.avatar fullName email", // ✅ केवल जरूरी fields
+//     })
+//     .lean(); // ✅ plain object so we can manipulate
+
+//   if (!payments || payments.length === 0) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "No verified payments found",
+//     });
+//   }
+
+//   // ✅ Clean and minimal response structure
+//   const result = payments.map((p) => ({
+//     _id: p._id,
+//     orderId: p.orderId,
+//     paymentId: p.paymentId,
+//     invoiceNumber: p.invoiceNumber,
+//     amount: p.amount,
+//     baseAmount: p.baseAmount,
+//     status: p.status,
+//     createdAt: p.createdAt,
+//     billingDetails: {
+//       businessName: p.billingDetails?.businessName,
+//       planName: p.billingDetails?.planName,
+//       planPrice: p.billingDetails?.planPrice,
+//       currency: p.billingDetails?.currency,
+//     },
+//     tax: {
+//       cgst: p.tax?.cgst,
+//       sgst: p.tax?.sgst,
+//       igst: p.tax?.igst,
+//     },
+//     user: {
+//       profile: {
+//         avatar: p.user?.profile?.avatar || null,
+//       },
+//       _id: p.user?._id || null,
+//       fullName: p.user?.fullName || null,
+//       email: p.user?.email || null,
+//       userGst: p.userGst || null, // ✅ userGst from Payment model
+//     },
+//   }));
+
+//   res.status(200).json({
+//     success: true,
+//     count: result.length,
+//     payments: result,
+//   });
+// });
+
+
+
+//live rozorpay webhook details of payment
+
 export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
   const payments = await Payment.find({ status: "success" })
-    .populate("user")
-    .sort({ createdAt: -1 });
+    .populate({
+      path: "user",
+      select:
+        "profile.avatar fullName email createdAt updatedAt city country state zipCode phone",
+    })
+    .sort({ createdAt: -1 })
+    .lean();
 
   if (!payments || payments.length === 0) {
     return res.status(404).json({
@@ -241,14 +325,33 @@ export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
     });
   }
 
+  // ✅ Format result
+  const result = payments.map((p) => ({
+    _id: p._id,
+    tax: p.tax,
+    billingDetails: {
+      ...p.billingDetails,
+      orderId: p.orderId,
+      paymentId: p.paymentId,
+      signature: p.signature,
+      amount: p.amount,
+      baseAmount: p.baseAmount,
+      isUP: p.isUP,
+      status: p.status,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    },
+    user: p.user,
+  }));
+
   res.status(200).json({
     success: true,
-    count: payments.length,
-    payments,
+    count: result.length,
+    payments: result,
   });
 });
 
-//live rozorpay webhook details of payment
+
 
 export const getAllPayments = async (req, res) => {
   try {
