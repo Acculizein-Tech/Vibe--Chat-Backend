@@ -10,4 +10,4 @@ router.post('/createEnquiry', protect,  createEnquiry);
 router.get('/getEnquiries', protect, roles('admin', 'superadmin'), getAllEnquiries);
 
 
-export default router;
+export default router; 

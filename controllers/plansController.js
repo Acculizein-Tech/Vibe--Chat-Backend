@@ -37,6 +37,7 @@ export const createPricePlan = async (req, res) => {
       priceName,
       price,
       duration,
+      isService,
       features
     });
 

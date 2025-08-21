@@ -27,6 +27,10 @@ const pricePlanSchema = new mongoose.Schema(
       
       default: ''
     },
+    isService: {
+      type: Boolean,
+      default: false
+    },
     features: {
       type: [featureSchema],
       default: []

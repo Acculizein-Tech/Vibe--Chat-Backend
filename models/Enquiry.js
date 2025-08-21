@@ -19,11 +19,10 @@ const EnquirySchema = new mongoose.Schema({
     type: String,
     
   },
-  subject: {
-     type: String,
-    enum: ['General Inquiry', 'Technical Support', 'Billing', 'Business Enquiry About Basic Branding Plan', 'Healthcare Digital Marketing Services Break-Up'],
-    default: 'General Inquiry'
-  },
+subject: {
+  type: String,
+  default: 'General Inquiry'
+},
   message: {
     type: String,
     required: true

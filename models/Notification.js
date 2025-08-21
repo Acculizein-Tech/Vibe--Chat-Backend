@@ -23,7 +23,8 @@ const notificationSchema = new mongoose.Schema(
         'EVENT_REQUEST',
         'ADMIN_ALERT',
         'NEW_BUSINESS_BY_REFERRAL',
-        'NEW_BUSINESS_LISTED'
+        'NEW_BUSINESS_LISTED',
+        'NEW_ENQUIRY_CREATED'
       ],
       required: true
     },

@@ -4,21 +4,116 @@ import { notifyRole } from '../utils/sendNotification.js';
 // import sanitize from 'mongo-sanitize'; // optional: if you use this for extra protection
 
 
+// export const createEnquiry = async (req, res) => {
+//   try {
+//     const {
+//       fullName = '', 
+//       email = '',
+//       phone = '',
+//       businessName = '',
+//       subject = '',
+//       message = ''
+//     } = req.body; // Prevent NoSQL injections if needed
+
+//     // ✅ Basic validation
+//     if (!fullName.trim() || !email.trim() || !phone.trim() || !message.trim()) {
+//       return res.status(400).json({ error: "All required fields must be filled" });
+//     }
+
+//     // ✅ Save enquiry to DB
+//     const enquiry = await Enquiry.create({
+//       fullName: fullName.trim(),
+//       email: email.trim(),
+//       phone: phone.trim(),
+//       businessName: businessName.trim(),
+//       subject: subject.trim(),
+//       message: message.trim()
+//     });
+
+//     // 📇 Create associated lead entry
+//     try {
+//       await Leads.create({
+//         name: fullName.trim(),
+//         contact: email.trim() || phone.trim(),
+//         businessType: businessName.trim(),
+//         status: 'New Enquiry',
+//         notes: subject.trim(),
+//         followUpDate: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours later
+//       });
+//     } catch (leadErr) {
+//       console.error("⚠️ Failed to create lead from enquiry:", leadErr.message);
+//     }
+
+//     // 🔔 Notify superadmin and admin
+//     const notificationData = {
+//       enquiryId: enquiry._id,
+//       name: fullName,
+//       redirectPath: `/admin/enquiries/${enquiry._id}`
+//     };
+
+//     const notificationMessage = `New enquiry received from "${fullName}".`;
+
+//     await Promise.all([
+//       notifyRole({
+//         role: 'admin',
+//         type: 'NEW_ENQUIRY',
+//         title: '📩 New Enquiry Received',
+//         message: notificationMessage,
+//         data: notificationData
+//       }),
+//       notifyRole({
+//         role: 'superadmin',
+//         type: 'NEW_ENQUIRY',
+//         title: '📩 New Enquiry Received',
+//         message: notificationMessage,
+//         data: {
+//           ...notificationData,
+//           redirectPath: `/superadmin/enquiries/${enquiry._id}`
+//         }
+//       })
+//     ]);
+
+//     return res.status(201).json({
+//       message: 'Enquiry submitted successfully',
+//       enquiry
+//     });
+
+//   } catch (err) {
+//     console.error('❌ Server error while creating enquiry:', err.message);
+//     return res.status(500).json({ error: 'Something went wrong. Please try again later.' });
+//   }
+// };
+
+
+
 export const createEnquiry = async (req, res) => {
   try {
     const {
-      fullName = '', 
-      email = '',
-      phone = '',
-      businessName = 'Not Specified',
-      subject = 'Enquiry',
-      message = ''
-    } = sanitize(req.body); // Prevent NoSQL injections if needed
+      fullName = "",
+      email = "",
+      phone = "",
+      businessName = "Not Specified",
+      subject = "General Inquiry", // default safe value
+      message = "",
+    } = req.body;
 
     // ✅ Basic validation
     if (!fullName.trim() || !email.trim() || !phone.trim() || !message.trim()) {
       return res.status(400).json({ error: "All required fields must be filled" });
     }
+
+    // ✅ Allow only enum-safe subject (fallback kare default pe)
+    const allowedSubjects = [
+      "General Inquiry",
+      "Technical Support",
+      "Billing",
+      "Business Enquiry About Basic Branding Plan",
+      "Healthcare Digital Marketing Services Break-Up",
+    ];
+
+    const finalSubject = allowedSubjects.includes(subject.trim())
+      ? subject.trim()
+      : "General Inquiry";
 
     // ✅ Save enquiry to DB
     const enquiry = await Enquiry.create({
@@ -26,8 +121,8 @@ export const createEnquiry = async (req, res) => {
       email: email.trim(),
       phone: phone.trim(),
       businessName: businessName.trim(),
-      subject: subject.trim(),
-      message: message.trim()
+      subject: finalSubject,
+      message: message.trim(),
     });
 
     // 📇 Create associated lead entry
@@ -36,53 +131,54 @@ export const createEnquiry = async (req, res) => {
         name: fullName.trim(),
         contact: email.trim() || phone.trim(),
         businessType: businessName.trim(),
-        status: 'New Enquiry',
-        notes: subject.trim(),
-        followUpDate: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours later
+        status: "New Enquiry",
+        notes: finalSubject,
+        followUpDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hrs later
       });
     } catch (leadErr) {
-      console.error("⚠️ Failed to create lead from enquiry:", leadErr.message);
+      console.error("⚠️ Failed to create lead from enquiry:", leadErr);
     }
 
-    // 🔔 Notify superadmin and admin
+    // 🔔 Notify admins
     const notificationData = {
       enquiryId: enquiry._id,
       name: fullName,
-      redirectPath: `/admin/enquiries/${enquiry._id}`
+      redirectPath: `/admin/enquiries/${enquiry._id}`,
     };
 
     const notificationMessage = `New enquiry received from "${fullName}".`;
 
     await Promise.all([
       notifyRole({
-        role: 'admin',
-        type: 'NEW_ENQUIRY',
-        title: '📩 New Enquiry Received',
+        role: "admin",
+        type: "NEW_ENQUIRY_CREATED",
+        title: "📩 New Enquiry Received",
         message: notificationMessage,
-        data: notificationData
+        data: notificationData,
       }),
       notifyRole({
-        role: 'superadmin',
-        type: 'NEW_ENQUIRY',
-        title: '📩 New Enquiry Received',
+        role: "superadmin",
+        type: "NEW_ENQUIRY_CREATED",
+        title: "📩 New Enquiry Received",
         message: notificationMessage,
         data: {
           ...notificationData,
-          redirectPath: `/superadmin/enquiries/${enquiry._id}`
-        }
-      })
+          redirectPath: `/superadmin/enquiries/${enquiry._id}`,
+        },
+      }),
     ]);
 
     return res.status(201).json({
-      message: 'Enquiry submitted successfully',
-      enquiry
+      message: "Enquiry submitted successfully",
+      enquiry,
     });
-
   } catch (err) {
-    console.error('❌ Server error while creating enquiry:', err.message);
-    return res.status(500).json({ error: 'Something went wrong. Please try again later.' });
+    console.error("❌ Server error while creating enquiry:", err);
+    return res.status(500).json({ error: "Something went wrong. Please try again later." });
   }
 };
+
+
 
 export const getAllEnquiries = async (req, res) => {
   try {
