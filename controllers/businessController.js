@@ -36,6 +36,8 @@ import Hardware from '../models/Hardware.js'; // Import Hardware model
 import EntertainmentEvents from  '../models/EntertainmentEvents.js'; // Import Movies model
 import DeliveryPickups from '../models/DeliveryPickups.js'; // Import DeliveryPickups model
 import QuickServices from '../models/QuickServices.js'; // Import QuickServices model
+import ShowroomShops from '../models/ShowroomShops.js'; // Import ShowroomShops model
+import MarketingBranding from '../models/MarketingBranding.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
 
@@ -70,7 +72,9 @@ const categoryModels = {
   Hardware: Hardware,
   EntertainmentEvents: EntertainmentEvents,
   DeliveryPickups: DeliveryPickups,
-  QuickServices: QuickServices
+  QuickServices: QuickServices,
+  ShowroomShops: ShowroomShops,
+  MarketingBranding: MarketingBranding
 };
 
 
