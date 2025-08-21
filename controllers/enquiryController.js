@@ -93,7 +93,7 @@ export const createEnquiry = async (req, res) => {
       email = "",
       phone = "",
       businessName = "Not Specified",
-      subject = "General Inquiry", // default safe value
+      subject = "", // 👈 ab user jo bheje wahi save hoga
       message = "",
     } = req.body;
 
@@ -102,18 +102,8 @@ export const createEnquiry = async (req, res) => {
       return res.status(400).json({ error: "All required fields must be filled" });
     }
 
-    // ✅ Allow only enum-safe subject (fallback kare default pe)
-    const allowedSubjects = [
-      "General Inquiry",
-      "Technical Support",
-      "Billing",
-      "Business Enquiry About Basic Branding Plan",
-      "Healthcare Digital Marketing Services Break-Up",
-    ];
-
-    const finalSubject = allowedSubjects.includes(subject.trim())
-      ? subject.trim()
-      : "General Inquiry";
+    // ✅ Directly use subject (no restriction)
+    const finalSubject = subject.trim() || "General Inquiry";
 
     // ✅ Save enquiry to DB
     const enquiry = await Enquiry.create({
@@ -121,7 +111,7 @@ export const createEnquiry = async (req, res) => {
       email: email.trim(),
       phone: phone.trim(),
       businessName: businessName.trim(),
-      subject: finalSubject,
+      subject: finalSubject, // 👈 user ka diya hua save hoga
       message: message.trim(),
     });
 
@@ -177,6 +167,7 @@ export const createEnquiry = async (req, res) => {
     return res.status(500).json({ error: "Something went wrong. Please try again later." });
   }
 };
+
 
 
 
