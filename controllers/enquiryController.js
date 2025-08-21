@@ -7,7 +7,7 @@ import { notifyRole } from '../utils/sendNotification.js';
 export const createEnquiry = async (req, res) => {
   try {
     const {
-      fullName = '',
+      fullName = '', 
       email = '',
       phone = '',
       businessName = 'Not Specified',
