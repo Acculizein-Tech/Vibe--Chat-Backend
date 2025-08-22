@@ -32,7 +32,7 @@ router.get('/sales/listings', protect, getBusinessBySalesId);
 
 router.get('/my-businesses', protect, roles('customer'), getMyBusinesses);  //pricing
 //razorpay data 
-router.get('/paymentsRazorpay', getRazorpayPayments);
+router.get('/paymentsRazorpay', protect, roles('superadmin'), getRazorpayPayments);
 router.put('/update-pricing/:id', protect, roles('customer'), updateBusinessPricing);
 router.delete('/deleteBusiness/:id', protect, roles('superadmin', 'customer'), deleteBusinessListingById);
 
