@@ -216,6 +216,7 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
       sgst: p.tax?.sgst?.toFixed(2) || "0.00",
       igst: p.tax?.igst?.toFixed(2) || "0.00",
       total: p.totalAmount?.toFixed(2) || "0.00",
+      isUP: p.isUP || false
     },
   }));
 

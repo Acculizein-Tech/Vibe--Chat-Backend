@@ -54,6 +54,20 @@ emailResendBlock: Date, // 🟢 Add this line
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
 
+//new
+wallet: {
+  balance: { type: Number, default: 0 },
+  history: [
+    {
+      amount: Number,
+      type: { type: String, enum: ["credit", "debit"] },
+      description: String,
+      date: { type: Date, default: Date.now },
+    },
+  ],
+},
+
+
 
 }, { timestamps: true });
 

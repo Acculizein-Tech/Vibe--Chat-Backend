@@ -40,6 +40,7 @@ import ShowroomShops from '../models/ShowroomShops.js'; // Import ShowroomShops 
 import MarketingBranding from '../models/MarketingBranding.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
+import axios from 'axios'
 
 import mongoose from 'mongoose';
 import { uploadToS3 } from '../middlewares/upload.js';
@@ -1410,3 +1411,52 @@ export const updateBusinessPricing = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+export const getRazorpayPayments = asyncHandler(async (req, res) => {
+try {
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+    const mode = key_id.startsWith("rzp_live") ? "live" : "test";
+
+    // Fetch payments
+    const response = await axios.get("https://api.razorpay.com/v1/payments?count=58", {
+      auth: { username: key_id, password: key_secret },
+    });
+
+    const payments = response.data.items;
+
+    // Total transactions
+    const totalTransactions = payments.length;
+
+    // Successful transactions
+    const successful = payments.filter(p => p.status === "captured");
+
+    // Revenue
+    const totalRevenue = successful.reduce((sum, p) => sum + p.amount, 0) / 100; // INR
+
+    // Success rate
+    const successRate = totalTransactions > 0 ? 
+      ((successful.length / totalTransactions) * 100).toFixed(2) : 0;
+
+    // Mode of payment distribution
+    const paymentModes = {};
+    payments.forEach(p => {
+      const m = p.method || "unknown";
+      paymentModes[m] = (paymentModes[m] || 0) + 1;
+    });
+
+    res.json({
+      mode,
+      totalTransactions,
+      successfulTransactions: successful.length,
+      totalRevenue,
+      successRate: successRate + "%",
+      paymentModes,
+      rawData: response.data, // include original data too if needed
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});

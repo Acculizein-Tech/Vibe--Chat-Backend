@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan, getMyBusinesses, updateBusinessPricing } from '../controllers/businessController.js';
+import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan, getMyBusinesses, updateBusinessPricing, getRazorpayPayments } from '../controllers/businessController.js';
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
@@ -31,6 +31,8 @@ router.get('/count', businessCountByCategory);
 router.get('/sales/listings', protect, getBusinessBySalesId);
 
 router.get('/my-businesses', protect, roles('customer'), getMyBusinesses);  //pricing
+//razorpay data 
+router.get('/paymentsRazorpay', getRazorpayPayments);
 router.put('/update-pricing/:id', protect, roles('customer'), updateBusinessPricing);
 router.delete('/deleteBusiness/:id', protect, roles('superadmin', 'customer'), deleteBusinessListingById);
 
