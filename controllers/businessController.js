@@ -1067,6 +1067,122 @@ export const getBusinessId = async (req, res) => {
 
 
 
+// export const searchBusinesses = async (req, res) => {
+//   try {
+//     const { keyword = "", location = "" } = req.query;
+
+//     if (!keyword && !location) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Please provide a keyword or location to search."
+//       });
+//     }
+
+//     const keywordRegex = keyword ? new RegExp(keyword, "i") : null;
+//     const locationRegex = location ? new RegExp(location, "i") : null;
+
+//     const pipeline = [
+//       // Convert services object to searchable array of keys
+//       {
+//         $addFields: {
+//           serviceKeys: { $map: {
+//             input: { $objectToArray: { $ifNull: ["$services", {}] } },
+//             as: "svc",
+//             in: "$$svc.k"
+//           }}
+//         }
+//       },
+
+//       // Match stage
+//       {
+//         $match: {
+//           $and: [
+//             keyword
+//               ? {
+//                   $or: [
+//                     { serviceKeys: keywordRegex }, // service key match
+//                     { name: keywordRegex },
+//                     { category: keywordRegex },
+//                     { description: keywordRegex }
+//                   ]
+//                 }
+//               : {},
+//             location
+//               ? {
+//                   $or: [
+//                     { "location.city": locationRegex },
+//                     { "location.state": locationRegex },
+//                     { "location.pincode": locationRegex },
+//                     { "location.address": locationRegex }
+//                   ]
+//                 }
+//               : {}
+//           ]
+//         }
+//       },
+
+//       // Add ranking score
+//       {
+//         $addFields: {
+//           matchScore: {
+//             $add: [
+//               {
+//                 $cond: [{ $in: [keyword, "$serviceKeys"] }, 100, 0] // service key match = high priority
+//               },
+//               {
+//                 $cond: [{ $regexMatch: { input: "$name", regex: keywordRegex } }, 50, 0]
+//               },
+//               {
+//                 $cond: [{ $regexMatch: { input: "$category", regex: keywordRegex } }, 30, 0]
+//               },
+//               {
+//                 $cond: [{ $regexMatch: { input: "$description", regex: keywordRegex } }, 10, 0]
+//               }
+//             ]
+//           }
+//         }
+//       },
+
+//       // Sort by matchScore and optionally rating
+//       { $sort: { matchScore: -1, rating: -1 } },
+
+//       // Limit results
+//       { $limit: 50 }
+//     ];
+
+//     let results = await Business.aggregate(pipeline);
+
+//     // Fallback if no results
+//     if (results.length === 0) {
+//       results = await Business.find({})
+//         .sort({ rating: -1 })
+//         .limit(10)
+//         .lean();
+//     }
+
+//     return res.status(200).json({
+//       status: "success",
+//       count: results.length,
+//       results
+//     });
+
+//   } catch (error) {
+//     console.error("Search Error:", error);
+
+//     const fallbackBusinesses = await Business.find({})
+//       .sort({ rating: -1 })
+//       .limit(5)
+//       .lean();
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Showing popular businesses due to a temporary issue",
+//       count: fallbackBusinesses.length,
+//       results: fallbackBusinesses
+//     });
+//   }
+// };
+
 export const searchBusinesses = async (req, res) => {
   try {
     const { keyword = "", location = "" } = req.query;
@@ -1085,11 +1201,13 @@ export const searchBusinesses = async (req, res) => {
       // Convert services object to searchable array of keys
       {
         $addFields: {
-          serviceKeys: { $map: {
-            input: { $objectToArray: { $ifNull: ["$services", {}] } },
-            as: "svc",
-            in: "$$svc.k"
-          }}
+          serviceKeys: {
+            $map: {
+              input: { $objectToArray: { $ifNull: ["$services", {}] } },
+              as: "svc",
+              in: "$$svc.k"
+            }
+          }
         }
       },
 
@@ -1100,9 +1218,9 @@ export const searchBusinesses = async (req, res) => {
             keyword
               ? {
                   $or: [
-                    { serviceKeys: keywordRegex }, // service key match
+                    { "services.category": keywordRegex }, // strict category match
+                    { serviceKeys: keywordRegex },         // service keys
                     { name: keywordRegex },
-                    { category: keywordRegex },
                     { description: keywordRegex }
                   ]
                 }
@@ -1127,16 +1245,28 @@ export const searchBusinesses = async (req, res) => {
           matchScore: {
             $add: [
               {
-                $cond: [{ $in: [keyword, "$serviceKeys"] }, 100, 0] // service key match = high priority
+                $cond: [
+                  { $regexMatch: { input: "$services.category", regex: keywordRegex } },
+                  100,
+                  0
+                ]
               },
               {
-                $cond: [{ $regexMatch: { input: "$name", regex: keywordRegex } }, 50, 0]
+                $cond: [{ $in: [keyword, "$serviceKeys"] }, 70, 0]
               },
               {
-                $cond: [{ $regexMatch: { input: "$category", regex: keywordRegex } }, 30, 0]
+                $cond: [
+                  { $regexMatch: { input: "$name", regex: keywordRegex } },
+                  50,
+                  0
+                ]
               },
               {
-                $cond: [{ $regexMatch: { input: "$description", regex: keywordRegex } }, 10, 0]
+                $cond: [
+                  { $regexMatch: { input: "$description", regex: keywordRegex } },
+                  20,
+                  0
+                ]
               }
             ]
           }
@@ -1182,7 +1312,6 @@ export const searchBusinesses = async (req, res) => {
     });
   }
 };
-
 
 
 
