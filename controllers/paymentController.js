@@ -210,6 +210,8 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
       email: p.billingDetails?.email || "NA",
       status: p.status || "NA", 
       address: p.billingDetails?.state || "NA",
+      location: p.billingDetails?.location || "NA",
+      userGst: p.billingDetails?.userGst || "NA",
       gstin: p.billingDetails?.gstin || "NA",
       price: p.baseAmount?.toFixed(2) || "0.00",
       cgst: p.tax?.cgst?.toFixed(2) || "0.00",

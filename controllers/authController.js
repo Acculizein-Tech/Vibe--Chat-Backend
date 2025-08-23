@@ -20,168 +20,6 @@ const generateReferralCode = () => {
   return "SLS" + Math.floor(1000 + Math.random() * 9000);
 };
 
-export const register = asyncHandler(async (req, res) => {
-  const {
-    fullName,
-    email,
-    phone,
-    password,
-    role = "customer",
-    profile = {},
-    referralCode,
-  } = req.body;
-
-  // 🚫 Restrict admin/superadmin registration
-  if (["admin", "superadmin"].includes(role)) {
-    res.status(400);
-    throw new Error("Cannot register as admin");
-  }
-
-  // 🔍 Check if email is already registered
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    if (existingUser.isVerified) {
-      res.status(400);
-      throw new Error("Email is already registered");
-    } else {
-      res.status(400);
-      throw new Error(
-        "You already registered. Please verify your email or request a new OTP"
-      );
-    }
-  }
-
-  // 🔐 Generate OTP
-  // const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  // const otpExpires = Date.now() + 10 * 60 * 1000;
-  const otp = generateOTP();
-  const now = Date.now();
-  const otpExpires = now + 10 * 60 * 1000; // 10 minutes
-  const resendCooldown = now + 30 * 1000; // 30 seconds
-
-  let referredBy = null;
-  let salesExecutive = null;
-
-  // 🔁 Assign sales executive via referral
-  if (referralCode && role === "customer") {
-    const refUser = await User.findOne({ referralCode });
-    if (refUser) {
-      referredBy = refUser._id;
-      salesExecutive = refUser._id;
-    } else {
-      return res.status(400).json({ message: "Invalid referral code" });
-    }
-  }
-
-  // 🔁 Auto-generate referralCode for sales user
-  let generatedReferralCode;
-  if (role === "sales") {
-    let unique = false;
-    while (!unique) {
-      const temp = generateReferralCode();
-      const exists = await User.findOne({ referralCode: temp });
-      if (!exists) {
-        generatedReferralCode = temp;
-        unique = true;
-      }
-    }
-  }
-
-  // 👤 Create user
-  const user = await User.create({
-    fullName,
-    email,
-    phone,
-    password,
-    role,
-    profile,
-    emailVerifyOTP: otp,
-    emailVerifyExpires: otpExpires,
-    emailResendBlock: resendCooldown,
-    referralCode: generatedReferralCode,
-    referredBy,
-  });
-
-  // 🔁 Round-robin fallback sales assignment (if no referral)
-  // ✅ Assign sales executive ONLY if referral code is used
-  // if (referralCode && !salesExecutive) {
-  //   const salesUsers = await User.find({ role: 'sales' });
-  //   if (salesUsers.length > 0) {
-  //     const index = Math.floor(Math.random() * salesUsers.length);
-  //     salesExecutive = salesUsers[index]._id;
-  //   }
-  // }
-
-  // 📌 Create a lead with follow-up reminder (for cron job)
-  await Lead.create({
-    name: user.fullName,
-    contact: user.email,
-    businessType: "Unknown",
-    status: "Interested",
-    notes: "Signed up on website",
-    salesUser: salesExecutive || null,
-    followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
-  });
-
-  // 🔔 Notifications
-  const notificationData = {
-    userId: user._id,
-    userName: user.fullName,
-    userEmail: user.email,
-    redirectPath: `/admin/users/${user._id}`, // your frontend admin user path
-  };
-
-  // ➤ Notify associated sales user if exists
-  if (salesExecutive) {
-    await notifyUser({
-      userId: salesExecutive,
-      type: "LEAD_GENERATED",
-      title: "🎯 New Lead Assigned",
-      message: `A new user "${user.fullName}" has signed up and is assigned to you.`,
-      data: notificationData,
-    });
-  }
-
-  // ➤ Notify Admins and SuperAdmins
-  await Promise.all([
-    notifyRole({
-      role: "admin",
-      type: "LEAD_GENERATED",
-      title: "🆕 New User Registered",
-      message: `"${user.fullName}" registered as a customer.`,
-      data: notificationData,
-    }),
-    notifyRole({
-      role: "superadmin",
-      type: "LEAD_GENERATED",
-      title: "🆕 New User Registered",
-      message: `"${user.fullName}" registered as a customer.`,
-      data: notificationData,
-    }),
-  ]);
-
-  // 📧 Send OTP email
-  await sendEmail({
-    to: user.email,
-    subject: "Email Verification OTP",
-    text: `Your OTP is: ${otp}`,
-  });
-
-  // 🔐 Generate tokens
-  const accessToken = generateToken(user._id, "15m");
-  const refreshToken = generateToken(user._id, "7d");
-
-  user.refreshTokens.push(refreshToken);
-  await user.save();
-
-  // ✅ Send response
-  res.status(201).json({
-    accessToken,
-    refreshToken,
-    message: "OTP sent to your email for verification",
-  });
-});
-
 // export const register = asyncHandler(async (req, res) => {
 //   const {
 //     fullName,
@@ -214,42 +52,38 @@ export const register = asyncHandler(async (req, res) => {
 //   }
 
 //   // 🔐 Generate OTP
+//   // const otp = Math.floor(100000 + Math.random() * 900000).toString();
+//   // const otpExpires = Date.now() + 10 * 60 * 1000;
 //   const otp = generateOTP();
 //   const now = Date.now();
 //   const otpExpires = now + 10 * 60 * 1000; // 10 minutes
 //   const resendCooldown = now + 30 * 1000; // 30 seconds
 
 //   let referredBy = null;
+//   let salesExecutive = null;
 
-//   // 🔁 Handle referral (ANY user can refer)
-//   if (referralCode) {
+//   // 🔁 Assign sales executive via referral
+//   if (referralCode && role === "customer") {
 //     const refUser = await User.findOne({ referralCode });
 //     if (refUser) {
 //       referredBy = refUser._id;
-
-//       // 💰 Credit wallet for the referrer
-//       const rewardAmount = 100; // <-- you can configure this value
-//       refUser.wallet.balance += rewardAmount;
-//       refUser.wallet.history.push({
-//         amount: rewardAmount,
-//         type: "credit",
-//         description: `Referral reward for inviting ${fullName}`,
-//       });
-//       await refUser.save();
+//       salesExecutive = refUser._id;
 //     } else {
 //       return res.status(400).json({ message: "Invalid referral code" });
 //     }
 //   }
 
-//   // 🔁 Auto-generate referralCode for every new user
+//   // 🔁 Auto-generate referralCode for sales user
 //   let generatedReferralCode;
-//   let unique = false;
-//   while (!unique) {
-//     const temp = generateReferralCode();
-//     const exists = await User.findOne({ referralCode: temp });
-//     if (!exists) {
-//       generatedReferralCode = temp;
-//       unique = true;
+//   if (role === "sales") {
+//     let unique = false;
+//     while (!unique) {
+//       const temp = generateReferralCode();
+//       const exists = await User.findOne({ referralCode: temp });
+//       if (!exists) {
+//         generatedReferralCode = temp;
+//         unique = true;
+//       }
 //     }
 //   }
 
@@ -268,14 +102,24 @@ export const register = asyncHandler(async (req, res) => {
 //     referredBy,
 //   });
 
-//   // 📌 Create a lead with follow-up reminder
+//   // 🔁 Round-robin fallback sales assignment (if no referral)
+//   // ✅ Assign sales executive ONLY if referral code is used
+//   // if (referralCode && !salesExecutive) {
+//   //   const salesUsers = await User.find({ role: 'sales' });
+//   //   if (salesUsers.length > 0) {
+//   //     const index = Math.floor(Math.random() * salesUsers.length);
+//   //     salesExecutive = salesUsers[index]._id;
+//   //   }
+//   // }
+
+//   // 📌 Create a lead with follow-up reminder (for cron job)
 //   await Lead.create({
 //     name: user.fullName,
 //     contact: user.email,
 //     businessType: "Unknown",
 //     status: "Interested",
 //     notes: "Signed up on website",
-//     salesUser: null,
+//     salesUser: salesExecutive || null,
 //     followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
 //   });
 
@@ -284,9 +128,21 @@ export const register = asyncHandler(async (req, res) => {
 //     userId: user._id,
 //     userName: user.fullName,
 //     userEmail: user.email,
-//     redirectPath: `/admin/users/${user._id}`,
+//     redirectPath: `/admin/users/${user._id}`, // your frontend admin user path
 //   };
 
+//   // ➤ Notify associated sales user if exists
+//   if (salesExecutive) {
+//     await notifyUser({
+//       userId: salesExecutive,
+//       type: "LEAD_GENERATED",
+//       title: "🎯 New Lead Assigned",
+//       message: `A new user "${user.fullName}" has signed up and is assigned to you.`,
+//       data: notificationData,
+//     });
+//   }
+
+//   // ➤ Notify Admins and SuperAdmins
 //   await Promise.all([
 //     notifyRole({
 //       role: "admin",
@@ -325,6 +181,150 @@ export const register = asyncHandler(async (req, res) => {
 //     message: "OTP sent to your email for verification",
 //   });
 // });
+
+export const register = asyncHandler(async (req, res) => {
+  const {
+    fullName,
+    email,
+    phone,
+    password,
+    role = "customer",
+    profile = {},
+    referralCode,
+  } = req.body;
+
+  // 🚫 Restrict admin/superadmin registration
+  if (["admin", "superadmin"].includes(role)) {
+    res.status(400);
+    throw new Error("Cannot register as admin");
+  }
+
+  // 🔍 Check if email is already registered
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    if (existingUser.isVerified) {
+      res.status(400);
+      throw new Error("Email is already registered");
+    } else {
+      res.status(400);
+      throw new Error(
+        "You already registered. Please verify your email or request a new OTP"
+      );
+    }
+  }
+
+  // 🔐 Generate OTP
+  const otp = generateOTP();
+  const now = Date.now();
+  const otpExpires = now + 10 * 60 * 1000; // 10 minutes
+  const resendCooldown = now + 30 * 1000; // 30 seconds
+
+  let referredBy = null;
+
+  // 🔁 Handle referral (ANY user can refer)
+  if (referralCode) {
+    const refUser = await User.findOne({ referralCode });
+    if (refUser) {
+      referredBy = refUser._id;
+
+      // 💰 Credit wallet for the referrer
+      const rewardAmount = 100; // <-- you can configure this value
+      refUser.wallet.balance += rewardAmount;
+      refUser.wallet.history.push({
+        amount: rewardAmount,
+        type: "credit",
+        description: `Referral reward for inviting ${fullName}`,
+      });
+      await refUser.save();
+    } else {
+      return res.status(400).json({ message: "Invalid referral code" });
+    }
+  }
+
+  // 🔁 Auto-generate referralCode for every new user
+  let generatedReferralCode;
+  let unique = false;
+  while (!unique) {
+    const temp = generateReferralCode();
+    const exists = await User.findOne({ referralCode: temp });
+    if (!exists) {
+      generatedReferralCode = temp;
+      unique = true;
+    }
+  }
+
+  // 👤 Create user
+  const user = await User.create({
+    fullName,
+    email,
+    phone,
+    password,
+    role,
+    profile,
+    emailVerifyOTP: otp,
+    emailVerifyExpires: otpExpires,
+    emailResendBlock: resendCooldown,
+    referralCode: generatedReferralCode,
+    referredBy,
+  });
+
+  // 📌 Create a lead with follow-up reminder
+  await Lead.create({
+    name: user.fullName,
+    contact: user.email,
+    businessType: "Unknown",
+    status: "Interested",
+    notes: "Signed up on website",
+    salesUser: null,
+    followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
+  });
+
+  // 🔔 Notifications
+  const notificationData = {
+    userId: user._id,
+    userName: user.fullName,
+    userEmail: user.email,
+    redirectPath: `/admin/users/${user._id}`,
+  };
+
+  await Promise.all([
+    notifyRole({
+      role: "admin",
+      type: "LEAD_GENERATED",
+      title: "🆕 New User Registered",
+      message: `"${user.fullName}" registered as a customer.`,
+      data: notificationData,
+    }),
+    notifyRole({
+      role: "superadmin",
+      type: "LEAD_GENERATED",
+      title: "🆕 New User Registered",
+      message: `"${user.fullName}" registered as a customer.`,
+      data: notificationData,
+    }),
+  ]);
+
+  // 📧 Send OTP email
+  await sendEmail({
+    to: user.email,
+    subject: "Email Verification OTP",
+    text: `Your OTP is: ${otp}`,
+  });
+
+  // 🔐 Generate tokens
+  const accessToken = generateToken(user._id, "15m");
+  const refreshToken = generateToken(user._id, "7d");
+
+  user.refreshTokens.push(refreshToken);
+  await user.save();
+
+  // ✅ Send response
+  res.status(201).json({
+    accessToken,
+    refreshToken,
+    message: "OTP sent to your email for verification",
+  });
+});
 
 
 
