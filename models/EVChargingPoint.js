@@ -1,8 +1,8 @@
 // models/HealthMedical.js
 import mongoose from 'mongoose';
 
-const GarmentSchema = new mongoose.Schema({
-  speciality: {
+const EVChargingPointSchema = new mongoose.Schema({
+  location: {
     type: String,
    
   },
@@ -46,5 +46,5 @@ facilities: {
   }
 });
 
-const Garment = mongoose.model('Garment', GarmentSchema);
-export default Garment;
+const EVChargingPoint = mongoose.model('EVChargingPoint', EVChargingPointSchema);
+export default EVChargingPoint;
