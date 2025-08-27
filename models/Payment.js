@@ -69,6 +69,14 @@ const paymentSchema = new mongoose.Schema(
       gstin: String, // GSTIN for tax purposes
     },
 
+      // ✅ Referral details (new)
+    referral: {
+  code: { type: String }, // referral code applied (if any)
+  referrer: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // user who owns the code
+  bonusAmount: { type: Number, default: 0 }, // how much was credited to referrer
+},
+
+
     // UPI, Card, Netbanking, etc.
   },
   {

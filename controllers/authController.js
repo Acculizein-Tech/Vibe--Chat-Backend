@@ -359,7 +359,7 @@ export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email });
-  console.log(user);
+  // console.log(user);
 
   if (!user || !(await user.matchPassword(password))) {
     res.status(401);
@@ -390,7 +390,7 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Refresh access token
+
 // @route   POST /api/auth/refresh
 export const refreshToken = asyncHandler(async (req, res) => {
   const { refreshToken } = req.body;

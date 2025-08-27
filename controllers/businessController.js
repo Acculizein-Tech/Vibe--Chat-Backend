@@ -37,6 +37,7 @@ import EntertainmentEvents from  '../models/EntertainmentEvents.js'; // Import M
 import DeliveryPickups from '../models/DeliveryPickups.js'; // Import DeliveryPickups model
 import QuickServices from '../models/QuickServices.js'; // Import QuickServices model
 import ShowroomShops from '../models/ShowroomShops.js'; // Import ShowroomShops model
+import EVChargingPoint from '../models/EVChargingPoint.js'; // Import EVChargingPoint model
 import MarketingBranding from '../models/MarketingBranding.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
@@ -75,7 +76,8 @@ const categoryModels = {
   DeliveryPickups: DeliveryPickups,
   QuickServices: QuickServices,
   ShowroomShops: ShowroomShops,
-  MarketingBranding: MarketingBranding
+  MarketingBranding: MarketingBranding,
+  EVChargingPoint: EVChargingPoint
 };
 
 

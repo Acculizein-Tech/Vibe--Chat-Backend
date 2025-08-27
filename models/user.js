@@ -55,18 +55,34 @@ resetPasswordOTP: String,
 resetPasswordExpires: Date,
 
 //new
+// wallet: {
+//   balance: { type: Number, default: 0 },
+//   history: [
+//     {
+//       amount: Number,
+//       type: { type: String, enum: ["credit", "debit"] },
+//       description: String,
+//       date: { type: Date, default: Date.now },
+//     },
+//   ],
+// },
 wallet: {
-  balance: { type: Number, default: 0 },
-  history: [
-    {
-      amount: Number,
-      type: { type: String, enum: ["credit", "debit"] },
-      description: String,
-      date: { type: Date, default: Date.now },
-    },
-  ],
-},
+      balance: { type: Number, default: 0 },
+      history: [
+        {
+          amount: { type: Number, required: true },
+          type: { type: String, enum: ['credit', 'debit'], required: true },
+          description: String,
 
+          // track kis user se aaya
+          fromUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          fromEmail: { type: String },
+
+          date: { type: Date, default: Date.now },
+        },
+      ],
+    },
+  
 
 
 }, { timestamps: true });

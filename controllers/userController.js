@@ -198,6 +198,20 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       zipCode: zipCode?.trim(),
     };
 
+       // ✅ Handle avatar upload in background (non-blocking)
+    if (req.file) {
+      try {
+        const s3Result = await uploadToS3(req.file, req);
+        await User.findByIdAndUpdate(
+          req.params.id,
+          { $set: { "profile.avatar": s3Result.url } },
+          { new: true }
+        );
+      } catch (uploadErr) {
+        console.error("S3 upload failed:", uploadErr.message);
+      }
+    }
+
     // ✅ Update user immediately in DB
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
@@ -219,19 +233,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       data: updatedUser,
     });
 
-    // ✅ Handle avatar upload in background (non-blocking)
-    if (req.file) {
-      try {
-        const s3Result = await uploadToS3(req.file, req);
-        await User.findByIdAndUpdate(
-          req.params.id,
-          { $set: { "profile.avatar": s3Result.url } },
-          { new: true }
-        );
-      } catch (uploadErr) {
-        console.error("S3 upload failed:", uploadErr.message);
-      }
-    }
+ 
 
   } catch (err) {
     res.status(500).json({
@@ -437,3 +439,32 @@ export const getUsersByReferral = asyncHandler(async (req, res) => {
   }
 });
 
+
+
+//get the userRefferal by user.
+export const getWalletInfo = async (req, res) => {
+  try {
+    const userId = req.user.id; // auth middleware se aayega
+
+    const user = await User.findById(userId).select("wallet referralCode");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      wallet: user.wallet,         // { balance, history }
+      referralCode: user.referralCode, // sirf referral code
+    });
+  } catch (error) {
+    console.error("❌ Error in getWalletInfo:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};

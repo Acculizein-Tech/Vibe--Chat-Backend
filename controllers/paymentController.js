@@ -7,6 +7,8 @@ import path from "path";
 import { generateInvoicePDF } from "../utils/pdfInvoiceGenerator.js"; // ✅ Adjust path
 import Business from "../models/Business.js";
 import InvoiceCounter from "../models/InvoiceCounter.js"; // ✅ NEW IMPORT
+import User from "../models/user.js";
+import Razorpay from "razorpay";
 
 // ✅ GST Calculation
 const calculateGST = (amount, state) => {
@@ -53,12 +55,119 @@ export const createOrder = asyncHandler(async (req, res) => {
 // ✅ Step 2: Verify & Save Payment
 
 
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+//       business,
+//       companyData,
+//     } = req.body;
+
+//     // Step 1: Validate Razorpay credentials
+//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Missing payment credentials",
+//       });
+//     }
+
+//     const generated_signature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
+
+//     if (generated_signature !== razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Invalid Razorpay signature",
+//       });
+//     }
+
+//     // Step 2: Calculate GST correctly (Base + GST = Total)
+//     const baseAmount = parseFloat((business.planPrice || 0).toFixed(2)); // ₹ without GST
+//     const gstAmount = parseFloat((baseAmount * 0.18).toFixed(2));        // 18% GST
+//     const totalAmount = parseFloat((baseAmount + gstAmount).toFixed(2)); // Final Total ₹
+
+//     // ✅ Step 2.1: Check if buyer is from UP
+//     const buyerState = (business?.state || "").trim().toLowerCase();
+//     const isUP = buyerState === "uttar pradesh";
+
+//     // Step 3: Generate invoice number in format BZ/01/25-26 (Atomic)
+//     const now = new Date();
+//     const currentYear = now.getFullYear();
+//     const currentMonth = now.getMonth();
+//     const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+//     const fyEnd = fyStart + 1;
+//     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd
+//       .toString()
+//       .slice(-2)}`;
+
+//     const counter = await InvoiceCounter.findOneAndUpdate(
+//       { financialYear },
+//       { $inc: { sequence: 1 } },
+//       { new: true, upsert: true }
+//     );
+
+//     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+//     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+//     // Step 4: Save payment to DB
+//     const payment = await Payment.create({
+//       user: req.user._id,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       HSN: process.env.BUSINESS_HSN, // Default HSN if not provided
+//       amount: totalAmount, // ✅ store final paid amount
+//       baseAmount,          // ₹ without GST
+//       totalAmount,         // ✅ Final Total stored in DB
+//       tax: {
+//         cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         igst: !isUP ? gstAmount : 0,
+//       },
+//       invoiceNumber,
+//       isUP, // ✅ directly store true/false based on state
+//       status: "success",
+//       billingDetails: {
+//         ...business,
+//         currency: "INR",
+//       },
+//       companyData: {
+//         companyName: companyData?.companyName,
+//         companyAddress: companyData?.companyAddress,
+//         companyPhone: companyData?.companyPhone,
+//         companyEmail: companyData?.companyEmail,
+//         state: companyData?.state,
+//         gstin: companyData?.gstin,
+//       },
+//     });
+
+//     // Step 5: Send response
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Payment verified and stored successfully",
+//       invoiceNumber,
+//       data: payment,
+//     });
+//   } catch (err) {
+//     console.error("Error verifying payment:", err);
+//     return res.status(500).json({
+//       status: "fail",
+//       message: "Internal Server Error",
+//       error: err.message,
+//     });
+//   }
+// });
+
+
 export const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const {
       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
       business,
       companyData,
+      referralCode, // ✅ incoming referralCode from frontend (if used)
     } = req.body;
 
     // Step 1: Validate Razorpay credentials
@@ -81,16 +190,48 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       });
     }
 
-    // Step 2: Calculate GST correctly (Base + GST = Total)
-    const baseAmount = parseFloat((business.planPrice || 0).toFixed(2)); // ₹ without GST
-    const gstAmount = parseFloat((baseAmount * 0.18).toFixed(2));        // 18% GST
-    const totalAmount = parseFloat((baseAmount + gstAmount).toFixed(2)); // Final Total ₹
+    // -----------------------
+    // Step 2: Inclusive GST logic
+    // -----------------------
+    let totalAmount = parseFloat((business.planPrice || 0).toFixed(2)); // Inclusive price (e.g., 3500)
 
-    // ✅ Step 2.1: Check if buyer is from UP
+    let referralData = {}; // to store referral info in Payment model
+
+    // Step 3: Referral code check
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+
+      if (referrer) {
+        // Deduct ₹300 from customer’s payable amount
+        totalAmount = totalAmount - 300;
+
+        // ✅ Credit ₹300 to referrer’s wallet
+        referrer.wallet.balance += 300;
+        referrer.wallet.history.push({
+          amount: 300,
+          type: "credit",
+          description: `Referral bonus from ${req.user.fullName || "a new user"}`,
+        });
+        await referrer.save();
+
+        // ✅ Prepare referral data for Payment model
+        referralData = {
+          code: referralCode,
+          referrer: referrer._id,
+          bonusAmount: 300,
+        };
+      }
+    }
+
+    // Step 4: Compute base & GST (reverse calculation from inclusive price)
+    const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
+    const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
+
+    // Step 5: Check buyer state
     const buyerState = (business?.state || "").trim().toLowerCase();
     const isUP = buyerState === "uttar pradesh";
 
-    // Step 3: Generate invoice number in format BZ/01/25-26 (Atomic)
+    // Step 6: Generate invoice number
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
@@ -109,23 +250,23 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
 
-    // Step 4: Save payment to DB
+    // Step 7: Save Payment with referral details
     const payment = await Payment.create({
       user: req.user._id,
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
       signature: razorpay_signature,
-      HSN: process.env.BUSINESS_HSN, // Default HSN if not provided
-      amount: totalAmount, // ✅ store final paid amount
-      baseAmount,          // ₹ without GST
-      totalAmount,         // ✅ Final Total stored in DB
+      HSN: process.env.BUSINESS_HSN,
+      amount: totalAmount,   // ✅ Inclusive amount paid
+      baseAmount,            // ✅ Extracted base (without GST)
+      totalAmount,           // ✅ Final inclusive amount stored
       tax: {
         cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
         igst: !isUP ? gstAmount : 0,
       },
       invoiceNumber,
-      isUP, // ✅ directly store true/false based on state
+      isUP,
       status: "success",
       billingDetails: {
         ...business,
@@ -139,9 +280,9 @@ export const verifyPayment = asyncHandler(async (req, res) => {
         state: companyData?.state,
         gstin: companyData?.gstin,
       },
+      referral: referralData, // ✅ new field inside Payment
     });
 
-    // Step 5: Send response
     return res.status(200).json({
       status: "success",
       message: "Payment verified and stored successfully",
@@ -159,11 +300,147 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 });
 
 
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+//       business,
+//       companyData,
+//       referralCode, // keep same
+//     } = req.body;
+
+//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//       return res.status(400).json({ status: "fail", message: "Missing payment credentials" });
+//     }
+
+//     const generated_signature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
+
+//     if (generated_signature !== razorpay_signature) {
+//       return res.status(400).json({ status: "fail", message: "Invalid Razorpay signature" });
+//     }
+
+//     // ---------- Inclusive amount (planPrice) ----------
+//     let totalAmount = parseFloat((business.planPrice || 0).toFixed(2)); // inclusive (e.g., 3500.00)
+
+//     // Referral handling (₹300 off to buyer, ₹300 credit to referrer)
+//     let referralData = undefined;
+//     if (referralCode) {
+//       const referrer = await User.findOne({ referralCode });
+//       if (referrer) {
+//         totalAmount = parseFloat(Math.max(0, totalAmount - 300).toFixed(2)); // keep names, clamp >= 0
+
+//         // wallet credit (no name changes)
+//         referrer.wallet.balance += 300;
+//         referrer.wallet.history.push({
+//           amount: 300,
+//           type: "credit",
+//           description: `Referral bonus from ${req.user.fullName || "a new user"}`,
+//           date: new Date(),
+//         });
+//         await referrer.save();
+
+//         referralData = { code: referralCode, referrer: referrer._id, bonusAmount: 300 };
+//       }
+//     }
+
+//     // ---------- Exact paise rounding so base + tax = total ----------
+//     const toPaise = (n) => Math.round(Number(n) * 100);
+//     const fromPaise = (p) => Number((p / 100).toFixed(2));
+
+//     const totalPaise = toPaise(totalAmount);              // e.g., 350000
+//     const basePaise  = Math.round((totalPaise * 100) / 118); // reverse-calc base in paise
+//     const gstPaise   = totalPaise - basePaise;            // exact GST paise
+
+//     // State split
+//     const buyerState = (business?.state || "").trim().toLowerCase();
+//     const isUP = buyerState === "uttar pradesh";
+
+//     let cgstPaise = 0, sgstPaise = 0, igstPaise = 0;
+//     if (isUP) {
+//       // Split with remainder so cgst+sgst == gst exactly
+//       cgstPaise = Math.floor(gstPaise / 2);
+//       sgstPaise = gstPaise - cgstPaise; // remainder goes to SGST
+//     } else {
+//       igstPaise = gstPaise;
+//     }
+
+//     // Final display numbers (names unchanged)
+//     const baseAmount = fromPaise(basePaise);
+//     const gstAmount  = fromPaise(gstPaise); // not stored separately but used for clarity
+//     const tax = {
+//       cgst: fromPaise(cgstPaise),
+//       sgst: fromPaise(sgstPaise),
+//       igst: fromPaise(igstPaise),
+//     };
+
+//     // ---------- Invoice number ----------
+//     const now = new Date();
+//     const currentYear = now.getFullYear();
+//     const currentMonth = now.getMonth();
+//     const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+//     const fyEnd = fyStart + 1;
+//     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd.toString().slice(-2)}`;
+
+//     const counter = await InvoiceCounter.findOneAndUpdate(
+//       { financialYear },
+//       { $inc: { sequence: 1 } },
+//       { new: true, upsert: true }
+//     );
+
+//     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+//     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+//     // ---------- Save (field names unchanged) ----------
+//     const payment = await Payment.create({
+//       user: req.user._id,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       HSN: process.env.BUSINESS_HSN,
+//       amount: totalAmount,         // inclusive
+//       baseAmount,                  // extracted base
+//       totalAmount,                 // inclusive (kept)
+//       tax,                         // exact split so base+tax = total
+//       invoiceNumber,
+//       isUP,
+//       status: "success",
+//       billingDetails: {
+//         ...business,
+//         currency: "INR",
+//       },
+//       companyData: {
+//         companyName: companyData?.companyName,
+//         companyAddress: companyData?.companyAddress,
+//         companyPhone: companyData?.companyPhone,
+//         companyEmail: companyData?.companyEmail,
+//         state: companyData?.state,
+//         gstin: companyData?.gstin,
+//       },
+//       // store referral details if present (schema already supports it)
+//       ...(referralData ? { referral: referralData } : {}),
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Payment verified and stored successfully",
+//       invoiceNumber,
+//       data: payment,
+//     });
+//   } catch (err) {
+//     console.error("Error verifying payment:", err);
+//     return res.status(500).json({ status: "fail", message: "Internal Server Error", error: err.message });
+//   }
+// });
 
 
 
 
 // ✅ Step 3: Get Payment History
+
+
 export const getPayments = asyncHandler(async (req, res) => {
   const payments = await Payment.find()
     .populate("user")
@@ -228,85 +505,6 @@ export const getPaymentsByUserId = asyncHandler(async (req, res) => {
     payments: formattedPayments,
   });
 });
-
-
-
-
-//get the all verify payment details to superadmin
-// export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
-//   const payments = await Payment.find({ status: "success" })
-//     .populate("user")
-//     .sort({ createdAt: -1 });
-
-//   if (!payments || payments.length === 0) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "No verified payments found",
-//     });
-//   }
-
-//   res.status(200).json({
-//     success: true,
-//     count: payments.length,
-//     payments,
-//   });
-// });
-
-
-// export const getAllVerifiedPayments = asyncHandler(async (req, res) => {
-//   const payments = await Payment.find({ status: "success" })
-//     .populate({
-//       path: "user",
-//       select: "profile.avatar fullName email", // ✅ केवल जरूरी fields
-//     })
-//     .lean(); // ✅ plain object so we can manipulate
-
-//   if (!payments || payments.length === 0) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "No verified payments found",
-//     });
-//   }
-
-//   // ✅ Clean and minimal response structure
-//   const result = payments.map((p) => ({
-//     _id: p._id,
-//     orderId: p.orderId,
-//     paymentId: p.paymentId,
-//     invoiceNumber: p.invoiceNumber,
-//     amount: p.amount,
-//     baseAmount: p.baseAmount,
-//     status: p.status,
-//     createdAt: p.createdAt,
-//     billingDetails: {
-//       businessName: p.billingDetails?.businessName,
-//       planName: p.billingDetails?.planName,
-//       planPrice: p.billingDetails?.planPrice,
-//       currency: p.billingDetails?.currency,
-//     },
-//     tax: {
-//       cgst: p.tax?.cgst,
-//       sgst: p.tax?.sgst,
-//       igst: p.tax?.igst,
-//     },
-//     user: {
-//       profile: {
-//         avatar: p.user?.profile?.avatar || null,
-//       },
-//       _id: p.user?._id || null,
-//       fullName: p.user?.fullName || null,
-//       email: p.user?.email || null,
-//       userGst: p.userGst || null, // ✅ userGst from Payment model
-//     },
-//   }));
-
-//   res.status(200).json({
-//     success: true,
-//     count: result.length,
-//     payments: result,
-//   });
-// });
-
 
 
 //live rozorpay webhook details of payment
@@ -376,42 +574,6 @@ export const getAllPayments = async (req, res) => {
   }
 };
 
-
-// GET Payment by Payment ID
-// export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
-//   try {
-//     const { paymentId } = req.params;
-
-//     if (!paymentId) {
-//       return res.status(400).json({ message: "Payment ID is required" });
-//     }
-
-//     // check payment in DB
-//     const payment = await Payment.findOne({ paymentId });
-
-//     if (!payment) {
-//       return res.status(404).json({ message: "Payment not found" });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       data: payment,
-//       companyDetails: {
-//         companyName: process.env.COMPANY_NAME || "",
-//         gstin: process.env.COMPANY_GSTIN || "",
-//         email: process.env.COMPANY_EMAIL || "info@acculizeintech.com",
-//         phone: process.env.COMPANY_PHONE || "",
-//         invoiceDate: payment.createdAt
-//           ? payment.createdAt.toISOString().split("T")[0] // yyyy-mm-dd
-//           : "",
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching payment:", error.message);
-//     return res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// });
-
 export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -454,6 +616,71 @@ export const getPaymentByPaymentId = asyncHandler(async (req, res) => {
       success: false,
       message: "Internal server error", 
       error: error.message 
+    });
+  }
+});
+
+
+const razorpayX = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// ✅ Redeem Wallet Balance
+export const redeemBalance = asyncHandler(async (req, res) => {
+  const { amount } = req.body; // user input
+  const userId = req.user._id; // from auth middleware
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // ✅ KYC Check
+  if (!user.kyc || !user.kyc.isVerified) {
+    return res.status(400).json({ message: "KYC not verified. Please complete KYC first." });
+  }
+
+  // ✅ Wallet Balance Check
+  if (user.wallet.balance < amount) {
+    return res.status(400).json({ message: "Insufficient wallet balance" });
+  }
+
+  // ✅ Create RazorpayX Payout
+  try {
+    const payout = await razorpayX.payouts.create({
+      account_number: process.env.RAZORPAYX_ACCOUNT_NO, // RazorpayX virtual account
+      fund_account_id: user.kyc.fundAccountId, // saved after KYC
+      amount: amount * 100, // in paise
+      currency: "INR",
+      mode: "IMPS", // or "UPI"
+      purpose: "payout",
+      queue_if_low_balance: true,
+    });
+
+    // ✅ Update Wallet
+    user.wallet.balance -= amount;
+    user.wallet.history.push({
+      amount,
+      type: "debit",
+      method: "RazorpayX",
+      status: "success",
+      date: new Date(),
+      transactionId: payout.id,
+    });
+
+    await user.save();
+
+    res.json({
+      message: "Redeem successful",
+      payout,
+      walletBalance: user.wallet.balance,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Redeem failed",
+      error: error.message,
     });
   }
 });
