@@ -558,18 +558,18 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 //apply referal code
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
-    const { referralCode, userId, totalAmount } = req.body;
+    const { refferal_code, user_id, actual_amount } = req.body;
 
     // 🛑 Validation
-    if (!referralCode || !userId || !totalAmount) {
+    if (!refferal_code || !user_id || !actual_amount) {
       return res.status(400).json({
         success: false,
-        message: "Referral code, userId and totalAmount are required",
+        message: "Referral code, user_id and actual_amount are required",
       });
     }
 
     // 🎯 Step 1: Check if referral code exists in DB
-    const referralProvider = await User.findOne({ referralCode });
+    const referralProvider = await User.findOne({ referralCode: refferal_code });
     if (!referralProvider) {
       return res.status(404).json({
         success: false,
@@ -578,7 +578,7 @@ export const applyReferral = asyncHandler(async (req, res) => {
     }
 
     // 🎯 Step 2: Ensure user is not using own referral code
-    if (referralProvider._id.toString() === userId) {
+    if (referralProvider._id.toString() === user_id) {
       return res.status(400).json({
         success: false,
         message: "You cannot use your own referral code",
@@ -586,7 +586,7 @@ export const applyReferral = asyncHandler(async (req, res) => {
     }
 
     // 🎯 Step 3: Apply discount
-    let updatedAmount = totalAmount - 300;
+    let updatedAmount = actual_amount - 300;
     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
 
     // 🎯 Step 4: Return updated amount
