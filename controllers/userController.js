@@ -558,10 +558,10 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 //apply referal code
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
-    const { refferal_code, user_id, actual_amount } = req.body;
+    const { referral_code, user_id, actual_amount } = req.body;
 
     // 🛑 Validation
-    if (!refferal_code || !user_id || !actual_amount) {
+    if (!referral_code || !user_id || !actual_amount) {
       return res.status(400).json({
         success: false,
         message: "Referral code, user_id and actual_amount are required",
@@ -569,7 +569,7 @@ export const applyReferral = asyncHandler(async (req, res) => {
     }
 
     // 🎯 Step 1: Check if referral code exists in DB
-    const referralProvider = await User.findOne({ referralCode: refferal_code });
+    const referralProvider = await User.findOne({ referralCode: referral_code });
     if (!referralProvider) {
       return res.status(404).json({
         success: false,
