@@ -126,9 +126,9 @@ export const createOrder = asyncHandler(async (req, res) => {
 //     const gstAmount = parseFloat((baseAmount * 0.18).toFixed(2));        // 18% GST
 //     const totalAmount = parseFloat((baseAmount + gstAmount).toFixed(2)); // Final Total ₹
 
-//     // ✅ Step 2.1: Check if buyer is from UP
-//     const buyerState = (business?.state || "").trim().toLowerCase();
-//     const isUP = buyerState === "uttar pradesh";
+    // // ✅ Step 2.1: Check if buyer is from UP
+    // const buyerState = (business?.state || "").trim().toLowerCase();
+    // const isUP = buyerState === "uttar pradesh";
 
 //     // Step 3: Generate invoice number in format BZ/01/25-26 (Atomic)
 //     const now = new Date();
@@ -265,9 +265,9 @@ export const createOrder = asyncHandler(async (req, res) => {
 //     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
 //     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
 
-//     // Step 5: Check buyer state
-//     const buyerState = (business?.state || "").trim().toLowerCase();
-//     const isUP = buyerState === "uttar pradesh";
+    // // Step 5: Check buyer state
+    // const buyerState = (business?.state || "").trim().toLowerCase();
+    // const isUP = buyerState === "uttar pradesh";
 
     
 
@@ -909,15 +909,20 @@ console.log("🔹 notes object:", order.notes);
     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
 
-    let cgst = 0, sgst = 0, igst = 0;
-    const isUP = (order.notes?.state || "").toLowerCase() === "uttar pradesh";
+    // ✅ Step 2.1: Check if buyer is from UP
+    const buyerState = (business?.state || "").trim().toLowerCase();
+    const isUP = buyerState === "uttar pradesh";
 
-    if (isUP) {
-      cgst = parseFloat((gstAmount / 2).toFixed(2));
-      sgst = parseFloat((gstAmount - cgst).toFixed(2));
-    } else {
-      igst = gstAmount;
-    }
+    // let cgst = 0, sgst = 0, igst = 0;
+    // const isUP = (order.notes?.state || "").toLowerCase() === "uttar pradesh";
+
+    // if (isUP) {
+    //   cgst = parseFloat((gstAmount / 2).toFixed(2));
+    //   sgst = parseFloat((gstAmount - cgst).toFixed(2));
+    // } else {
+    //   igst = gstAmount;
+    // }
+    
 
     // ✅ Step 4: Referral handling
   // Step 4: Referral handling
