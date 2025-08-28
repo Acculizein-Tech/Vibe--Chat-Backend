@@ -342,12 +342,12 @@ export const createOrder = asyncHandler(async (req, res) => {
 
 // export const verifyPayment = asyncHandler(async (req, res) => {
 //   try {
-//     const {
-//       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
-//       business,
-//       companyData,
-//       referralCode, // keep same
-//     } = req.body;
+    // const {
+    //   razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+    //   business,
+    //   companyData,
+    //   referralCode, // keep same
+    // } = req.body;
 
 //     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
 //       return res.status(400).json({ status: "fail", message: "Missing payment credentials" });
@@ -630,25 +630,25 @@ export const createOrder = asyncHandler(async (req, res) => {
 //       referral_code, // ✅ aayega taaki wallet credit kare
 //     } = req.body;
 
-//     // Step 1: Validate Razorpay credentials
-//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-//       return res.status(400).json({
-//         status: "fail",
-//         message: "Missing payment credentials",
-//       });
-//     }
+    // // Step 1: Validate Razorpay credentials
+    // if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    //   return res.status(400).json({
+    //     status: "fail",
+    //     message: "Missing payment credentials",
+    //   });
+    // }
 
-//     const generated_signature = crypto
-//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-//       .digest("hex");
+    // const generated_signature = crypto
+    //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    //   .digest("hex");
 
-//     if (generated_signature !== razorpay_signature) {
-//       return res.status(400).json({
-//         status: "fail",
-//         message: "Invalid Razorpay signature",
-//       });
-//     }
+    // if (generated_signature !== razorpay_signature) {
+    //   return res.status(400).json({
+    //     status: "fail",
+    //     message: "Invalid Razorpay signature",
+    //   });
+    // }
 
 //     // -----------------------
 //     // Step 2: Total from frontend (already discounted if referral used)
@@ -868,12 +868,20 @@ export const createOrder = asyncHandler(async (req, res) => {
 export const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
+      razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+      
+       // keep same
     } = req.body;
 
     // ✅ Step 1: Verify Razorpay signature
+  // Step 1: Validate Razorpay credentials
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Missing payment credentials",
+      });
+    }
+
     const generated_signature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -881,7 +889,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     if (generated_signature !== razorpay_signature) {
       return res.status(400).json({
-        success: false,
+        status: "fail",
         message: "Invalid Razorpay signature",
       });
     }
