@@ -767,6 +767,104 @@ export const createOrder = asyncHandler(async (req, res) => {
 //   }
 // });
 
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay_order_id,
+//       razorpay_payment_id,
+//       razorpay_signature,
+//     } = req.body;
+
+//     // Step 1: Verify Signature
+//     const sign = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(razorpay_order_id + "|" + razorpay_payment_id)
+//       .digest("hex");
+
+//     if (sign !== razorpay_signature) {
+//       return res.status(400).json({ success: false, message: "Invalid signature" });
+//     }
+
+//     // Step 2: Fetch Order
+//     const order = await razorpay.orders.fetch(razorpay_order_id);
+//     const totalAmount = order.amount / 100; // INR
+//     const userId = order.notes?.userId;
+//     const referralCode = order.notes?.referralCode;
+
+//     // Step 3: Tax Calculation
+//     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
+//     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
+
+//     let cgst = 0, sgst = 0, igst = 0;
+//     const isUP = (order.notes?.state || "").toLowerCase() === "uttar pradesh";
+
+//     if (isUP) {
+//       cgst = parseFloat((gstAmount / 2).toFixed(2));
+//       sgst = gstAmount - cgst;
+//     } else {
+//       igst = gstAmount;
+//     }
+
+//     // Step 4: Referral Handling
+//     let referralData = {};
+//     if (referralCode) {
+//       const referrer = await User.findOne({ referralCode });
+//       if (referrer) {
+//         referrer.wallet.balance += 300;
+//         referrer.wallet.history.push({
+//           amount: 300,
+//           type: "credit",
+//           description: `Referral bonus from user ${userId}`,
+//         });
+//         await referrer.save();
+
+//         referralData = {
+//           code: referralCode,
+//           referrer: referrer._id,
+//           bonusAmount: 300,
+//         };
+//       }
+//     }
+
+//     // Step 5: Invoice Number
+//     const now = new Date();
+//     const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+//     const fyEnd = fyStart + 1;
+//     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd.toString().slice(-2)}`;
+
+//     const counter = await InvoiceCounter.findOneAndUpdate(
+//       { financialYear },
+//       { $inc: { sequence: 1 } },
+//       { new: true, upsert: true }
+//     );
+
+//     const invoiceNumber = `BZ/${counter.sequence.toString().padStart(3, "0")}/${financialYear}`;
+
+//     // Step 6: Save Payment
+//     const payment = await Payment.create({
+//       user: userId,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       amount: totalAmount,
+//       baseAmount,
+//       tax: { cgst, sgst, igst },
+//       invoiceNumber,
+//       referral: referralData,
+//       status: "success",
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Payment verified successfully",
+//       invoiceNumber,
+//       payment,
+//     });
+//   } catch (err) {
+//     console.error("Payment verification error:", err);
+//     res.status(500).json({ success: false, message: "Payment verification failed", error: err.message });
+//   }
+// });
 export const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const {
@@ -775,23 +873,26 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       razorpay_signature,
     } = req.body;
 
-    // Step 1: Verify Signature
-    const sign = crypto
+    // ✅ Step 1: Verify Razorpay signature
+    const generated_signature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    if (sign !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Invalid signature" });
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Razorpay signature",
+      });
     }
 
-    // Step 2: Fetch Order
+    // ✅ Step 2: Fetch Razorpay order
     const order = await razorpay.orders.fetch(razorpay_order_id);
     const totalAmount = order.amount / 100; // INR
     const userId = order.notes?.userId;
     const referralCode = order.notes?.referralCode;
 
-    // Step 3: Tax Calculation
+    // ✅ Step 3: Tax calculation
     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
 
@@ -800,12 +901,12 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     if (isUP) {
       cgst = parseFloat((gstAmount / 2).toFixed(2));
-      sgst = gstAmount - cgst;
+      sgst = parseFloat((gstAmount - cgst).toFixed(2));
     } else {
       igst = gstAmount;
     }
 
-    // Step 4: Referral Handling
+    // ✅ Step 4: Referral handling
     let referralData = {};
     if (referralCode) {
       const referrer = await User.findOne({ referralCode });
@@ -815,6 +916,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
           amount: 300,
           type: "credit",
           description: `Referral bonus from user ${userId}`,
+          fromUser: userId,
         });
         await referrer.save();
 
@@ -826,7 +928,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       }
     }
 
-    // Step 5: Invoice Number
+    // ✅ Step 5: Invoice number generation
     const now = new Date();
     const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     const fyEnd = fyStart + 1;
@@ -840,7 +942,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     const invoiceNumber = `BZ/${counter.sequence.toString().padStart(3, "0")}/${financialYear}`;
 
-    // Step 6: Save Payment
+    // ✅ Step 6: Save payment
     const payment = await Payment.create({
       user: userId,
       orderId: razorpay_order_id,
@@ -862,7 +964,11 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error("Payment verification error:", err);
-    res.status(500).json({ success: false, message: "Payment verification failed", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
+      error: err.message,
+    });
   }
 });
 
