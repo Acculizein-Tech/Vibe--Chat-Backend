@@ -1,7 +1,8 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
+import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, redeemWallet, applyReferral } from '../controllers/userController.js';
 
-import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo } from '../controllers/userController.js';
+
 import { protect } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -26,6 +27,12 @@ router.get('/getbusinessbyid', protect, getUserListings);
 router.get('/getAllSalesUsers', protect, getAllSalesUsers);
 router.get('/getWalletInfo', protect, getWalletInfo);
 router.get('/getreferralUser', protect, getUsersByReferral); // Get users by referral code
+
+//addrefferal
+router.post("/apply-referral", protect, applyReferral);
+
+// ✅ Redeem Wallet Route
+router.post("/redeem", protect, redeemWallet);
 // router.get('/getbusinessbyid/:id', protect, getUserBusinesses);
 
 export default router;

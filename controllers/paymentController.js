@@ -35,22 +35,67 @@ const calculateGST = (amount, state) => {
 };
 
 // ✅ Step 1: Create Razorpay Order
+// export const createOrder = asyncHandler(async (req, res) => {
+//   const { amount } = req.body;
+
+//   const options = {
+//     amount: amount * 100,
+//     currency: "INR",
+//     receipt: `rcpt_${Date.now()}`,
+//   };
+
+//   const order = await razorpay.orders.create(options);
+
+//   res.status(200).json({
+//     success: true,
+//     order,
+//   });
+// });
+
+// ✅ Step 1: Create Razorpay Order with Referral Discount
 export const createOrder = asyncHandler(async (req, res) => {
-  const { amount } = req.body;
+  const { amount, referralCode } = req.body;
 
-  const options = {
-    amount: amount * 100,
-    currency: "INR",
-    receipt: `rcpt_${Date.now()}`,
-  };
+  try {
+    let finalAmount = amount;
 
-  const order = await razorpay.orders.create(options);
+    // ✅ Step 2: Referral check
+    if (referralCode) {
+      const referral = await Referral.findOne({ code: referralCode, isUsed: false });
 
-  res.status(200).json({
-    success: true,
-    order,
-  });
+      if (referral) {
+        finalAmount = Math.max(0, amount - 300); // Discount -300, minimum 0
+        referral.isUsed = true; // ✅ Optional: Mark as used if one-time referral
+        await referral.save();
+      }
+    }
+
+    // ✅ Step 3: Create Razorpay order
+    const options = {
+      amount: finalAmount * 100, // Razorpay needs amount in paise
+      currency: "INR",
+      receipt: `rcpt_${Date.now()}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    res.status(200).json({
+      success: true,
+      message: referralCode
+        ? "Referral applied successfully!"
+        : "Order created successfully",
+      finalAmount,
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong while creating order",
+      error: error.message,
+    });
+  }
 });
+
 
 // ✅ Step 2: Verify & Save Payment
 
@@ -161,143 +206,145 @@ export const createOrder = asyncHandler(async (req, res) => {
 // });
 
 
-export const verifyPayment = asyncHandler(async (req, res) => {
-  try {
-    const {
-      razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
-      business,
-      companyData,
-      referralCode, // ✅ incoming referralCode from frontend (if used)
-    } = req.body;
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+//       business,
+//       companyData,
+//       referralCode, // ✅ incoming referralCode from frontend (if used)
+//     } = req.body;
 
-    // Step 1: Validate Razorpay credentials
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({
-        status: "fail",
-        message: "Missing payment credentials",
-      });
-    }
+//     // Step 1: Validate Razorpay credentials
+//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Missing payment credentials",
+//       });
+//     }
 
-    const generated_signature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
+//     const generated_signature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
 
-    if (generated_signature !== razorpay_signature) {
-      return res.status(400).json({
-        status: "fail",
-        message: "Invalid Razorpay signature",
-      });
-    }
+//     if (generated_signature !== razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Invalid Razorpay signature",
+//       });
+//     }
 
-    // -----------------------
-    // Step 2: Inclusive GST logic
-    // -----------------------
-    let totalAmount = parseFloat((business.planPrice || 0).toFixed(2)); // Inclusive price (e.g., 3500)
+//     // -----------------------
+//     // Step 2: Inclusive GST logic
+//     // -----------------------
+//     let totalAmount = parseFloat((business.planPrice || 0).toFixed(2)); // Inclusive price (e.g., 3500)
 
-    let referralData = {}; // to store referral info in Payment model
+//     let referralData = {}; // to store referral info in Payment model
 
-    // Step 3: Referral code check
-    if (referralCode) {
-      const referrer = await User.findOne({ referralCode });
+//     // Step 3: Referral code check
+//     if (referralCode) {
+//       const referrer = await User.findOne({ referralCode });
 
-      if (referrer) {
-        // Deduct ₹300 from customer’s payable amount
-        totalAmount = totalAmount - 300;
+//       if (referrer) {
+//         // Deduct ₹300 from customer’s payable amount
+//         totalAmount = totalAmount - 300;
 
-        // ✅ Credit ₹300 to referrer’s wallet
-        referrer.wallet.balance += 300;
-        referrer.wallet.history.push({
-          amount: 300,
-          type: "credit",
-          description: `Referral bonus from ${req.user.fullName || "a new user"}`,
-        });
-        await referrer.save();
+//         // ✅ Credit ₹300 to referrer’s wallet
+//         referrer.wallet.balance += 300;
+//         referrer.wallet.history.push({
+//           amount: 300,
+//           type: "credit",
+//           description: `Referral bonus from ${req.user.fullName || "a new user"}`,
+//         });
+//         await referrer.save();
 
-        // ✅ Prepare referral data for Payment model
-        referralData = {
-          code: referralCode,
-          referrer: referrer._id,
-          bonusAmount: 300,
-        };
-      }
-    }
+//         // ✅ Prepare referral data for Payment model
+//         referralData = {
+//           code: referralCode,
+//           referrer: referrer._id,
+//           bonusAmount: 300,
+//         };
+//       }
+//     }
 
-    // Step 4: Compute base & GST (reverse calculation from inclusive price)
-    const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
-    const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
+//     // Step 4: Compute base & GST (reverse calculation from inclusive price)
+//     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
+//     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
 
-    // Step 5: Check buyer state
-    const buyerState = (business?.state || "").trim().toLowerCase();
-    const isUP = buyerState === "uttar pradesh";
+//     // Step 5: Check buyer state
+//     const buyerState = (business?.state || "").trim().toLowerCase();
+//     const isUP = buyerState === "uttar pradesh";
 
-    // Step 6: Generate invoice number
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
-    const fyEnd = fyStart + 1;
-    const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd
-      .toString()
-      .slice(-2)}`;
+    
 
-    const counter = await InvoiceCounter.findOneAndUpdate(
-      { financialYear },
-      { $inc: { sequence: 1 } },
-      { new: true, upsert: true }
-    );
+//     // Step 6: Generate invoice number
+//     const now = new Date();
+//     const currentYear = now.getFullYear();
+//     const currentMonth = now.getMonth();
+//     const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+//     const fyEnd = fyStart + 1;
+//     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd
+//       .toString()
+//       .slice(-2)}`;
 
-    const sequenceNumber = counter.sequence.toString().padStart(2, "0");
-    const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+//     const counter = await InvoiceCounter.findOneAndUpdate(
+//       { financialYear },
+//       { $inc: { sequence: 1 } },
+//       { new: true, upsert: true }
+//     );
 
-    // Step 7: Save Payment with referral details
-    const payment = await Payment.create({
-      user: req.user._id,
-      orderId: razorpay_order_id,
-      paymentId: razorpay_payment_id,
-      signature: razorpay_signature,
-      HSN: process.env.BUSINESS_HSN,
-      amount: totalAmount,   // ✅ Inclusive amount paid
-      baseAmount,            // ✅ Extracted base (without GST)
-      totalAmount,           // ✅ Final inclusive amount stored
-      tax: {
-        cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
-        sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
-        igst: !isUP ? gstAmount : 0,
-      },
-      invoiceNumber,
-      isUP,
-      status: "success",
-      billingDetails: {
-        ...business,
-        currency: "INR",
-      },
-      companyData: {
-        companyName: companyData?.companyName,
-        companyAddress: companyData?.companyAddress,
-        companyPhone: companyData?.companyPhone,
-        companyEmail: companyData?.companyEmail,
-        state: companyData?.state,
-        gstin: companyData?.gstin,
-      },
-      referral: referralData, // ✅ new field inside Payment
-    });
+//     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+//     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
 
-    return res.status(200).json({
-      status: "success",
-      message: "Payment verified and stored successfully",
-      invoiceNumber,
-      data: payment,
-    });
-  } catch (err) {
-    console.error("Error verifying payment:", err);
-    return res.status(500).json({
-      status: "fail",
-      message: "Internal Server Error",
-      error: err.message,
-    });
-  }
-});
+//     // Step 7: Save Payment with referral details
+//     const payment = await Payment.create({
+//       user: req.user._id,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       HSN: process.env.BUSINESS_HSN,
+//       amount: totalAmount,   // ✅ Inclusive amount paid
+//       baseAmount,            // ✅ Extracted base (without GST)
+//       totalAmount,           // ✅ Final inclusive amount stored
+//       tax: {
+//         cgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         sgst: isUP ? parseFloat((gstAmount / 2).toFixed(2)) : 0,
+//         igst: !isUP ? gstAmount : 0,
+//       },
+//       invoiceNumber,
+//       isUP,
+//       status: "success",
+//       billingDetails: {
+//         ...business,
+//         currency: "INR",
+//       },
+//       companyData: {
+//         companyName: companyData?.companyName,
+//         companyAddress: companyData?.companyAddress,
+//         companyPhone: companyData?.companyPhone,
+//         companyEmail: companyData?.companyEmail,
+//         state: companyData?.state,
+//         gstin: companyData?.gstin,
+//       },
+//       referral: referralData, // ✅ new field inside Payment
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Payment verified and stored successfully",
+//       invoiceNumber,
+//       data: payment,
+//     });
+//   } catch (err) {
+//     console.error("Error verifying payment:", err);
+//     return res.status(500).json({
+//       status: "fail",
+//       message: "Internal Server Error",
+//       error: err.message,
+//     });
+//   }
+// });
 
 
 // export const verifyPayment = asyncHandler(async (req, res) => {
@@ -435,6 +482,297 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 //   }
 // });
 
+// export const verifyPayment = asyncHandler(async (req, res) => {
+//   try {
+//     const {
+//       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+//       business,
+//       companyData,
+//       referralCode,
+//     } = req.body;
+
+//     // Step 1: Validate Razorpay credentials
+//     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Missing payment credentials",
+//       });
+//     }
+
+//     const generated_signature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
+
+//     if (generated_signature !== razorpay_signature) {
+//       return res.status(400).json({
+//         status: "fail",
+//         message: "Invalid Razorpay signature",
+//       });
+//     }
+
+//     // -----------------------
+//     // Step 2: Inclusive GST logic
+//     // -----------------------
+//     let totalAmount = parseFloat((business.planPrice || 0).toFixed(2));
+
+//     let referralData = {};
+
+//     // Step 3: Referral code check
+//     if (referralCode) {
+//       const referrer = await User.findOne({ referralCode });
+
+//       if (referrer) {
+//         totalAmount = totalAmount - 300;
+
+//         referrer.wallet.balance += 300;
+//         referrer.wallet.history.push({
+//           amount: 300,
+//           type: "credit",
+//           description: `Referral bonus from ${req.user.fullName || "a new user"}`,
+//         });
+//         await referrer.save();
+
+//         referralData = {
+//           code: referralCode,
+//           referrer: referrer._id,
+//           bonusAmount: 300,
+//         };
+//       }
+//     }
+
+//     // Step 4: Compute base & GST
+//     const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
+//     const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
+
+//     // Step 5: Check buyer state
+//     const buyerState = (business?.state || "").trim().toLowerCase();
+//     const isUP = buyerState === "uttar pradesh";
+
+//     // Step 6: Tax breakdown with adjustment
+//     let cgst = 0, sgst = 0, igst = 0;
+//     if (isUP) {
+//       const halfGST = gstAmount / 2;
+//       cgst = parseFloat(halfGST.toFixed(2));  // round CGST
+//       sgst = parseFloat((gstAmount - cgst).toFixed(2)); // adjust SGST
+//     } else {
+//       igst = gstAmount;
+//     }
+
+//     // Step 7: Generate invoice number
+//     const now = new Date();
+//     const currentYear = now.getFullYear();
+//     const currentMonth = now.getMonth();
+//     const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+//     const fyEnd = fyStart + 1;
+//     const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd
+//       .toString()
+//       .slice(-2)}`;
+
+//     const counter = await InvoiceCounter.findOneAndUpdate(
+//       { financialYear },
+//       { $inc: { sequence: 1 } },
+//       { new: true, upsert: true }
+//     );
+
+//     const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+//     const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+//     // Step 8: Save Payment with referral details
+//     const payment = await Payment.create({
+//       user: req.user._id,
+//       orderId: razorpay_order_id,
+//       paymentId: razorpay_payment_id,
+//       signature: razorpay_signature,
+//       HSN: process.env.BUSINESS_HSN,
+//       amount: totalAmount,
+//       baseAmount,
+//       totalAmount,
+//       tax: {
+//         cgst,
+//         sgst,
+//         igst,
+//       },
+//       invoiceNumber,
+//       isUP,
+//       status: "success",
+//       billingDetails: {
+//         ...business,
+//         currency: "INR",
+//       },
+//       companyData: {
+//         companyName: companyData?.companyName,
+//         companyAddress: companyData?.companyAddress,
+//         companyPhone: companyData?.companyPhone,
+//         companyEmail: companyData?.companyEmail,
+//         state: companyData?.state,
+//         gstin: companyData?.gstin,
+//       },
+//       referral: referralData,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Payment verified and stored successfully",
+//       invoiceNumber,
+//       data: payment,
+//     });
+//   } catch (err) {
+//     console.error("Error verifying payment:", err);
+//     return res.status(500).json({
+//       status: "fail",
+//       message: "Internal Server Error",
+//       error: err.message,
+//     });
+//   }
+// });
+
+
+export const verifyPayment = asyncHandler(async (req, res) => {
+  try {
+    const {
+      razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+      business,
+      companyData,
+      referralCode, // ✅ aayega taaki wallet credit kare
+    } = req.body;
+
+    // Step 1: Validate Razorpay credentials
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Missing payment credentials",
+      });
+    }
+
+    const generated_signature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid Razorpay signature",
+      });
+    }
+
+    // -----------------------
+    // Step 2: Total from frontend (already discounted if referral used)
+    // -----------------------
+    let totalAmount = parseFloat((business.planPrice || 0).toFixed(2));
+
+    let referralData = {};
+
+    // Step 3: Referral wallet credit (no discount calculation here)
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+
+      if (referrer) {
+        // ✅ Wallet me paisa daalna
+        referrer.wallet.balance += 300;
+        referrer.wallet.history.push({
+          amount: 300,
+          type: "credit",
+          description: `Referral bonus from ${req.user.fullName || "a new user"}`,
+          fromUser: req.user._id,
+          fromEmail: req.user.email,
+        });
+        await referrer.save();
+
+        referralData = {
+          code: referralCode,
+          referrer: referrer._id,
+          bonusAmount: 300,
+        };
+      }
+    }
+
+    // Step 4: Compute base & GST
+    const baseAmount = parseFloat((totalAmount / 1.18).toFixed(2));
+    const gstAmount = parseFloat((totalAmount - baseAmount).toFixed(2));
+
+    // Step 5: Buyer state
+    const buyerState = (business?.state || "").trim().toLowerCase();
+    const isUP = buyerState === "uttar pradesh";
+
+    // Step 6: Tax breakdown
+    let cgst = 0, sgst = 0, igst = 0;
+    if (isUP) {
+      const halfGST = gstAmount / 2;
+      cgst = parseFloat(halfGST.toFixed(2));
+      sgst = parseFloat((gstAmount - cgst).toFixed(2));
+    } else {
+      igst = gstAmount;
+    }
+
+    // Step 7: Invoice number
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const fyStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+    const fyEnd = fyStart + 1;
+    const financialYear = `${fyStart.toString().slice(-2)}-${fyEnd
+      .toString()
+      .slice(-2)}`;
+
+    const counter = await InvoiceCounter.findOneAndUpdate(
+      { financialYear },
+      { $inc: { sequence: 1 } },
+      { new: true, upsert: true }
+    );
+
+    const sequenceNumber = counter.sequence.toString().padStart(2, "0");
+    const invoiceNumber = `BZ/${sequenceNumber}/${financialYear}`;
+
+    // Step 8: Save Payment
+    const payment = await Payment.create({
+      user: req.user._id,
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      signature: razorpay_signature,
+      HSN: process.env.BUSINESS_HSN,
+      amount: totalAmount, // ✅ already discounted if referral used
+      baseAmount,
+      totalAmount,
+      tax: {
+        cgst,
+        sgst,
+        igst,
+      },
+      invoiceNumber,
+      isUP,
+      status: "success",
+      billingDetails: {
+        ...business,
+        currency: "INR",
+      },
+      companyData: {
+        companyName: companyData?.companyName,
+        companyAddress: companyData?.companyAddress,
+        companyPhone: companyData?.companyPhone,
+        companyEmail: companyData?.companyEmail,
+        state: companyData?.state,
+        gstin: companyData?.gstin,
+      },
+      referral: referralData, // ✅ stored only for record
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Payment verified and stored successfully",
+      invoiceNumber,
+      data: payment,
+    });
+  } catch (err) {
+    console.error("Error verifying payment:", err);
+    return res.status(500).json({
+      status: "fail",
+      message: "Internal Server Error",
+      error: err.message,
+    });
+  }
+});
 
 
 
@@ -684,3 +1022,5 @@ export const redeemBalance = asyncHandler(async (req, res) => {
     });
   }
 });
+
+
