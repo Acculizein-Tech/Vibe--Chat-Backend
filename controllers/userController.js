@@ -558,13 +558,13 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 //apply referal code
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
-    const { referral_code, user_id, actual_amount } = req.body;
+    const { referral_code, user_id, total_plan_amount } = req.body;
 
     // 🛑 Validation
-    if (!referral_code || !user_id || !actual_amount) {
+    if (!referral_code || !user_id || !total_plan_amount) {
       return res.status(400).json({
         success: false,
-        message: "Referral code, user_id and actual_amount are required",
+        message: "Referral code, user_id and total_plan_amount are required",
       });
     }
 
@@ -586,7 +586,7 @@ export const applyReferral = asyncHandler(async (req, res) => {
     }
 
     // 🎯 Step 3: Apply discount
-    let updatedAmount = actual_amount - 300;
+    let updatedAmount = total_plan_amount - 300;
     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
 
     // 🎯 Step 4: Return updated amount
