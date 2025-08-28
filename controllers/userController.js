@@ -556,6 +556,58 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 
 
 //apply referal code
+// export const applyReferral = asyncHandler(async (req, res) => {
+//   try {
+//     const { referral_code, user_id, total_plan_amount } = req.body;
+
+//     // 🛑 Validation
+//     if (!referral_code || !user_id || !total_plan_amount) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Referral code, user_id and total_plan_amount are required",
+//       });
+//     }
+
+//     // 🎯 Step 1: Check if referral code exists in DB
+//     const referralProvider = await User.findOne({ referralCode: referral_code });
+//     if (!referralProvider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invalid referral code",
+//       });
+//     }
+
+//     // 🎯 Step 2: Ensure user is not using own referral code
+//     if (referralProvider._id.toString() === user_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You cannot use your own referral code",
+//       });
+//     }
+
+//     // 🎯 Step 3: Apply discount
+//     let updatedAmount = total_plan_amount - 300;
+//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
+
+//     // 🎯 Step 4: Return updated amount
+//     return res.status(200).json({
+//       success: true,
+//       message: "Referral applied successfully",
+//       updatedAmount,
+//       referralProvider: {
+//         id: referralProvider._id,
+//         name: referralProvider.fullName,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error in applyReferral:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error applying referral",
+//     });
+//   }
+// });
+
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
     const { referral_code, user_id, total_plan_amount } = req.body;
@@ -585,11 +637,23 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // 🎯 Step 3: Apply discount
-    let updatedAmount = total_plan_amount - 300;
+    // 🎯 Step 3: Apply referral bonus to provider
+    const bonusAmount = 300;
+    referralProvider.wallet.balance += bonusAmount;
+    referralProvider.wallet.history.push({
+      amount: bonusAmount,
+      type: "credit",
+      description: `Referral bonus from user ${user_id}`,
+      fromUser: user_id,
+      date: new Date(),
+    });
+    await referralProvider.save();
+
+    // 🎯 Step 4: Apply discount to current user's plan
+    let updatedAmount = total_plan_amount - bonusAmount;
     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
 
-    // 🎯 Step 4: Return updated amount
+    // 🎯 Step 5: Return updated amount and referral info
     return res.status(200).json({
       success: true,
       message: "Referral applied successfully",
@@ -597,6 +661,8 @@ export const applyReferral = asyncHandler(async (req, res) => {
       referralProvider: {
         id: referralProvider._id,
         name: referralProvider.fullName,
+        wallet: referralProvider.wallet,
+        referralCode: referralProvider.referralCode,
       },
     });
   } catch (error) {
@@ -607,82 +673,3 @@ export const applyReferral = asyncHandler(async (req, res) => {
     });
   }
 });
-
-// export const applyReferral = asyncHandler(async (req, res) => {
-//   try {
-//     const { referralCode, userId, business } = req.body;
-
-//     // 🛑 Validation
-//     if (!referralCode || !userId || !business?.plan || !business?.location?.state) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral code, userId, plan and state are required",
-//       });
-//     }
-
-//     // 🎯 Step 1: Check if referral code exists
-//     const referralProvider = await User.findOne({ referralCode });
-//     if (!referralProvider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid referral code",
-//       });
-//     }
-
-//     // 🎯 Step 2: Prevent self-referral
-//     if (referralProvider._id.toString() === userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You cannot use your own referral code",
-//       });
-//     }
-
-//     // 🎯 Step 3: Get plan price from DB
-//     const plan = await Plan.findById(business.plan);
-//     if (!plan) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Plan not found",
-//       });
-//     }
-
-//     let totalAmount = plan.price; // ✅ Plan price (GST included)
-//     let updatedAmount = totalAmount - 300;
-//     if (updatedAmount < 0) updatedAmount = 0;
-
-//     // 🎯 Step 4: Recompute GST split
-//     const baseAmount = parseFloat((updatedAmount / 1.18).toFixed(2));
-//     const gstAmount = parseFloat((updatedAmount - baseAmount).toFixed(2));
-
-//     const buyerState = (business?.location?.state || "").trim().toLowerCase();
-//     const isUP = buyerState === "uttar pradesh";
-
-//     let cgst = 0, sgst = 0, igst = 0;
-//     if (isUP) {
-//       const halfGST = gstAmount / 2;
-//       cgst = parseFloat(halfGST.toFixed(2));
-//       sgst = parseFloat((gstAmount - cgst).toFixed(2));
-//     } else {
-//       igst = gstAmount;
-//     }
-
-//     // 🎯 Step 5: Return updated amount with GST details
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral applied successfully",
-//       updatedAmount,
-//       baseAmount,
-//       tax: { cgst, sgst, igst },
-//       referralProvider: {
-//         id: referralProvider._id,
-//         name: referralProvider.fullName,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in applyReferral:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error applying referral",
-//     });
-//   }
-// });
