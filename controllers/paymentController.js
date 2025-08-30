@@ -1207,6 +1207,15 @@ export const redeemBalance = asyncHandler(async (req, res) => {
   const { amount } = req.body; // user input
   const userId = req.user._id; // from auth middleware
 
+  if (!amount || isNaN(amount) || amount <= 0) {
+    return res.status(400).json({ message: "Invalid redeem amount" });
+  }
+
+  // ✅ Minimum limit check (₹500)
+  if (amount < 500) {
+    return res.status(400).json({ message: "Minimum redeem amount is ₹500" });
+  }
+
   const user = await User.findById(userId);
 
   if (!user) {
@@ -1214,7 +1223,7 @@ export const redeemBalance = asyncHandler(async (req, res) => {
   }
 
   // ✅ KYC Check
-  if (!user.kyc || !user.kyc.isVerified) {
+  if (!user.kyc || !user.kyc.isVerified || !user.kyc.fundAccountId) {
     return res.status(400).json({ message: "KYC not verified. Please complete KYC first." });
   }
 
@@ -1223,14 +1232,14 @@ export const redeemBalance = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Insufficient wallet balance" });
   }
 
-  // ✅ Create RazorpayX Payout
   try {
+    // ✅ Create RazorpayX Payout
     const payout = await razorpayX.payouts.create({
       account_number: process.env.RAZORPAYX_ACCOUNT_NO, // RazorpayX virtual account
       fund_account_id: user.kyc.fundAccountId, // saved after KYC
-      amount: amount * 100, // in paise
+      amount: amount * 100, // paise
       currency: "INR",
-      mode: "IMPS", // or "UPI"
+      mode: "IMPS", // UPI bhi ho sakta hai
       purpose: "payout",
       queue_if_low_balance: true,
     });
@@ -1241,22 +1250,26 @@ export const redeemBalance = asyncHandler(async (req, res) => {
       amount,
       type: "debit",
       method: "RazorpayX",
-      status: "success",
+      status: payout.status || "pending",
       date: new Date(),
       transactionId: payout.id,
     });
 
     await user.save();
 
-    res.json({
-      message: "Redeem successful",
+    return res.json({
+      success: true,
+      message: "Redeem request successful",
       payout,
       walletBalance: user.wallet.balance,
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("❌ RazorpayX Payout Error:", error);
+
+    return res.status(500).json({
+      success: false,
       message: "Redeem failed",
-      error: error.message,
+      error: error.error?.description || error.message,
     });
   }
 });

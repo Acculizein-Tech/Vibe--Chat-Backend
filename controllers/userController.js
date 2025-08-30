@@ -7,6 +7,7 @@ import Business from '../models/Business.js';
 import Review from '../models/Review.js';
 import { uploadToS3 } from '../middlewares/upload.js';
 import Plan from '../models/Priceplan.js';
+import Payment from '../models/Payment.js';
 import axios from 'axios';
 
 // @desc    Get current user details
@@ -444,10 +445,37 @@ export const getUsersByReferral = asyncHandler(async (req, res) => {
 
 
 //get the userRefferal by user.
+// export const getWalletInfo = async (req, res) => {
+//   try {
+//     const userId = req.user.id; // auth middleware se aayega
+
+//     const user = await User.findById(userId).select("wallet referralCode");
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       wallet: user.wallet,         // { balance, history }
+//       referralCode: user.referralCode, // sirf referral code
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in getWalletInfo:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
 export const getWalletInfo = async (req, res) => {
   try {
     const userId = req.user.id; // auth middleware se aayega
 
+    // 🟢 User fetch karo
     const user = await User.findById(userId).select("wallet referralCode");
 
     if (!user) {
@@ -457,20 +485,36 @@ export const getWalletInfo = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    // 🟢 Agar referralCode hi nahi hai
+    if (!user.referralCode) {
+      return res.status(200).json({
+        success: true,
+        wallet: user.wallet,
+        referralCode: null,
+        totalReferrals: 0,
+      });
+    }
+
+    // 🟢 Count all Payment docs jaha referral.code == user.referralCode
+    const totalReferrals = await Payment.countDocuments({
+      "referral.code": user.referralCode,
+      status: "success", // optional filter (sirf successful payments)
+    });
+
+    return res.status(200).json({
       success: true,
-      wallet: user.wallet,         // { balance, history }
-      referralCode: user.referralCode, // sirf referral code
+      wallet: user.wallet,              // { balance, history }
+      referralCode: user.referralCode,  // unique referral code of user
+      totalReferrals,                   // count of how many times it was used
     });
   } catch (error) {
     console.error("❌ Error in getWalletInfo:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
-
 
 //redeem referral code
 const razorpayX = axios.create({
