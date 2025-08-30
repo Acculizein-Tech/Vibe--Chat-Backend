@@ -5,9 +5,9 @@ import Business from "../models/Business.js";
 
 // ✅ Submit KYC
 export const submitKyc = asyncHandler(async (req, res) => {
-  const { panCard, bankDetails } = req.body;
-  const userId = req.user._id;
-
+  const {userId,  panCard, bankDetails } = req.body;
+  
+// console.log(req.body)
   //  KYC exist 
   const existing = await KYC.findOne({ userId });
   if (existing) {
@@ -15,15 +15,16 @@ export const submitKyc = asyncHandler(async (req, res) => {
   }
 
   // Aadhaar Business model se laao
-  const business = await Business.findOne({ userId });
-  if (!business || !business.aadhaarFront || !business.aadhaarBack) {
+  const business = await Business.findOne({ owner: userId });
+  // console.log(business);
+  if (!business || !business.aadhaarImages?.front || !business.aadhaarImages?.back) {
     return res.status(400).json({ success: false, message: "Aadhaar details not found in Business profile" });
   }
 
   const kyc = await KYC.create({
     userId,
-    aadhaarFront: business.aadhaarFront,
-    aadhaarBack: business.aadhaarBack,
+    aadhaarFront: business.aadhaarImages.aadhaarFront,
+    aadhaarBack: business.aadhaarImages.aadhaarBack,
     panCard,
     bankDetails,
   });
