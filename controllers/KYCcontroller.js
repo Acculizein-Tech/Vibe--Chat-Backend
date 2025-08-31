@@ -4,27 +4,29 @@ import KYC from "../models/KYC.js";
 import Business from "../models/Business.js"; 
 
 // ✅ Submit KYC
+
+
 export const submitKyc = asyncHandler(async (req, res) => {
-  const {userId,  panCard, bankDetails } = req.body;
-  
-// console.log(req.body)
-  //  KYC exist 
+  const { userId, panCard, bankDetails } = req.body;
+
+  // Check existing KYC
   const existing = await KYC.findOne({ userId });
   if (existing) {
     return res.status(400).json({ success: false, message: "KYC already submitted" });
   }
 
-  // Aadhaar Business model se laao
-  const business = await Business.findOne({ owner: userId });
-  // console.log(business);
+  // Aadhaar Business model se latest record fetch
+  const business = await Business.findOne({ owner: userId }).sort({ createdAt: -1 });
+
   if (!business || !business.aadhaarImages?.front || !business.aadhaarImages?.back) {
     return res.status(400).json({ success: false, message: "Aadhaar details not found in Business profile" });
   }
 
+  // Create new KYC entry
   const kyc = await KYC.create({
     userId,
-    aadhaarFront: business.aadhaarImages.aadhaarFront,
-    aadhaarBack: business.aadhaarImages.aadhaarBack,
+    aadhaarFront: business.aadhaarImages.front,
+    aadhaarBack: business.aadhaarImages.back,
     panCard,
     bankDetails,
   });
@@ -35,6 +37,7 @@ export const submitKyc = asyncHandler(async (req, res) => {
     kyc,
   });
 });
+
 
 // ✅ Get My KYC (User side)
 export const getMyKyc = asyncHandler(async (req, res) => {
