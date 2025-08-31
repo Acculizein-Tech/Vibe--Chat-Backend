@@ -31,6 +31,14 @@ const kycSchema = new mongoose.Schema({
     accountHolderName: { type: String },
   },
 
+  
+  // RazorpayX contact ID
+  razorpayContactId: {
+    type: String,
+    required: true,   // ab se har KYC ke liye contactId hoga
+  },
+  razorpayFundAccountId: { type: String },  // ✅ New
+
   // Admin verification for enabling payouts
   isPaymentified: { 
     type: Boolean, 

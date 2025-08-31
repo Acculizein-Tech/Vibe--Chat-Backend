@@ -8,7 +8,8 @@ import {
   getPaymentsByUserId,
   getAllVerifiedPayments,
   getAllPayments,
-  getPaymentByPaymentId
+  getPaymentByPaymentId,
+  redeemBalance
 } from "../controllers/paymentController.js";
 
 import { protect } from "../middlewares/auth.js";
@@ -26,5 +27,6 @@ router.get('/all-verified', protect, roles('superadmin'), getAllVerifiedPayments
 router.get('/all', protect, roles('superadmin'), getAllPayments);
 
 router.get("/:paymentId", protect, roles('customer', 'superadmin'), getPaymentByPaymentId);
+router.post('/redeem', protect, redeemBalance);
 
 export default router;
