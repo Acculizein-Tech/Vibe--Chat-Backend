@@ -1315,8 +1315,8 @@ export const redeemBalance = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Invalid redeem amount" });
   }
 
-  if (amount < 500) {
-    return res.status(400).json({ message: "Minimum redeem amount is ₹500" });
+  if (amount < 200) {
+    return res.status(400).json({ message: "Minimum redeem amount is ₹200" });
   }
 
   const user = await User.findById(userId);
@@ -1343,7 +1343,7 @@ export const redeemBalance = asyncHandler(async (req, res) => {
 
     // ✅ Create RazorpayX Payout
     const payout = await axios.post(
-      "https://api.razorpay.com/v1/payouts",
+      "https://api.razorpayx.com/v1/payouts",
       {
         account_number: process.env.RAZORPAYX_ACCOUNT_NO, // RazorpayX virtual account number
         fund_account_id: fundAccountId,
@@ -1396,7 +1396,7 @@ export const redeemBalance = asyncHandler(async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server is busy due to high traffic of users. Please try again later.",
+      message: "Server is busy due to high traffic of users. Please try again ",
       error: error.response?.data || error.message,
     });
   }
