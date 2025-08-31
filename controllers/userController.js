@@ -374,75 +374,75 @@ const razorpayX = axios.create({
 /**
  * Redeem Wallet Balance (Min ₹10)
  */
-export const redeemWallet = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id; // from auth middleware
-    const { amount, fund_account_id } = req.body; // fund_account_id = RazorpayX Fund Account (bank/UPI)
+// export const redeemWallet = asyncHandler(async (req, res) => {
+//   try {
+//     const userId = req.user._id; // from auth middleware
+//     const { amount, fund_account_id } = req.body; // fund_account_id = RazorpayX Fund Account (bank/UPI)
 
-    const user = await User.findById(userId);
+//     const user = await User.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: "User not found" });
+//     }
 
-    // ✅ Check wallet balance
-    if (user.wallet.balance < 10) {
-      return res.status(400).json({
-        success: false,
-        message: "Minimum ₹10 balance required to redeem",
-      });
-    }
+//     // ✅ Check wallet balance
+//     if (user.wallet.balance < 10) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Minimum ₹10 balance required to redeem",
+//       });
+//     }
 
-    if (amount > user.wallet.balance) {
-      return res.status(400).json({
-        success: false,
-        message: "Insufficient wallet balance",
-      });
-    }
+//     if (amount > user.wallet.balance) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Insufficient wallet balance",
+//       });
+//     }
 
-    // ✅ Create Payout Request to RazorpayX
-    const payoutData = {
-      account_number: process.env.RAZORPAYX_ACCOUNT_NUMBER, // Virtual account no.
-      fund_account_id, // saved fund account of user (UPI/Bank)
-      amount: amount * 100, // in paise
-      currency: "INR",
-      mode: "UPI", // or "IMPS"/"NEFT"
-      purpose: "payout",
-      queue_if_low_balance: true,
-      reference_id: `redeem_${userId}_${Date.now()}`,
-      narration: "Wallet Redeem",
-    };
+//     // ✅ Create Payout Request to RazorpayX
+//     const payoutData = {
+//       account_number: process.env.RAZORPAYX_ACCOUNT_NUMBER, // Virtual account no.
+//       fund_account_id, // saved fund account of user (UPI/Bank)
+//       amount: amount * 100, // in paise
+//       currency: "INR",
+//       mode: "UPI", // or "IMPS"/"NEFT"
+//       purpose: "payout",
+//       queue_if_low_balance: true,
+//       reference_id: `redeem_${userId}_${Date.now()}`,
+//       narration: "Wallet Redeem",
+//     };
 
-    const payoutResponse = await razorpayX.post("/payouts", payoutData);
+//     const payoutResponse = await razorpayX.post("/payouts", payoutData);
 
-    // ✅ Deduct balance & save transaction
-    user.wallet.balance -= amount;
-    user.wallet.history.push({
-      amount,
-      type: "debit",
-      description: "Wallet Redeem",
-      transactionId: payoutResponse.data.id,
-      createdAt: new Date(),
-    });
+//     // ✅ Deduct balance & save transaction
+//     user.wallet.balance -= amount;
+//     user.wallet.history.push({
+//       amount,
+//       type: "debit",
+//       description: "Wallet Redeem",
+//       transactionId: payoutResponse.data.id,
+//       createdAt: new Date(),
+//     });
 
-    await user.save();
+//     await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Redeem successful",
-      payout: payoutResponse.data,
-      balance: user.wallet.balance,
-    });
-  } catch (error) {
-    console.error("Redeem Error:", error.response?.data || error.message);
+//     return res.status(200).json({
+//       success: true,
+//       message: "Redeem successful",
+//       payout: payoutResponse.data,
+//       balance: user.wallet.balance,
+//     });
+//   } catch (error) {
+//     console.error("Redeem Error:", error.response?.data || error.message);
 
-    return res.status(500).json({
-      success: false,
-      message: "Redeem failed",
-      error: error.response?.data || error.message,
-    });
-  }
-});
+//     return res.status(500).json({
+//       success: false,
+//       message: "Redeem failed",
+//       error: error.response?.data || error.message,
+//     });
+//   }
+// });
 
 
 //apply referal code

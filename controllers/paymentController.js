@@ -1396,7 +1396,7 @@ export const redeemBalance = asyncHandler(async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server is busy due to high traffic of users. Please try again later.",
       error: error.response?.data || error.message,
     });
   }
