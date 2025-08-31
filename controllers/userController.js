@@ -652,6 +652,72 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 //   }
 // });
 
+// export const applyReferral = asyncHandler(async (req, res) => {
+//   try {
+//     const { referral_code, user_id, total_plan_amount } = req.body;
+
+//     // 🛑 Validation
+//     if (!referral_code || !user_id || !total_plan_amount) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Referral code, user_id and total_plan_amount are required",
+//       });
+//     }
+
+//     // 🎯 Step 1: Check if referral code exists in DB
+//     const referralProvider = await User.findOne({ referralCode: referral_code });
+//     if (!referralProvider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invalid referral code",
+//       });
+//     }
+
+//     // 🎯 Step 2: Ensure user is not using own referral code
+//     if (referralProvider._id.toString() === user_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You cannot use your own referral code",
+//       });
+//     }
+
+//     // 🎯 Step 3: Apply referral bonus to provider
+//     const bonusAmount = 300;
+//     referralProvider.wallet.balance += bonusAmount;
+//     referralProvider.wallet.history.push({
+//       amount: bonusAmount,
+//       type: "credit",
+//       description: `Referral bonus from user ${user_id}`,
+//       fromUser: user_id,
+//       date: new Date(),
+//     });
+//     await referralProvider.save();
+
+//     // 🎯 Step 4: Apply discount to current user's plan
+//     let updatedAmount = total_plan_amount - bonusAmount;
+//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
+
+//     // 🎯 Step 5: Return updated amount and referral info
+//     return res.status(200).json({
+//       success: true,
+//       message: "Referral applied successfully",
+//       updatedAmount,
+//       referralProvider: {
+//         id: referralProvider._id,
+//         name: referralProvider.fullName,
+//         wallet: referralProvider.wallet,
+//         referralCode: referralProvider.referralCode,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error in applyReferral:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error applying referral",
+//     });
+//   }
+// });
+
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
     const { referral_code, user_id, total_plan_amount } = req.body;
@@ -681,23 +747,14 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // 🎯 Step 3: Apply referral bonus to provider
+    // 🎯 Step 3: Just calculate referral bonus (do NOT update wallet here)
     const bonusAmount = 300;
-    referralProvider.wallet.balance += bonusAmount;
-    referralProvider.wallet.history.push({
-      amount: bonusAmount,
-      type: "credit",
-      description: `Referral bonus from user ${user_id}`,
-      fromUser: user_id,
-      date: new Date(),
-    });
-    await referralProvider.save();
 
     // 🎯 Step 4: Apply discount to current user's plan
     let updatedAmount = total_plan_amount - bonusAmount;
     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
 
-    // 🎯 Step 5: Return updated amount and referral info
+    // 🎯 Step 5: Return updated amount and referral info (no wallet change)
     return res.status(200).json({
       success: true,
       message: "Referral applied successfully",
@@ -705,7 +762,6 @@ export const applyReferral = asyncHandler(async (req, res) => {
       referralProvider: {
         id: referralProvider._id,
         name: referralProvider.fullName,
-        wallet: referralProvider.wallet,
         referralCode: referralProvider.referralCode,
       },
     });

@@ -82,6 +82,28 @@ wallet: {
         },
       ],
     },
+    userKYCDetails: {
+  panCard: String,
+  bankDetails: {
+    accountNumber: String,
+    ifsc: String,
+    accountHolderName: String,
+  },
+  fundAccountId: { type: String },   // Razorpay fund account id
+  isPaymentified: { type: Boolean, default: false }, // superadmin approve karega
+},
+
+payoutHistory: [
+  {
+    payoutId: String,
+    fundAccountId: String,
+    amount: Number,
+    status: { type: String, enum: ['pending', 'processing', 'processed', 'failed'], default: 'pending' },
+    mode: { type: String, enum: ['UPI', 'IMPS', 'NEFT', 'RTGS'] },
+    createdAt: { type: Date, default: Date.now }
+  }
+],
+
   
 
 
