@@ -9,6 +9,7 @@ import { uploadToS3 } from '../middlewares/upload.js';
 import Plan from '../models/Priceplan.js';
 import Payment from '../models/Payment.js';
 import axios from 'axios';
+import KYC from '../models/KYC.js';
 
 // @desc    Get current user details
 // @route   GET /api/user/profile/:id
@@ -31,143 +32,7 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 });
 
 // @desc    Update user profile
-// export const updateUserProfile = asyncHandler(async (req, res) => {
-//   try {
-//     const { fullName, email, phone, city, state, country, zipCode } = req.body;
 
-//     let avatarUrl = '';
-
-//     // Agar image bheji hai to S3 pr upload karo
-//     if (req.file) {
-//       const s3Url = await uploadToS3(req.file, req); // returns full URL
-//       avatarUrl = s3Url;
-//     }
-
-//     const updatedFields = {
-//       fullName, 
-//       email,
-//       phone,
-//       city,
-//       state,
-//       country,
-//       zipCode,
-//     };
-
-//      // ❌ Check for spaces in phone number
-//     if (phone && phone.includes(' ')) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Phone number should not contain spaces. Please enter a valid phone number like +919876543210',
-//       });
-//     }
-
-//     // ✅ Allow + in the beginning of phone for country code
-//     const phoneRegex = /^\+?[0-9]{10,15}$/;
-//     if (phone && !phoneRegex.test(phone)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid phone number format. Please enter a valid number like +919876543210',
-//       });
-//     }
-
-//     // if (avatarUrl) {
-//     //   updatedFields['profile'] = { avatar: avatarUrl };
-//     // }
-//     if (avatarUrl) {
-//   updatedFields['profile.avatar'] = avatarUrl; // sirf avatar field update karega
-// }
-
-//     const updatedUser = await User.findByIdAndUpdate(
-//       req.params.id,
-//       { $set: updatedFields },
-//       { new: true }
-//     );    
-
-//     res.status(200).json({
-//       success: true,
-//       message: 'Profile updated successfully',
-//       data: updatedUser,
-//     });
-//   } catch (err) {
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to update profile',
-//       error: err.message,
-//     });
-//   }
-// });
-
-// export const updateUserProfile = asyncHandler(async (req, res) => {
-//   try {
-//     const { fullName, email, phone, city, state, country, zipCode } = req.body;
-
-//     // ✅ Validation: Phone number space check
-//     if (phone && phone.includes(' ')) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Phone number should not contain spaces. Example: +919876543210',
-//       });
-//     }
-
-//     // ✅ Validation: Allow + in beginning & length 10-15
-//     const phoneRegex = /^\+?[0-9]{10,15}$/;
-//     if (phone && !phoneRegex.test(phone)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid phone number. Example: +919876543210',
-//       });
-//     }
-
-//     // ✅ Prepare updated fields
-//     const updatedFields = {
-//       fullName: fullName?.trim(),
-//       email: email?.trim(),
-//       phone,
-//       city: city?.trim(),
-//       state: state?.trim(),
-//       country: country?.trim(),
-//       zipCode: zipCode?.trim(),
-//     };
-
-//     // ✅ Agar avatar file aayi hai to S3 pr upload
-//     // if (req.file) {
-//     //   const s3Url = await uploadToS3(req.file, req);
-//     //   updatedFields["profile.avatar"] = s3Url; // ✅ Dot notation se nested field update
-//     // }
-//     if (req.file) {
-//   const s3Result = await uploadToS3(req.file, req);
-//   updatedFields["profile.avatar"] = s3Result.url; // only string, no object
-// }
-
-
-//     // ✅ Update & return latest user
-//     const updatedUser = await User.findByIdAndUpdate(
-//       req.params.id,
-//       { $set: updatedFields },
-//       { new: true, runValidators: true }
-//     );
-
-//     if (!updatedUser) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'User not found',
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: 'Profile updated successfully',
-//       data: updatedUser,
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to update profile',
-//       error: err.message,
-//     });
-//   }
-// });
 
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
@@ -445,32 +310,7 @@ export const getUsersByReferral = asyncHandler(async (req, res) => {
 
 
 //get the userRefferal by user.
-// export const getWalletInfo = async (req, res) => {
-//   try {
-//     const userId = req.user.id; // auth middleware se aayega
 
-//     const user = await User.findById(userId).select("wallet referralCode");
-
-//     if (!user) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "User not found",
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       wallet: user.wallet,         // { balance, history }
-//       referralCode: user.referralCode, // sirf referral code
-//     });
-//   } catch (error) {
-//     console.error("❌ Error in getWalletInfo:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
 export const getWalletInfo = async (req, res) => {
   try {
     const userId = req.user.id; // auth middleware se aayega
@@ -494,6 +334,11 @@ export const getWalletInfo = async (req, res) => {
         totalReferrals: 0,
       });
     }
+     // 🟢 Fetch KYC status
+    const kyc = await KYC.findOne({ userId }).select("isPaymentified");
+    const isKycVerified = kyc?.isPaymentified === true;
+
+
 
     // 🟢 Count all Payment docs jaha referral.code == user.referralCode
     const totalReferrals = await Payment.countDocuments({
@@ -505,7 +350,8 @@ export const getWalletInfo = async (req, res) => {
       success: true,
       wallet: user.wallet,              // { balance, history }
       referralCode: user.referralCode,  // unique referral code of user
-      totalReferrals,                   // count of how many times it was used
+      totalReferrals, 
+      isPaymentified: isKycVerified,                  // count of how many times it was used
     });
   } catch (error) {
     console.error("❌ Error in getWalletInfo:", error);
@@ -600,123 +446,7 @@ export const redeemWallet = asyncHandler(async (req, res) => {
 
 
 //apply referal code
-// export const applyReferral = asyncHandler(async (req, res) => {
-//   try {
-//     const { referral_code, user_id, total_plan_amount } = req.body;
 
-//     // 🛑 Validation
-//     if (!referral_code || !user_id || !total_plan_amount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral code, user_id and total_plan_amount are required",
-//       });
-//     }
-
-//     // 🎯 Step 1: Check if referral code exists in DB
-//     const referralProvider = await User.findOne({ referralCode: referral_code });
-//     if (!referralProvider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid referral code",
-//       });
-//     }
-
-//     // 🎯 Step 2: Ensure user is not using own referral code
-//     if (referralProvider._id.toString() === user_id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You cannot use your own referral code",
-//       });
-//     }
-
-//     // 🎯 Step 3: Apply discount
-//     let updatedAmount = total_plan_amount - 300;
-//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
-
-//     // 🎯 Step 4: Return updated amount
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral applied successfully",
-//       updatedAmount,
-//       referralProvider: {
-//         id: referralProvider._id,
-//         name: referralProvider.fullName,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in applyReferral:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error applying referral",
-//     });
-//   }
-// });
-
-// export const applyReferral = asyncHandler(async (req, res) => {
-//   try {
-//     const { referral_code, user_id, total_plan_amount } = req.body;
-
-//     // 🛑 Validation
-//     if (!referral_code || !user_id || !total_plan_amount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral code, user_id and total_plan_amount are required",
-//       });
-//     }
-
-//     // 🎯 Step 1: Check if referral code exists in DB
-//     const referralProvider = await User.findOne({ referralCode: referral_code });
-//     if (!referralProvider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid referral code",
-//       });
-//     }
-
-//     // 🎯 Step 2: Ensure user is not using own referral code
-//     if (referralProvider._id.toString() === user_id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You cannot use your own referral code",
-//       });
-//     }
-
-//     // 🎯 Step 3: Apply referral bonus to provider
-//     const bonusAmount = 300;
-//     referralProvider.wallet.balance += bonusAmount;
-//     referralProvider.wallet.history.push({
-//       amount: bonusAmount,
-//       type: "credit",
-//       description: `Referral bonus from user ${user_id}`,
-//       fromUser: user_id,
-//       date: new Date(),
-//     });
-//     await referralProvider.save();
-
-//     // 🎯 Step 4: Apply discount to current user's plan
-//     let updatedAmount = total_plan_amount - bonusAmount;
-//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
-
-//     // 🎯 Step 5: Return updated amount and referral info
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral applied successfully",
-//       updatedAmount,
-//       referralProvider: {
-//         id: referralProvider._id,
-//         name: referralProvider.fullName,
-//         wallet: referralProvider.wallet,
-//         referralCode: referralProvider.referralCode,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in applyReferral:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error applying referral",
-//     });
-//   }
-// });
 
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
