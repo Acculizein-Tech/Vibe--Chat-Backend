@@ -101,16 +101,106 @@ import axios from 'axios';
 // });
 
 
-export const submitKyc = asyncHandler(async (req, res) => {
-  const { userId, panCard, bankDetails } = req.body;
+// export const submitKyc = asyncHandler(async (req, res) => {
+//   const { userId, panCard, bankDetails } = req.body;
 
-  // Check existing KYC
+//   // Check existing KYC
+//   const existing = await KYC.findOne({ userId });
+//   if (existing) {
+//     return res.status(400).json({ success: false, message: "KYC already submitted" });
+//   }
+
+//   // Aadhaar Business model se latest record fetch
+//   const business = await Business.findOne({ owner: userId }).sort({ createdAt: -1 });
+
+//   if (!business || !business.aadhaarImages?.front || !business.aadhaarImages?.back) {
+//     return res.status(400).json({ success: false, message: "Aadhaar details not found in Business profile" });
+//   }
+
+//   // 1️⃣ Create RazorpayX Contact
+//   let contactId;
+//   try {
+//     const contactRes = await axios.post(
+//       "https://api.razorpay.com/v1/contacts",
+//       {
+//         name: bankDetails.accountHolderName,
+//         email: req.user?.email || "noemail@test.com",
+//         contact: req.user?.phone || "9999999999",
+//         type: "customer",
+//         reference_id: userId.toString(),
+//       },
+//       {
+//         auth: {
+//           username: process.env.RAZORPAY_KEY_ID,
+//           password: process.env.RAZORPAY_KEY_SECRET,
+//         },
+//       }
+//     );
+
+//     contactId = contactRes.data.id; // e.g. cont_Jx6Xb...
+//     console.log("✅ Razorpay Contact Created:", contactId);
+//   } catch (err) {
+//     console.error("❌ Failed to create Razorpay Contact:", err.response?.data || err.message);
+//     return res.status(500).json({ success: false, message: "Failed to create Razorpay Contact" });
+//   }
+
+//   // 2️⃣ Create RazorpayX Fund Account
+//   let fundAccountId;
+//   try {
+//     const fundRes = await axios.post(
+//       "https://api.razorpay.com/v1/fund_accounts",
+//       {
+//         contact_id: contactId,
+//         account_type: "bank_account",
+//         bank_account: {
+//           name: bankDetails.accountHolderName,
+//           ifsc: bankDetails.ifsc,
+//           account_number: bankDetails.accountNumber,
+//         },
+//       },
+//       {
+//         auth: {
+//           username: process.env.RAZORPAY_KEY_ID,
+//           password: process.env.RAZORPAY_KEY_SECRET,
+//         },
+//       }
+//     );
+
+//     fundAccountId = fundRes.data.id; // e.g. fa_Jy3asd...
+//     console.log("✅ Razorpay Fund Account Created:", fundAccountId);
+//   } catch (err) {
+//     console.error("❌ Failed to create Fund Account:", err.response?.data || err.message);
+//     return res.status(500).json({ success: false, message: "Failed to create Fund Account" });
+//   }
+
+//   // 3️⃣ Save KYC entry with both IDs
+//   const kyc = await KYC.create({
+//     userId,
+//     aadhaarFront: business.aadhaarImages.front,
+//     aadhaarBack: business.aadhaarImages.back,
+//     panCard,
+//     bankDetails,
+//     razorpayContactId: contactId,
+//     razorpayFundAccountId: fundAccountId,  // 🔹 Now saving fund account too
+//   });
+
+//   res.status(201).json({
+//     success: true,
+//     message: "KYC submitted successfully, Please wait upto 48 hours for verification",
+//     kyc,
+//   });
+// });
+
+export const submitKyc = asyncHandler(async (req, res) => {
+  const { userId, accountHolderName, accountNumber, bankIfscCode, panCardNumber } = req.body;
+
+  // ✅ Check existing KYC
   const existing = await KYC.findOne({ userId });
   if (existing) {
     return res.status(400).json({ success: false, message: "KYC already submitted" });
   }
 
-  // Aadhaar Business model se latest record fetch
+  // ✅ Aadhaar images Business model se uthao
   const business = await Business.findOne({ owner: userId }).sort({ createdAt: -1 });
 
   if (!business || !business.aadhaarImages?.front || !business.aadhaarImages?.back) {
@@ -123,7 +213,7 @@ export const submitKyc = asyncHandler(async (req, res) => {
     const contactRes = await axios.post(
       "https://api.razorpay.com/v1/contacts",
       {
-        name: bankDetails.accountHolderName,
+        name: accountHolderName,
         email: req.user?.email || "noemail@test.com",
         contact: req.user?.phone || "9999999999",
         type: "customer",
@@ -137,7 +227,7 @@ export const submitKyc = asyncHandler(async (req, res) => {
       }
     );
 
-    contactId = contactRes.data.id; // e.g. cont_Jx6Xb...
+    contactId = contactRes.data.id;
     console.log("✅ Razorpay Contact Created:", contactId);
   } catch (err) {
     console.error("❌ Failed to create Razorpay Contact:", err.response?.data || err.message);
@@ -153,9 +243,9 @@ export const submitKyc = asyncHandler(async (req, res) => {
         contact_id: contactId,
         account_type: "bank_account",
         bank_account: {
-          name: bankDetails.accountHolderName,
-          ifsc: bankDetails.ifsc,
-          account_number: bankDetails.accountNumber,
+          name: accountHolderName,
+          ifsc: bankIfscCode,
+          account_number: accountNumber,
         },
       },
       {
@@ -166,22 +256,26 @@ export const submitKyc = asyncHandler(async (req, res) => {
       }
     );
 
-    fundAccountId = fundRes.data.id; // e.g. fa_Jy3asd...
+    fundAccountId = fundRes.data.id;
     console.log("✅ Razorpay Fund Account Created:", fundAccountId);
   } catch (err) {
     console.error("❌ Failed to create Fund Account:", err.response?.data || err.message);
     return res.status(500).json({ success: false, message: "Failed to create Fund Account" });
   }
 
-  // 3️⃣ Save KYC entry with both IDs
+  // 3️⃣ Save KYC entry with Razorpay IDs
   const kyc = await KYC.create({
     userId,
     aadhaarFront: business.aadhaarImages.front,
     aadhaarBack: business.aadhaarImages.back,
-    panCard,
-    bankDetails,
+    panCardNumber, // 🔹 direct save
+    bankDetails: {
+      accountHolderName,
+      accountNumber,
+      ifsc:bankIfscCode,
+    },
     razorpayContactId: contactId,
-    razorpayFundAccountId: fundAccountId,  // 🔹 Now saving fund account too
+    razorpayFundAccountId: fundAccountId,
   });
 
   res.status(201).json({
@@ -190,6 +284,7 @@ export const submitKyc = asyncHandler(async (req, res) => {
     kyc,
   });
 });
+
 
 
 // ✅ Get My KYC (User side)
