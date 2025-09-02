@@ -1399,7 +1399,11 @@ export const getBusinessPrefillInfo = async (req, res) => {
 
     if (businessId) {
       // ✅ If businessId provided -> fetch that specific business
-      business = await Business.findOne({ _id: businessId, owner: userId });
+      business = await Business.findOne(
+        { _id: businessId, owner: userId },
+        "name gender aadhaarNumber location website email socialLinks aadhaarImages"
+      ).lean();
+
       if (!business) {
         return res
           .status(404)
@@ -1407,7 +1411,10 @@ export const getBusinessPrefillInfo = async (req, res) => {
       }
     } else {
       // ✅ Otherwise -> fetch the last created business of this user
-      business = await Business.findOne({ owner: userId })
+      business = await Business.findOne(
+        { owner: userId },
+        "name gender aadhaarNumber location website email socialLinks aadhaarImages"
+      )
         .sort({ _id: -1 }) // newest by ObjectId
         .lean();
 
@@ -1421,7 +1428,7 @@ export const getBusinessPrefillInfo = async (req, res) => {
       delete business._id;
     }
 
-    // ✅ Return business details
+    // ✅ Return only selected fields
     res.json({
       status: "success",
       business,
@@ -1431,4 +1438,5 @@ export const getBusinessPrefillInfo = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
