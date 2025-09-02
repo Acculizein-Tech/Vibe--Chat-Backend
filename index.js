@@ -26,6 +26,7 @@ import uploadRoutes from './routes/uploadData.js'; // Import upload routes
 import enquiryRoutes from './routes/enquiryRoute.js'; // Import enquiry routes
 // import redeemRoutes from './routes/redeemRoutes.js'; // Import redeem routes
 import KYCroute from './routes/KYCroute.js'; // Import KYC routes
+import User from './models/user.js';
 import './cronJobs/leadReminderJob.js';
 import cors from 'cors';
 dotenv.config();
@@ -71,6 +72,8 @@ io.on("connection", (socket) => {
 
   // Handle user registration
   socket.on("register", (data) => {
+
+    
     console.log("📩 Received register payload:", data);
 
     // 🚫 Reject invalid data
@@ -101,6 +104,23 @@ io.on("connection", (socket) => {
     console.log(`🟢 User ${userStr} joined room`);
     console.log("✅ Current onlineUsers:", Array.from(onlineUsers.entries()));
   });
+  // register event me
+// socket.on("register", async (data) => {
+//   const { userId } = data;
+
+//   const user = await User.findById(userId).select("role");
+//   if (!user) return;
+
+
+
+//   console.log(
+//     `📝 Register event: userId=${userId}, role=${user.role}, socketId=${socket.id}`
+//   );
+
+//   socket.join(`user_${userId}`);
+//   socket.join(`role_${user.role}`);
+// });
+
 
   // Cleanup on disconnect
   socket.on("disconnect", () => {

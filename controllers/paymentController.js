@@ -1314,8 +1314,8 @@ try {
     return res.status(400).json({ message: "Invalid redeem amount" });
   }
 
-  if (amount < 500) {
-    return res.status(400).json({ message: "Minimum redeem amount is ₹500" });
+  if (amount < 10000) {
+    return res.status(400).json({ message: "Minimum redeem amount is ₹10000" });
   }
 
   const user = await User.findById(userId);

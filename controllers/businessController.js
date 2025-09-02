@@ -1385,3 +1385,50 @@ try {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+//get the prefill business info
+// 📌 Get last business by user OR specific business by id
+export const getBusinessPrefillInfo = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+    const businessId = req.params.id;
+
+    let business;
+
+    if (businessId) {
+      // ✅ If businessId provided -> fetch that specific business
+      business = await Business.findOne({ _id: businessId, owner: userId });
+      if (!business) {
+        return res
+          .status(404)
+          .json({ message: "Business not found or unauthorized" });
+      }
+    } else {
+      // ✅ Otherwise -> fetch the last created business of this user
+      business = await Business.findOne({ owner: userId })
+        .sort({ _id: -1 }) // newest by ObjectId
+        .lean();
+
+      if (!business) {
+        return res
+          .status(404)
+          .json({ message: "No businesses found for this user" });
+      }
+
+      // ❌ Remove _id if returning "last" business
+      delete business._id;
+    }
+
+    // ✅ Return business details
+    res.json({
+      status: "success",
+      business,
+    });
+  } catch (error) {
+    console.error("❌ getBusinessPrefillInfo error:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
