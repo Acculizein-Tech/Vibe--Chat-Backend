@@ -1413,7 +1413,7 @@ export const getBusinessPrefillInfo = async (req, res) => {
       // ✅ Otherwise -> fetch the last created business of this user
       business = await Business.findOne(
         { owner: userId },
-        "name gender aadhaarNumber location website email socialLinks aadhaarImages"
+        "ownerName name gender aadhaarNumber phone experience description location website email socialLinks aadhaarImages"
       )
         .sort({ _id: -1 }) // newest by ObjectId
         .lean();
