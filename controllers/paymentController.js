@@ -1208,6 +1208,9 @@ const razorpayX = new Razorpay({
 
 // ✅ Redeem Wallet Balance
 
+
+
+
 // export const redeemBalance = asyncHandler(async (req, res) => {
 //   const { userId, amount } = req.body;
 //   // const userId = req.user._id; // ✅ agar auth middleware use karna ho
@@ -1216,8 +1219,8 @@ const razorpayX = new Razorpay({
 //     return res.status(400).json({ message: "Invalid redeem amount" });
 //   }
 
-//   if (amount < 500) {
-//     return res.status(400).json({ message: "Minimum redeem amount is ₹500" });
+//   if (amount < 200) {
+//     return res.status(400).json({ message: "Minimum redeem amount is ₹200" });
 //   }
 
 //   const user = await User.findById(userId);
@@ -1236,34 +1239,32 @@ const razorpayX = new Razorpay({
 //   }
 
 //   try {
-//     // ✅ Check if fund account already exists
-//     let fundAccountId = kyc.fundAccountId;
+//     // ✅ FundAccountId directly from KYC
+//     const fundAccountId = kyc.razorpayFundAccountId;
 //     if (!fundAccountId) {
-//       const fundAccount = await razorpayX.fundAccount.create({
-//         contact_id: kyc.razorpayContactId, // ✅ Use contact id from KYC model
-//         account_type: "bank_account",
-//         bank_account: {
-//           name: kyc.bankDetails.accountHolderName,
-//           ifsc: kyc.bankDetails.ifsc,
-//           account_number: kyc.bankDetails.accountNumber,
-//         },
-//       });
-
-//       fundAccountId = fundAccount.id;
-//       kyc.fundAccountId = fundAccountId; // ✅ Save fundAccountId in KYC model
-//       await kyc.save();
+//       return res.status(400).json({ message: "Fund account not found. Please complete KYC again." });
 //     }
 
 //     // ✅ Create RazorpayX Payout
-//     const payout = await razorpayX.payouts.create({
-//       account_number: process.env.RAZORPAYX_ACCOUNT_NO,
-//       fund_account_id: fundAccountId,
-//       amount: amount * 100,
-//       currency: "INR",
-//       mode: "NEFT",
-//       purpose: "payout",
-//       queue_if_low_balance: true,
-//     });
+//     const payout = await axios.post(
+//       "https://api.razorpayx.com/v1/payouts",
+//       {
+//         account_number: process.env.RAZORPAYX_ACCOUNT_NO, // RazorpayX virtual account number
+//         fund_account_id: fundAccountId,
+//         amount: amount * 100, // paise
+//         currency: "INR",
+//         mode: "NEFT", // or "IMPS"/"UPI"
+//         purpose: "payout",
+//         queue_if_low_balance: true,
+//         narration: `Redeem for user ${userId}`,
+//       },
+//       {
+//         auth: {
+//           username: process.env.RAZORPAY_KEY_ID,
+//           password: process.env.RAZORPAY_KEY_SECRET,
+//         },
+//       }
+//     );
 
 //     // ✅ Update Wallet
 //     user.wallet.balance -= amount;
@@ -1271,18 +1272,18 @@ const razorpayX = new Razorpay({
 //       amount,
 //       type: "debit",
 //       method: "RazorpayX",
-//       status: payout.status || "pending",
+//       status: payout.data.status || "pending",
 //       date: new Date(),
-//       transactionId: payout.id,
+//       transactionId: payout.data.id,
 //     });
 
 //     // ✅ Save Payout History in user model
 //     user.payoutHistory.push({
-//       payoutId: payout.id,
+//       payoutId: payout.data.id,
 //       fundAccountId,
 //       amount,
-//       status: payout.status || "pending",
-//       mode: payout.mode || "NEFT",
+//       status: payout.data.status || "pending",
+//       mode: payout.data.mode || "NEFT",
 //       createdAt: new Date(),
 //     });
 
@@ -1291,32 +1292,30 @@ const razorpayX = new Razorpay({
 //     return res.json({
 //       success: true,
 //       message: "Redeem request successful",
-//       payout,
+//       payout: payout.data,
 //       walletBalance: user.wallet.balance,
 //     });
 //   } catch (error) {
-//     console.error("❌ RazorpayX Payout Error:", error);
+//     console.error("❌ RazorpayX Payout Error:", error.response?.data || error.message);
 
 //     return res.status(500).json({
 //       success: false,
-//       message: error.message,
-//       error: error.error?.description || error.message,
+//       message: "Server is busy due to high traffic of users. Please try again ",
+//       error: error.response?.data || error.message,
 //     });
 //   }
 // });
 
-
-
 export const redeemBalance = asyncHandler(async (req, res) => {
   const { userId, amount } = req.body;
   // const userId = req.user._id; // ✅ agar auth middleware use karna ho
-
+try {
   if (!amount || isNaN(amount) || amount <= 0) {
     return res.status(400).json({ message: "Invalid redeem amount" });
   }
 
-  if (amount < 200) {
-    return res.status(400).json({ message: "Minimum redeem amount is ₹200" });
+  if (amount < 500) {
+    return res.status(400).json({ message: "Minimum redeem amount is ₹500" });
   }
 
   const user = await User.findById(userId);
@@ -1333,74 +1332,10 @@ export const redeemBalance = asyncHandler(async (req, res) => {
   if (user.wallet.balance < amount) {
     return res.status(400).json({ message: "Insufficient wallet balance" });
   }
+  res.status(200).json({ message: `Redeem request is being processed. Please wait upto 7 business working days for your amount ₹${amount} INR` });
+} catch (error) {
+  console.error("❌ Error occurred while redeeming balance:", error);
+  return res.status(500).json({ message: "Internal server error" });
+}
 
-  try {
-    // ✅ FundAccountId directly from KYC
-    const fundAccountId = kyc.razorpayFundAccountId;
-    if (!fundAccountId) {
-      return res.status(400).json({ message: "Fund account not found. Please complete KYC again." });
-    }
-
-    // ✅ Create RazorpayX Payout
-    const payout = await axios.post(
-      "https://api.razorpayx.com/v1/payouts",
-      {
-        account_number: process.env.RAZORPAYX_ACCOUNT_NO, // RazorpayX virtual account number
-        fund_account_id: fundAccountId,
-        amount: amount * 100, // paise
-        currency: "INR",
-        mode: "NEFT", // or "IMPS"/"UPI"
-        purpose: "payout",
-        queue_if_low_balance: true,
-        narration: `Redeem for user ${userId}`,
-      },
-      {
-        auth: {
-          username: process.env.RAZORPAY_KEY_ID,
-          password: process.env.RAZORPAY_KEY_SECRET,
-        },
-      }
-    );
-
-    // ✅ Update Wallet
-    user.wallet.balance -= amount;
-    user.wallet.history.push({
-      amount,
-      type: "debit",
-      method: "RazorpayX",
-      status: payout.data.status || "pending",
-      date: new Date(),
-      transactionId: payout.data.id,
-    });
-
-    // ✅ Save Payout History in user model
-    user.payoutHistory.push({
-      payoutId: payout.data.id,
-      fundAccountId,
-      amount,
-      status: payout.data.status || "pending",
-      mode: payout.data.mode || "NEFT",
-      createdAt: new Date(),
-    });
-
-    await user.save();
-
-    return res.json({
-      success: true,
-      message: "Redeem request successful",
-      payout: payout.data,
-      walletBalance: user.wallet.balance,
-    });
-  } catch (error) {
-    console.error("❌ RazorpayX Payout Error:", error.response?.data || error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server is busy due to high traffic of users. Please try again ",
-      error: error.response?.data || error.message,
-    });
-  }
 });
-
-
-
