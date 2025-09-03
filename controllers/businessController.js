@@ -185,16 +185,34 @@ export const createBusiness = async (req, res) => {
 
     
 // Handle uploaded files
-const profileImage = uploadedFiles.profileImage?.[0] || business.profileImage || null;
-const coverImage = uploadedFiles.coverImage?.[0] || business.coverImage || null;
-const certificateImages =
-  uploadedFiles.certificateImages?.slice(0, 5) || business.certificateImages || [];
-const galleryImages =
-  uploadedFiles.galleryImages?.slice(0, 10) || business.galleryImages || [];
+// ✅ Aadhaar handling (file or prefill URL)
 const aadhaarFront =
-  uploadedFiles.aadhaarFront?.[0] || business.aadhaarImages?.front || null;
+  uploadedFiles.aadhaarFront?.[0] ||
+  req.body.aadhaarFront || // prefill url aa raha hoga
+  null;
+
 const aadhaarBack =
-  uploadedFiles.aadhaarBack?.[0] || business.aadhaarImages?.back || null;
+  uploadedFiles.aadhaarBack?.[0] ||
+  req.body.aadhaarBack || // prefill url aa raha hoga
+  null;
+
+// ✅ Profile / Cover / Other Images
+const profileImage =
+  uploadedFiles.profileImage?.[0] || req.body.profileImage || null;
+
+const coverImage =
+  uploadedFiles.coverImage?.[0] || req.body.coverImage || null;
+
+const certificateImages =
+  uploadedFiles.certificateImages?.length
+    ? uploadedFiles.certificateImages.slice(0, 5)
+    : req.body.certificateImages || [];
+
+const galleryImages =
+  uploadedFiles.galleryImages?.length
+    ? uploadedFiles.galleryImages.slice(0, 10)
+    : req.body.galleryImages || [];
+
 
     // Sales executive handling
     // let salesExecutive = null;
