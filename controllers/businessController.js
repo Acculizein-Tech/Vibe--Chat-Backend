@@ -215,20 +215,20 @@ const galleryImages =
 
 
     // Sales executive handling
-    // let salesExecutive = null;
-    // if (referralCode) {
-    //   const refUser = await User.findOne({ referralCode });
-    //   if (!refUser) {
-    //     return res.status(400).json({ message: 'Invalid referral code' });
-    //   }
-    //   salesExecutive = refUser._id;
-    // }
-    // if (!salesExecutive) {
-    //   const salesUsers = await User.find({ role: 'sales' });
-    //   if (salesUsers.length > 0) {
-    //     salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
-    //   }
-    // }
+    let salesExecutive = null;
+    if (referralCode) {
+      const refUser = await User.findOne({ referralCode });
+      if (!refUser) {
+        return res.status(400).json({ message: 'Invalid referral code' });
+      }
+      salesExecutive = refUser._id;
+    }
+    if (!salesExecutive) {
+      const salesUsers = await User.find({ role: 'sales' });
+      if (salesUsers.length > 0) {
+        salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
+      }
+    }
 
     // Plan validation
     const cleanPlanId = typeof planId === 'string'
