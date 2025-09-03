@@ -8,6 +8,94 @@ import { notifyUser, notifyRole } from '../utils/sendNotification.js'; // ✅ Im
 
 //create review with notification
 // ⭐ Create Review
+// export const createReview = async (req, res) => {
+//   try {
+//     const { businessId } = req.params;
+//     const { rating, comment } = req.body;
+
+//     if (!rating && !comment) {
+//       return res.status(400).json({ message: 'Rating or comment is required' });
+//     }
+
+//     // 🔍 Validate business
+//     const business = await Business.findById(businessId).populate('owner', 'fullName email');
+//     if (!business) {
+//       return res.status(404).json({ message: 'Business not found' });
+//     }
+
+//     // 📝 Create review
+//     const review = new Review({
+//       user: req.user._id,
+//       business: businessId,
+//       rating: rating || undefined,
+//       comment: comment || ''
+//     });
+//     await review.save();
+
+//     // 🔁 Update average rating
+//     await updateBusinessRating(businessId);
+
+//     // 🔔 Notify business owner
+//     // 🔔 Notify business owner
+// if (business.owner?._id) {
+//   await notifyUser({
+//     userId: business.owner._id,
+//     type: 'REVIEW_RECEIVED',
+//     title: '📢 New Review Received',
+//     message: `${req.user.fullName} left a review on your business "${business.name}".`,
+//     data: {
+//       businessId,
+//       rating,
+//       comment,
+//       reviewerId: req.user._id,
+//       redirectPath: `/business/${businessId}/reviews` // ✅ Added for frontend routing
+//     }
+//   });
+// }
+
+// // 🔔 Notify admin and superadmin
+// await Promise.all([
+//   notifyRole({
+//     role: 'admin',
+//     type: 'REVIEW_RECEIVED',
+//     title: '📝 Business Received Review',
+//     message: `"${business.name}" just received a review from ${req.user.fullName}.`,
+//     data: {
+//       businessId,
+//       rating,
+//       comment,
+//       reviewerId: req.user._id,
+//       redirectPath: `/admin/business/${businessId}/reviews` // ✅ For admin view
+//     }
+//   }),
+//   notifyRole({
+//     role: 'superadmin',
+//     type: 'REVIEW_RECEIVED',
+//     title: '📝 Business Received Review',
+//     message: `"${business.name}" just received a review from ${req.user.fullName}.`,
+//     data: {
+//       businessId,
+//       rating,
+//       comment,
+//       reviewerId: req.user._id,
+//       redirectPath: `/superadmin/business/${businessId}/reviews` // ✅ For superadmin view
+//     }
+//   })
+// ]);
+
+
+//     res.status(201).json({
+//       message: 'Review submitted successfully',
+//       review
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Error creating review:', error);
+//     res.status(500).json({ message: 'Server Error', error: error.message });
+//   }
+// };
+
+// ⭐ Create Review
 export const createReview = async (req, res) => {
   try {
     const { businessId } = req.params;
@@ -18,7 +106,7 @@ export const createReview = async (req, res) => {
     }
 
     // 🔍 Validate business
-    const business = await Business.findById(businessId).populate('owner', 'fullName email');
+    const business = await Business.findById(businessId).populate('owner', 'fullName email role');
     if (!business) {
       return res.status(404).json({ message: 'Business not found' });
     }
@@ -35,54 +123,62 @@ export const createReview = async (req, res) => {
     // 🔁 Update average rating
     await updateBusinessRating(businessId);
 
-    // 🔔 Notify business owner
-    // 🔔 Notify business owner
-if (business.owner?._id) {
-  await notifyUser({
-    userId: business.owner._id,
-    type: 'REVIEW_RECEIVED',
-    title: '📢 New Review Received',
-    message: `${req.user.fullName} left a review on your business "${business.name}".`,
-    data: {
-      businessId,
-      rating,
-      comment,
-      reviewerId: req.user._id,
-      redirectPath: `/business/${businessId}/reviews` // ✅ Added for frontend routing
+    // 🔔 Notify business owner (but NOT if reviewer is owner)
+    if (business.owner?._id.toString() !== req.user._id.toString()) {
+      await notifyUser({
+        userId: business.owner._id,
+        type: 'REVIEW_RECEIVED',
+        title: '📢 New Review Received',
+        message: `${req.user.fullName} left a review on your business "${business.name}".`,
+        data: {
+          businessId,
+          rating,
+          comment,
+          reviewerId: req.user._id,
+          redirectPath: `/business/${businessId}/reviews`
+        }
+      });
     }
-  });
-}
 
-// 🔔 Notify admin and superadmin
-await Promise.all([
-  notifyRole({
-    role: 'admin',
-    type: 'REVIEW_RECEIVED',
-    title: '📝 Business Received Review',
-    message: `"${business.name}" just received a review from ${req.user.fullName}.`,
-    data: {
-      businessId,
-      rating,
-      comment,
-      reviewerId: req.user._id,
-      redirectPath: `/admin/business/${businessId}/reviews` // ✅ For admin view
+    // 🔔 Notify admin + superadmin (skip if owner already has same role)
+    const notifyRoles = [];
+    if (business.owner?.role !== 'admin') {
+      notifyRoles.push(
+        notifyRole({
+          role: 'admin',
+          type: 'REVIEW_RECEIVED',
+          title: '📝 Business Received Review',
+          message: `"${business.name}" just received a review from ${req.user.fullName}.`,
+          data: {
+            businessId,
+            rating,
+            comment,
+            reviewerId: req.user._id,
+            redirectPath: `/admin/business/${businessId}/reviews`
+          }
+        })
+      );
     }
-  }),
-  notifyRole({
-    role: 'superadmin',
-    type: 'REVIEW_RECEIVED',
-    title: '📝 Business Received Review',
-    message: `"${business.name}" just received a review from ${req.user.fullName}.`,
-    data: {
-      businessId,
-      rating,
-      comment,
-      reviewerId: req.user._id,
-      redirectPath: `/superadmin/business/${businessId}/reviews` // ✅ For superadmin view
-    }
-  })
-]);
 
+    if (business.owner?.role !== 'superadmin') {
+      notifyRoles.push(
+        notifyRole({
+          role: 'superadmin',
+          type: 'REVIEW_RECEIVED',
+          title: '📝 Business Received Review',
+          message: `"${business.name}" just received a review from ${req.user.fullName}.`,
+          data: {
+            businessId,
+            rating,
+            comment,
+            reviewerId: req.user._id,
+            redirectPath: `/superadmin/business/${businessId}/reviews`
+          }
+        })
+      );
+    }
+
+    await Promise.all(notifyRoles);
 
     res.status(201).json({
       message: 'Review submitted successfully',
@@ -94,6 +190,7 @@ await Promise.all([
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
+
 
 
 // ✏️ Update Review

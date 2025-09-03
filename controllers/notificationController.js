@@ -10,13 +10,17 @@ export const getNotifications = asyncHandler(async (req, res) => {
   const unreadOnly = req.query.unreadOnly === 'true';
 
   try {
-    // 📌 Build filter
-    const filter = {
-      $or: [
-        { user: userId },
-        { role: userRole }
-      ]
-    };
+    // 📌 Build filter correctly
+    let filter = { user: userId }; // Normal user → sirf apne notifications
+
+    if (userRole === "admin" || userRole === "superadmin") {
+      filter = {
+        $or: [
+          { user: userId },
+          { role: userRole }
+        ]
+      };
+    }
 
     if (unreadOnly) {
       filter.isRead = false;
@@ -29,7 +33,7 @@ export const getNotifications = asyncHandler(async (req, res) => {
       .limit(limit);
 
     // 🧠 Deduplicate by title + message + type
-    const uniqueNotifications = [];
+    const uniqueNotifications = [];   
     const seen = new Set();
 
     for (const notif of allNotifications) {
@@ -60,6 +64,7 @@ export const getNotifications = asyncHandler(async (req, res) => {
     });
   }
 });
+
 
 
 

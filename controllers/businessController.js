@@ -176,28 +176,41 @@ export const createBusiness = async (req, res) => {
     );
     // ================================
 
-    const profileImage = uploadedFiles.profileImage?.[0] || null;
-    const coverImage = uploadedFiles.coverImage?.[0] || null;
-    const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
-    const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
-    const aadhaarFront = uploadedFiles.aadhaarFront?.[0] || null;
-    const aadhaarBack = uploadedFiles.aadhaarBack?.[0] || null;
+    // const profileImage = uploadedFiles.profileImage?.[0] || null;
+    // const coverImage = uploadedFiles.coverImage?.[0] || null;
+    // const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+    // const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+    // const aadhaarFront = uploadedFiles.aadhaarFront?.[0] || null;
+    // const aadhaarBack = uploadedFiles.aadhaarBack?.[0] || null;
+
+    
+// Handle uploaded files
+const profileImage = uploadedFiles.profileImage?.[0] || business.profileImage || null;
+const coverImage = uploadedFiles.coverImage?.[0] || business.coverImage || null;
+const certificateImages =
+  uploadedFiles.certificateImages?.slice(0, 5) || business.certificateImages || [];
+const galleryImages =
+  uploadedFiles.galleryImages?.slice(0, 10) || business.galleryImages || [];
+const aadhaarFront =
+  uploadedFiles.aadhaarFront?.[0] || business.aadhaarImages?.front || null;
+const aadhaarBack =
+  uploadedFiles.aadhaarBack?.[0] || business.aadhaarImages?.back || null;
 
     // Sales executive handling
-    let salesExecutive = null;
-    if (referralCode) {
-      const refUser = await User.findOne({ referralCode });
-      if (!refUser) {
-        return res.status(400).json({ message: 'Invalid referral code' });
-      }
-      salesExecutive = refUser._id;
-    }
-    if (!salesExecutive) {
-      const salesUsers = await User.find({ role: 'sales' });
-      if (salesUsers.length > 0) {
-        salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
-      }
-    }
+    // let salesExecutive = null;
+    // if (referralCode) {
+    //   const refUser = await User.findOne({ referralCode });
+    //   if (!refUser) {
+    //     return res.status(400).json({ message: 'Invalid referral code' });
+    //   }
+    //   salesExecutive = refUser._id;
+    // }
+    // if (!salesExecutive) {
+    //   const salesUsers = await User.find({ role: 'sales' });
+    //   if (salesUsers.length > 0) {
+    //     salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
+    //   }
+    // }
 
     // Plan validation
     const cleanPlanId = typeof planId === 'string'
