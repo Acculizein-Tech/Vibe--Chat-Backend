@@ -1432,7 +1432,7 @@ export const getBusinessPrefillInfo = async (req, res) => {
       // ✅ If businessId provided -> fetch that specific business
       business = await Business.findOne(
         { _id: businessId, owner: userId },
-        "name gender aadhaarNumber location website email socialLinks aadhaarImages"
+        "name gender aadhaarNumber location experience website email socialLinks aadhaarImages"
       ).lean();
 
       if (!business) {
