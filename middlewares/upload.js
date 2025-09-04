@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';   // 🟢 added for unique filenames
 
 dotenv.config();
 
@@ -18,19 +19,24 @@ const s3 = new S3Client({
   },
 });
 
+
+// 🟢 use memoryStorage (no temp folder, no disk writes)
+const storage = multer.memoryStorage();
+
+
 // Local temp storage before uploading to S3
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const tempPath = './temp/';
-    if (!fs.existsSync(tempPath)) fs.mkdirSync(tempPath, { recursive: true });
-    cb(null, tempPath);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueName = `${Date.now()}-${file.fieldname}${ext}`;
-    cb(null, uniqueName);
-  },
-});
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     const tempPath = './temp/';
+//     if (!fs.existsSync(tempPath)) fs.mkdirSync(tempPath, { recursive: true });
+//     cb(null, tempPath);
+//   },
+//   filename: (req, file, cb) => {
+//     const ext = path.extname(file.originalname).toLowerCase();
+//     const uniqueName = `${Date.now()}-${file.fieldname}${ext}`;
+//     cb(null, uniqueName);
+//   },
+// });
 
 // File filter logic (allow all common image types)
 const fileFilter = (req, file, cb) => {
@@ -93,6 +99,15 @@ const getS3KeyPrefix = (req, file) => {
   return folder;
 };
 
+// 🟢 Upload and convert images directly from memory
+export const uploadToS3 = async (file, req) => {
+  const folder = getS3KeyPrefix(req, file);
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  // 🟢 ensure unique key every time
+  const uniqueName = `${Date.now()}-${uuidv4()}.webp`;
+  const key = `${folder}/${uniqueName}`;
+
 
 // Helper to delete file from S3
 // export const deleteFromS3 = async (fileUrl) => {
@@ -117,56 +132,98 @@ const getS3KeyPrefix = (req, file) => {
 
 
 // Upload and convert images
-export const uploadToS3 = async (file, req) => {
-  const folder = getS3KeyPrefix(req, file);
-  const baseFileName = path.parse(file.filename).name;
-  const key = `${folder}/${baseFileName}.webp`;
-  const ext = path.extname(file.originalname).toLowerCase();
+// export const uploadToS3 = async (file, req) => {
+//   const folder = getS3KeyPrefix(req, file);
+//   const baseFileName = path.parse(file.filename).name;
+//   const key = `${folder}/${baseFileName}.webp`;
+//   const ext = path.extname(file.originalname).toLowerCase();
 
+  // try {
+  //   let webpBuffer;
+
+  //   if (ext === '.gif') {
+  //     // Convert animated GIF → first frame WebP
+  //     webpBuffer = await sharp(file.path, { animated: true })
+  //       .webp({ quality: 80 })
+  //       .toBuffer();
+  //   } else if (ext === '.svg') {
+  //     // Convert SVG → PNG → WebP
+  //     const pngBuffer = await sharp(file.path).png().toBuffer();
+  //     webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
+  //   } else {
+  //     // Other image formats
+  //     webpBuffer = await sharp(file.path)
+  //       .webp({ quality: 80 })
+  //       .toBuffer();
+  //   }
+
+  //   // Upload to S3
+  //   await s3.send(new PutObjectCommand({
+  //     Bucket: process.env.AWS_BUCKET_NAME,
+  //     Key: key,
+  //     Body: webpBuffer,
+  //     ContentType: 'image/webp'
+  //   }));
+
+  //   // Delete temp file after processing
+  //   fs.unlink(file.path, () => {});
+
+  //   return {
+  //     success: true,
+  //     url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
+  //     message: (ext === '.gif' || ext === '.svg')
+  //       ? 'Some images were optimized for faster loading.'
+  //       : undefined
+  //   };
+  // } catch (err) {
+  //   console.error(`❌ Upload failed for "${file.filename}":`, err.message);
+  //   return {
+  //     success: false,
+  //     message: 'We could not process one of your images. Please try again.'
+  //   };
+  // }
   try {
-    let webpBuffer;
+  let webpBuffer;
 
-    if (ext === '.gif') {
-      // Convert animated GIF → first frame WebP
-      webpBuffer = await sharp(file.path, { animated: true })
-        .webp({ quality: 80 })
-        .toBuffer();
-    } else if (ext === '.svg') {
-      // Convert SVG → PNG → WebP
-      const pngBuffer = await sharp(file.path).png().toBuffer();
-      webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
-    } else {
-      // Other image formats
-      webpBuffer = await sharp(file.path)
-        .webp({ quality: 80 })
-        .toBuffer();
-    }
-
-    // Upload to S3
-    await s3.send(new PutObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: key,
-      Body: webpBuffer,
-      ContentType: 'image/webp'
-    }));
-
-    // Delete temp file after processing
-    fs.unlink(file.path, () => {});
-
-    return {
-      success: true,
-      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
-      message: (ext === '.gif' || ext === '.svg')
-        ? 'Some images were optimized for faster loading.'
-        : undefined
-    };
-  } catch (err) {
-    console.error(`❌ Upload failed for "${file.filename}":`, err.message);
-    return {
-      success: false,
-      message: 'We could not process one of your images. Please try again.'
-    };
+  if (ext === '.gif') {
+    // Convert animated GIF → first frame WebP
+    webpBuffer = await sharp(file.buffer, { animated: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+  } else if (ext === '.svg') {
+    // Convert SVG → PNG → WebP
+    const pngBuffer = await sharp(file.buffer).png().toBuffer();
+    webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
+  } else {
+    // Other image formats
+    webpBuffer = await sharp(file.buffer)
+      .webp({ quality: 80 })
+      .toBuffer();
   }
+
+  // Upload to S3
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: key,
+    Body: webpBuffer,
+    ContentType: 'image/webp'
+  }));
+
+  return {
+    success: true,
+    url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
+    message: (ext === '.gif' || ext === '.svg')
+      ? 'Some images were optimized for faster loading.'
+      : undefined
+  };
+} catch (err) {
+  console.error(`❌ Upload failed for "${file.originalname}":`, err.message);
+  return {
+    success: false,
+    message: 'We could not process one of your images. Please try again.'
+  };
+}
+
 };
 
 export default upload;
