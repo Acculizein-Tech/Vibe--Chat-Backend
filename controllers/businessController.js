@@ -1124,8 +1124,9 @@ export const searchBusinesses = async (req, res) => {
       status: "success",
       count: results.length,
       results: results.map(b => ({
-        _id: b._id,
+        // _id: b._id,
         name: b.name,
+        profileImage: b.profileImage,
         category: b.category,
         services: b.services,
         location: b.location,
