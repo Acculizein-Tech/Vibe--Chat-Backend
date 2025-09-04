@@ -176,10 +176,10 @@ export const createBusiness = async (req, res) => {
     );
     // ================================
 
-    // const profileImage = uploadedFiles.profileImage?.[0] || null;
-    // const coverImage = uploadedFiles.coverImage?.[0] || null;
-    // const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
-    // const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
+    const profileImage = uploadedFiles.profileImage?.[0] || null;
+    const coverImage = uploadedFiles.coverImage?.[0] || null;
+    const certificateImages = uploadedFiles.certificateImages?.slice(0, 5) || [];
+    const galleryImages = uploadedFiles.galleryImages?.slice(0, 10) || [];
     // const aadhaarFront = uploadedFiles.aadhaarFront?.[0] || null;
     // const aadhaarBack = uploadedFiles.aadhaarBack?.[0] || null;
 
@@ -197,21 +197,21 @@ const aadhaarBack =
   null;
 
 // ✅ Profile / Cover / Other Images
-const profileImage =
-  uploadedFiles.profileImage?.[0] || req.body.profileImage || null;
+// const profileImage =
+//   uploadedFiles.profileImage?.[0] || req.body.profileImage || null;
 
-const coverImage =
-  uploadedFiles.coverImage?.[0] || req.body.coverImage || null;
+// const coverImage =
+//   uploadedFiles.coverImage?.[0] || req.body.coverImage || null;
 
-const certificateImages =
-  uploadedFiles.certificateImages?.length
-    ? uploadedFiles.certificateImages.slice(0, 5)
-    : req.body.certificateImages || [];
+// const certificateImages =
+//   uploadedFiles.certificateImages?.length
+//     ? uploadedFiles.certificateImages.slice(0, 5)
+//     : req.body.certificateImages || [];
 
-const galleryImages =
-  uploadedFiles.galleryImages?.length
-    ? uploadedFiles.galleryImages.slice(0, 10)
-    : req.body.galleryImages || [];
+// const galleryImages =
+//   uploadedFiles.galleryImages?.length
+//     ? uploadedFiles.galleryImages.slice(0, 10)
+//     : req.body.galleryImages || [];
 
 
     // Sales executive handling
