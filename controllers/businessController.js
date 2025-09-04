@@ -642,12 +642,52 @@ export const updateBusiness = async (req, res) => {
       if (certUrls.length) business.certificateImages = certUrls;
     }
 
-    if (files.galleryImages?.length) {
-      const galleryUrls = (await Promise.all(
-        files.galleryImages.slice(0, 10).map(uploadSingle)
-      )).filter(Boolean);
-      if (galleryUrls.length) business.galleryImages = galleryUrls;
+    // if (files.galleryImages?.length) {
+    //   const galleryUrls = (await Promise.all(
+    //     files.galleryImages.slice(0, 10).map(uploadSingle)
+    //   )).filter(Boolean);
+    //   if (galleryUrls.length) business.galleryImages = galleryUrls;
+    // }
+
+// 🎯 Handle galleryImages: mix of existing URLs + new uploads
+// 🎯 Handle galleryImages: mix of existing URLs + new uploads
+if ("galleryImages" in req.body || "galleryImages" in files) {
+  let finalGallery = [];
+
+  // 1. Existing URLs from frontend
+  if (req.body.galleryImages) {
+    // Case 1: already array (jaise tum bhej rahe ho)
+    if (Array.isArray(req.body.galleryImages)) {
+      finalGallery = req.body.galleryImages;
     }
+    // Case 2: stringified array (kabhi kabhi frontend me stringify hota hai)
+    else {
+      try {
+        const parsed = JSON.parse(req.body.galleryImages);
+        if (Array.isArray(parsed)) {
+          finalGallery = parsed;
+        }
+      } catch (err) {
+        console.error("❌ Invalid galleryImages format:", err);
+      }
+    }
+  }
+
+  // 2. New uploaded files
+  if (files.galleryImages?.length > 0) {
+    const galleryUrls = (await Promise.all(
+      files.galleryImages.slice(0, 10).map(uploadSingle)
+    )).filter(Boolean);
+
+    finalGallery = [...finalGallery, ...galleryUrls];
+  }
+
+  // 3. Overwrite DB
+  business.galleryImages = finalGallery;
+}
+
+
+
 
     /* ------------------------------------------------------------------ */
     /* 5️⃣ Update scalar fields                                           */
