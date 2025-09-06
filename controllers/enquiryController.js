@@ -302,3 +302,6 @@ export const getAllEnquiries = async (req, res) => {
     return res.status(500).json({ error: 'Something went wrong. Please try again later.' });
   }
 };
+
+
+

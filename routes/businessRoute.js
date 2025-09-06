@@ -3,6 +3,7 @@ import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUse
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
+import { handleUpload } from '../middlewares/uploadWrapper.js';
 
 const router = express.Router();
 
@@ -18,8 +19,8 @@ const mediaFields = upload.fields([
   { name: 'licenseCopy', maxCount: 1 },
 ]);
 
-router.post('/business', protect, mediaFields, createBusiness);
-router.put('/business/:id', protect, mediaFields, roles('superadmin', 'customer', 'admin'), updateBusiness);
+router.post('/business', protect, handleUpload(mediaFields), createBusiness);
+router.put('/business/:id', protect, handleUpload(mediaFields), roles('superadmin', 'customer', 'admin'), updateBusiness);
 // router.get('/business/:id', protect, getBusinessById);
 router.get('/businesses', getAllBusinesses)
 router.get('/byid/:id', getBusinessId);
