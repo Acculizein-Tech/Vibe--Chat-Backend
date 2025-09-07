@@ -21,6 +21,9 @@ const pricePlanSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
+    discount:{
+      type: Number,
+    },
     duration: {
       type: String,
      
