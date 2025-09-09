@@ -22,9 +22,9 @@ router.post('/reply/:reviewId', protect, replyToReview);  //for replying to a re
 
 
 // DELETE /api/reviews/:reviewId
-router.delete('/:reviewId', protect, deleteReview);
+router.delete('/:reviewId', protect, roles('superadmin', 'customer'), deleteReview);
 
-router.get('/getreviewdata', protect, roles('superadmin'), getAllReviews);
+router.get('/getreviewdata', protect, roles('superadmin', 'admin'), getAllReviews);
 // GET /api/reviews/:businessId
 router.get('/:businessId', getBusinessReviews);
 
