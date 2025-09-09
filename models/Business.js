@@ -136,6 +136,7 @@ const businessSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+  
 
     salesExecutive: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     revenue: { type: Number, default: 0 },

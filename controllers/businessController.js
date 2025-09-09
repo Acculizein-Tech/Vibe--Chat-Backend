@@ -1765,3 +1765,18 @@ export const getBusinessPrefillInfo = async (req, res) => {
 };
 
 
+//get the citiese in api only which availabel in business only unique..
+export const getBusinessCities = asyncHandler(async (req, res) => {
+  try {
+    const cities = await Business.distinct("location.city", {
+      "location.city": { $ne: null, $ne: "" }
+    });
+    res.json({
+      status: "success",
+      cities
+    });
+  } catch (error) {
+    console.error("❌ getBusinessCities error:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});

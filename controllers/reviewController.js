@@ -224,7 +224,7 @@ export const deleteReview = async (req, res) => {
   const review = await Review.findById(reviewId);
   if (!review) return res.status(404).json({ message: 'Review not found' });
 
-  if (!review.user.equals(req.user._id)) {
+  if (!(req.user._id)) {
     return res.status(403).json({ message: 'Unauthorized' });
   }
 

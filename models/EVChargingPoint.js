@@ -34,11 +34,16 @@ facilities: {
     type: mongoose.Schema.Types.Mixed,
     default:{}
   },
+    paymentOptionsAvalilableList: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
   extraFields: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
     default: {}
   },
+
   business: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Business',

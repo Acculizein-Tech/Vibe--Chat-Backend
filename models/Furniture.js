@@ -31,6 +31,10 @@ const FurnitureSchema = new mongoose.Schema({
      type: mongoose.Schema.Types.Mixed,
      default:{}
    },
+     paymentOptionsAvalilableList: {
+       type: mongoose.Schema.Types.Mixed,
+       default: {}
+     },
 
   furniture: {
     brandsAvailable: {

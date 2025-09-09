@@ -34,6 +34,10 @@ facilities: {
     type: mongoose.Schema.Types.Mixed,
     default:{}
   },
+    paymentOptionsAvalilableList: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
   extraFields: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
