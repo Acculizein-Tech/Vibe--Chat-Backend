@@ -18,7 +18,7 @@ const mediaFields = upload.fields([
  { name: 'driverPhoto', maxCount: 1 },       // ✅ New: Driver Photo
   { name: 'licenseCopy', maxCount: 1 },
 ]);
-
+// fina
 router.post('/business', protect, handleUpload(mediaFields), createBusiness);
 router.put('/business/:id', protect, handleUpload(mediaFields), roles('superadmin', 'customer', 'admin'), updateBusiness);
 // router.get('/business/:id', protect, getBusinessById);
