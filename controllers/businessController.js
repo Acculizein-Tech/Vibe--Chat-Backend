@@ -850,7 +850,8 @@ export const updateBusiness = async (req, res) => {
       services: rawServices,
       location: rawLocation,
       socialLinks: rawSocialLinks,
-      businessHours: rawBusinessHours
+      businessHours: rawBusinessHours,
+      pricing
     } = req.body;
 
     // 2️⃣ Parse JSON-stringified fields safely
@@ -965,6 +966,7 @@ if ("galleryImages" in req.body || "galleryImages" in files) {
     if (Object.keys(location).length) business.location = location;
     if (Object.keys(socialLinks).length) business.socialLinks = socialLinks;
     if (Object.keys(services).length) business.services = services;
+    if (Object.keys(pricing).length) business.pricing = pricing;
 
     if (Array.isArray(businessHoursArr) && businessHoursArr.length) {
       business.businessHours = businessHoursArr.map(bh => ({
