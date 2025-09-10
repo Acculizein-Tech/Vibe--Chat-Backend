@@ -106,7 +106,8 @@ export const createBusiness = async (req, res) => {
       services,
       categoryData,
       planId,
-      paymentId
+      paymentId,
+      pricing
     } = req.body;
 
     const CategoryModel = categoryModels[category];
@@ -282,7 +283,12 @@ const aadhaarBack =
       categoryModel: category,
       services: parsedServices,
       salesExecutive,
-      plan: validPlan?._id || null
+      plan: validPlan?._id || null,
+      pricing,
+      // pricing: {
+      //   label: pricingLabel,
+      //   amount: pricingAmount,
+      // },
     });
 
     // Payment update

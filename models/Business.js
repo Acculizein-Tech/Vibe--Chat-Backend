@@ -177,9 +177,9 @@ const businessSchema = new mongoose.Schema(
       },
     ],
     pricing: {
-  label: { type: String, trim: true }, // e.g., "Consultation Fee", "Per Hour", "Per Day"
+  label: { type: String, trim: true }, // e.g., "Consultation Fee", "Per Hour", "Per Day", "Per Month"
   amount: { type: Number, min: 0 },
-  currency: { type: String, default: "INR" }
+  // currency: { type: String, default: "INR" }
 }
 
   },
