@@ -1358,7 +1358,7 @@ if ("galleryImages" in req.body || "galleryImages" in files) {
   } catch (error) {
     console.error('❌ Error updating business listing:', error);
     res.status(500).json({
-      message: error.message,
+      message: "Galley images limit must be 10 only",
       error: error.message
     });
   }
