@@ -6,29 +6,160 @@ import moment from "moment-timezone";
 /**
  * @desc Create new advertisement (user side) with S3 uploads
  */
+// export const createAd = async (req, res) => {
+//   try {
+//     const { 
+//       title,
+//       redirectUrl, suggestedPages, 
+//       startDate, endDate, billingModel, bidAmount, 
+//       dailyBudget, totalBudget, city,
+//       category,
+//       services 
+//     } = req.body;
+
+//     // assuming destructured from req.body
+// const { consentAccepted } = req.body;
+
+// // If consentAccepted might be a string or boolean, do:
+// if (consentAccepted !== true && consentAccepted !== "true") {
+//   return res.status(400).json({ message: "Consent is required to create an advertisement." });
+// }
+
+//     const uploadedFiles = {};
+//     const files = req.files || {};
+
+//     // ✅ Process image and video uploads if present
+//     for (const field of ["adImage", "adVideo"]) {
+//       if (files[field] && files[field][0]) {
+//         const s3Result = await uploadToS3(files[field][0], req);
+//         if (s3Result.success) {
+//           uploadedFiles[field] = s3Result.url;
+//         } else {
+//           return res.status(400).json({ message: s3Result.message });
+//         }
+//       }
+//     }
+//  let parsedServices = {};
+// if (services) {
+//   try {
+//     parsedServices = typeof services === "string" ? JSON.parse(services) : services;
+//     if (typeof parsedServices !== "object" || Array.isArray(parsedServices)) {
+//       return res.status(400).json({ message: "Services must be an object with booleans." });
+//     }
+//   } catch (err) {
+//     return res.status(400).json({ message: "Invalid services format." });
+//   }
+// }
+
+// let parsedPages = {};
+// if (suggestedPages) {
+//   try {
+//     parsedPages = typeof suggestedPages === "string" ? JSON.parse(suggestedPages) : suggestedPages;
+//   } catch (err) {
+//     parsedPages = {};
+//   }
+// }
+
+
+
+//     // ✅ Admin / SuperAdmin ads (no budget needed)
+//     if (req.user.role === "admin" || req.user.role === "superadmin") {
+//       const ad = new Advertisement({
+//         userId: req.user._id,
+//         adType: req.user.role, // save actual role
+//         title,
+//         image: uploadedFiles.adImage || null,
+//         video: uploadedFiles.adVideo || null,
+//         redirectUrl,
+//         suggestedPages: suggestedPages || [],
+        
+//         startDate,
+//         endDate,
+//         city: city,
+//         category: category,
+//         services: parsedServices ,
+//         consentAccepted: true, // force true
+//         status: "active"       // auto-active
+//       });
+//       await ad.save();
+
+//       return res.status(201).json({
+//         message: `✅ ${req.user.role} Ad created successfully.`,
+//         ad
+//       });
+//     }
+
+//     // ✅ Customer Ads (consent + budget required)
+//     if (req.user.role === "customer" && !consentGiven) {
+//       return res.status(400).json({ message: "Consent is required to create an advertisement." });
+//     }
+
+//     if (!req.user || req.user.plan === 0) {
+//       return res.status(403).json({ message: "Upgrade plan to create advertisements." });
+//     }
+
+//     const ad = new Advertisement({
+//       userId: req.user._id,
+//       adType: "customer",
+//       title,
+//       image: uploadedFiles.adImage || null,
+//       video: uploadedFiles.adVideo || null,
+//       redirectUrl,
+//       suggestedPages: suggestedPages || [],
+//       startDate,
+//       endDate,
+//       billingModel: billingModel || "CPC",
+//       bidAmount: bidAmount || 5,
+//       dailyBudget: dailyBudget || 0,
+//       totalBudget: totalBudget || 0,
+//       city: city,
+//       category: category ,
+//       services: parsedServices,
+//       consentAccepted: !!consentAccepted,
+//       status: "pending" // customers ka ad pending rahega
+//     });
+
+//     await ad.save();
+
+//     res.status(201).json({
+//       message: "✅ Customer Ad created successfully.",
+//       ad
+//     });
+
+//   } catch (error) {
+//     console.error("❌ createAd error:", error.message);
+//     res.status(500).json({ message: "Server error while creating ad." });
+//   }
+// };
+
 export const createAd = async (req, res) => {
   try {
     const { 
       title,
-      redirectUrl, suggestedPages, 
-      startDate, endDate, billingModel, bidAmount, 
-      dailyBudget, totalBudget, cities,
-      categories,
-      subCategories 
+      redirectUrl,
+      suggestedPages,
+      pagesToDisplay,
+      startDate,
+      endDate,
+      billingModel,
+      bidAmount,
+      dailyBudget,
+      totalBudget,
+      city,
+      category,
+      services,
+      consentAccepted
     } = req.body;
 
-    // assuming destructured from req.body
-const { consentAccepted } = req.body;
-
-// If consentAccepted might be a string or boolean, do:
-if (consentAccepted !== true && consentAccepted !== "true") {
-  return res.status(400).json({ message: "Consent is required to create an advertisement." });
-}
+    // ✅ Consent check
+    if (consentAccepted !== true && consentAccepted !== "true") {
+      return res.status(400).json({ message: "Consent is required to create an advertisement." });
+    }
 
     const uploadedFiles = {};
     const files = req.files || {};
 
-    // ✅ Process image and video uploads if present
+    // ✅ Upload image/video
     for (const field of ["adImage", "adVideo"]) {
       if (files[field] && files[field][0]) {
         const s3Result = await uploadToS3(files[field][0], req);
@@ -40,22 +171,64 @@ if (consentAccepted !== true && consentAccepted !== "true") {
       }
     }
 
-    // ✅ Admin / SuperAdmin ads (no budget needed)
+    // ✅ Parse services (Map<Boolean>)
+    let parsedServices = {};
+    if (services) {
+      try {
+        const obj = typeof services === "string" ? JSON.parse(services) : services;
+        if (typeof obj === "object" && !Array.isArray(obj)) {
+          parsedServices = obj;
+        }
+      } catch (err) {
+        return res.status(400).json({ message: "Invalid services format." });
+      }
+    }
+
+    // ✅ Parse pagesToDisplay (Map<Boolean>)
+    let parsedPagesToDisplay = {};
+    if (pagesToDisplay) {
+      try {
+        const obj = typeof pagesToDisplay === "string" ? JSON.parse(pagesToDisplay) : pagesToDisplay;
+        if (typeof obj === "object" && !Array.isArray(obj)) {
+          parsedPagesToDisplay = obj;
+        }
+      } catch (err) {
+        parsedPagesToDisplay = {};
+      }
+    }
+
+    // ✅ Parse suggestedPages (Array)
+    let parsedSuggestedPages = [];
+    if (suggestedPages) {
+      try {
+        parsedSuggestedPages = typeof suggestedPages === "string" ? JSON.parse(suggestedPages) : suggestedPages;
+        if (!Array.isArray(parsedSuggestedPages)) parsedSuggestedPages = [];
+      } catch (err) {
+        parsedSuggestedPages = [];
+      }
+    }
+
+    // ✅ City (String only)
+    const parsedCity = typeof city === "string" ? city : "";
+
+    // ✅ Admin / SuperAdmin ads (no budget required)
     if (req.user.role === "admin" || req.user.role === "superadmin") {
       const ad = new Advertisement({
         userId: req.user._id,
-        adType: req.user.role, // save actual role
-        title,
+        adType: req.user.role,
+        title:title,
         image: uploadedFiles.adImage || null,
         video: uploadedFiles.adVideo || null,
         redirectUrl,
-        suggestedPages: suggestedPages || [],
+        suggestedPages: parsedSuggestedPages,
+        pagesToDisplay: parsedPagesToDisplay,
         startDate,
-        endDate,cities: cities || [],
-        categories: categories || [],
-        subCategories: subCategories || [],
-        consentAccepted: true, // force true
-        status: "active"       // auto-active
+        endDate,
+        city: parsedCity,
+        category,
+        services: parsedServices,
+        consentAccepted: true,
+        status: "active"
       });
       await ad.save();
 
@@ -65,8 +238,8 @@ if (consentAccepted !== true && consentAccepted !== "true") {
       });
     }
 
-    // ✅ Customer Ads (consent + budget required)
-    if (req.user.role === "customer" && !consentGiven) {
+    // ✅ Customer validation
+    if (req.user.role === "customer" && !consentAccepted) {
       return res.status(400).json({ message: "Consent is required to create an advertisement." });
     }
 
@@ -74,25 +247,27 @@ if (consentAccepted !== true && consentAccepted !== "true") {
       return res.status(403).json({ message: "Upgrade plan to create advertisements." });
     }
 
+    // ✅ Customer Ad
     const ad = new Advertisement({
       userId: req.user._id,
       adType: "customer",
-      title,
+      tittle: title,
       image: uploadedFiles.adImage || null,
       video: uploadedFiles.adVideo || null,
       redirectUrl,
-      suggestedPages: suggestedPages || [],
+      suggestedPages: parsedSuggestedPages,
+      pagesToDisplay: parsedPagesToDisplay,
       startDate,
       endDate,
-      billingModel: billingModel || "CPC",
+      billingModel: billingModel || "CPD",
       bidAmount: bidAmount || 5,
       dailyBudget: dailyBudget || 0,
       totalBudget: totalBudget || 0,
-      cities: cities || [],
-      categories: categories || [],
-      subCategories: subCategories || [],
+      city: parsedCity,
+      category,
+      services: parsedServices,
       consentAccepted: !!consentAccepted,
-      status: "pending" // customers ka ad pending rahega
+      status: "pending"
     });
 
     await ad.save();
@@ -107,7 +282,6 @@ if (consentAccepted !== true && consentAccepted !== "true") {
     res.status(500).json({ message: "Server error while creating ad." });
   }
 };
-
 
 
 /**

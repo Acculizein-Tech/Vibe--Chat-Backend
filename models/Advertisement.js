@@ -10,7 +10,7 @@ const advertisementSchema = new mongoose.Schema(
     },
     adType: { type: String, enum: ["customer", "admin", "superadmin"]},
 
-    tittle:{type :String},
+    title:{type :String},
     image: {
       type: String, // S3 image URL
       
@@ -30,24 +30,32 @@ const advertisementSchema = new mongoose.Schema(
     },
 
     // SuperAdmin final selection ✅
-    pagesToDisplay: {
-      type: [String], // ["home", "billing", "search", "category:health", "location:delhi"]
-      default: [],
+     pagesToDisplay: {
+      type: Map,
+      of: Boolean,
+      default: {},
     },
 
-     /* ---------- New targeting fields ---------- */
-    cities: {
-      type: [String], // ["Delhi", "Mumbai"]
-      default: [],
+    //  /* ---------- New targeting fields ---------- */
+    // cities: {
+    //   type: String, // ["Delhi", "Mumbai"]
+    //   default: [],
+    // },
+    category:{type:String},
+     services: {
+      type: Map,
+      of: Boolean,
+      default: {},
     },
-    categories: {
-      type: [String], // ["Health", "Education"]
-      default: [],
-    },
-    subCategories: {
-      type: [String], // ["Hospital", "Gym"]
-      default: [],
-    },
+    city:{type:String},
+    // categories: {
+    //   type: [String], // ["Health", "Education"]
+    //   default: [],
+    // },
+    // subCategories: {
+    //   type: [String], // ["Hospital", "Gym"]
+    //   default: [],
+    // },
 
     startDate: {
       type: Date,
