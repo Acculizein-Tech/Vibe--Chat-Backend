@@ -15,6 +15,11 @@ const mediaFields = upload.fields([
   { name: "driverPhoto", maxCount: 1 }, // ✅ New: Driver Photo
   { name: "licenseCopy", maxCount: 1 }, // ✅ New: License Copy
   { name: "others", maxCount: 5 }, // ✅ New field
+
+
+   // 🟢 Advertisement fields
+  { name: "adImage", maxCount: 5 },
+  { name: "adVideo", maxCount: 1 },
 ]);
 
 // ✅ Multer wrapper
@@ -78,14 +83,23 @@ router.post("/upload", handleUpload, async (req, res) => {
     //     });
     //   }
     // }
-    for (const file of files[field]) {
+    for (const field in files) {
+
+      uploadedFiles[field] = [];
+      for (const file of files[field]) {
   try {
+     // Pass adId if uploading advertisement media
+          if ((field === "adImage" || field === "adVideo") && req.body.adId) {
+            req.params.adId = req.body.adId; // ensure folder uses adId
+          }
+
     const s3Url = await uploadToS3(file, req);
     uploadedFiles[field].push({ url: s3Url, uploadedAt: timestampIST });
   } catch (uploadErr) {
     console.warn(`Failed to upload ${file.originalname}: ${uploadErr.message}`);
   }
 }
+    }
 
 
     res.json({
@@ -97,6 +111,8 @@ router.post("/upload", handleUpload, async (req, res) => {
     console.error("Upload error:", error);
     res.status(500).json({ error: error.message });
   }
+  
+
 });
 
 export default router;

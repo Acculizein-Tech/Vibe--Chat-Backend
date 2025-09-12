@@ -24,9 +24,10 @@ import notificationRoutes from './routes/notificationRoute.js';
 import paymentRoutes from "./routes/paymentRoute.js";
 import uploadRoutes from './routes/uploadData.js'; // Import upload routes
 import enquiryRoutes from './routes/enquiryRoute.js'; // Import enquiry routes
+import advertisementRoutes from './routes/advertisementRoutes.js'; // Advertisement routes
 // import redeemRoutes from './routes/redeemRoutes.js'; // Import redeem routes
 import KYCroute from './routes/KYCroute.js'; // Import KYC routes
-import User from './models/user.js';
+// import User from './models/user.js';
 import './cronJobs/leadReminderJob.js';
 import cors from 'cors';
 dotenv.config();
@@ -161,6 +162,7 @@ app.use('/api/upload', uploadRoutes); // Use upload routes
 app.use('/api/enquiries', enquiryRoutes); // Use enquiry routes
 // app.use('/api/redeem', redeemRoutes); // Use redeem routes
 app.use('/api/kyc', KYCroute); // Use KYC routes
+app.use('/api/ads', advertisementRoutes); // Advertisement routes
 app.use("/invoices", express.static(path.join(path.resolve(), "invoices")));
 
 

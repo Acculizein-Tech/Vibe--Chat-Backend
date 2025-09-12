@@ -1,7 +1,14 @@
 import mongoose from "mongoose";
+import { type } from "os";
 
 const advertisementSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true, // track which user created the ad
+    },
+    tittle:{type :String},
     image: {
       type: String, // S3 image URL
       required: false,
@@ -10,14 +17,23 @@ const advertisementSchema = new mongoose.Schema(
       type: String, // S3 video URL
       required: false,
     },
-    pagesToDisplay: {
-      type: [String], // Array of page identifiers: ["home", "billing", "search"]
-      required: true,
-    },
     redirectUrl: {
-      type: String, // Where user should land when clicking
+      type: String, // Landing page when clicked
       required: true,
     },
+
+    // User suggestion (optional)
+    suggestedPages: {
+      type: [String], // user requested pages
+      default: [],
+    },
+
+    // SuperAdmin final selection ✅
+    pagesToDisplay: {
+      type: [String], // ["home", "billing", "search", "category:health", "location:delhi"]
+      default: [],
+    },
+
     startDate: {
       type: Date,
       required: true,
@@ -26,10 +42,70 @@ const advertisementSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+
+    adminApproved: {
+      type: Boolean,
+      default: false, // 🔑 superadmin toggles this
+    },
+
     status: {
       type: String,
-      enum: ["active", "inactive", "expired"],
-      default: "inactive",
+      enum: ["pending", "active", "paused", "expired", "rejected"],
+      default: "pending",
+    },
+
+    /* ---------- Billing / pricing fields ---------- */
+    // Which billing model this ad uses:
+    billingModel: {
+      type: String,
+      enum: ["CPD", "CPM"], // Cost Per Day, Cost Per Mille (per 1,000 impressions)
+      default: "CPD",
+    },
+
+    // Interpreted based on billingModel:
+    // - CPD: bidAmount = INR per active day (e.g. 5 => ₹5 per day)
+    // - CPM: bidAmount = INR per 1000 impressions (e.g. 50 => ₹50 per 1000 impressions)
+    bidAmount: {
+      type: Number,
+      default: 5,
+    },
+
+    // Optional caps
+    dailyBudget: {
+      type: Number, // optional cap per day (₹)
+      default: 0,
+    },
+    totalBudget: {
+      type: Number, // optional cap for the whole ad (₹). 0 means no cap.
+      default: 0,
+    },
+
+    /* ---------- runtime metrics & billing state ---------- */
+    impressions: {
+      type: Number,
+      default: 0,
+    },
+    clicks: {
+      type: Number,
+      default: 0,
+    },
+    spend: {
+      type: Number, // total charged so far (₹)
+      default: 0,
+    },
+    lastBilledAt: {
+      type: Date,
+    },
+
+    // for human readable reason when paused
+    pausedReason: {
+      type: String,
+    },
+    /* ---------- Consent ---------- */
+    consentAccepted: {
+      type: Boolean,
+      required: true,
+      default: false, // user must tick this before ad can go live
     },
   },
   { timestamps: true }

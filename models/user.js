@@ -122,4 +122,7 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 
-export default mongoose.model('User', userSchema);
+// 🔹 Prevent OverwriteModelError
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+
+export default User;
