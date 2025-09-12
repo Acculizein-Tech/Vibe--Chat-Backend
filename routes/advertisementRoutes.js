@@ -8,7 +8,8 @@ import {
   approveAd,
   trackAdEvent,
   pauseAd,
-  getAdStats
+  getAdStats,
+  updateAd
 } from "../controllers/advertisementController.js";
 import { protect } from '../middlewares/auth.js';
 import  role  from '../middlewares/roles.js';
@@ -58,6 +59,8 @@ router.get("/", protect, getUserAds);
 router.get("/stats", protect, role('superadmin'), getAdStats);
 router.post("/track", trackAdEvent);
 router.patch("/:adId/pause", protect, pauseAd);
+router.put("/:adId/update", protect, updateAd);
+
 
 // Admin routes
 router.patch("/:adId/approve", protect, role("admin"), approveAd);

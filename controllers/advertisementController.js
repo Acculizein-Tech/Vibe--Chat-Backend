@@ -138,7 +138,7 @@ export const createAd = async (req, res) => {
       title,
       redirectUrl,
       suggestedPages,
-      pagesToDisplay,
+      pages,
       startDate,
       endDate,
       billingModel,
@@ -186,9 +186,9 @@ export const createAd = async (req, res) => {
 
     // ✅ Parse pagesToDisplay (Map<Boolean>)
     let parsedPagesToDisplay = {};
-    if (pagesToDisplay) {
+    if (pages) {
       try {
-        const obj = typeof pagesToDisplay === "string" ? JSON.parse(pagesToDisplay) : pagesToDisplay;
+        const obj = typeof pages === "string" ? JSON.parse(pages) : pages;
         if (typeof obj === "object" && !Array.isArray(obj)) {
           parsedPagesToDisplay = obj;
         }
@@ -406,3 +406,141 @@ export const getAdStats = async (req, res) => {
     res.status(500).json({ message: "Server error while fetching ad stats." });
   }
 };
+
+
+//update the  adds 
+export const updateAd = async (req, res) => {
+  try {
+    const { adId } = req.params;
+
+    // ✅ Find ad by ID
+    const ad = await Advertisement.findById(adId);
+    if (!ad) {
+      return res.status(404).json({ message: "Ad not found" });
+    }
+
+    // ✅ Permission check
+    if (req.user.role !== "admin" && req.user.role !== "superadmin" && ad.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to update this ad" });
+    }
+
+    const {
+      title,
+      redirectUrl,
+      suggestedPages,
+      pagesToDisplay,
+      startDate,
+      endDate,
+      billingModel,
+      bidAmount,
+      dailyBudget,
+      totalBudget,
+      city,
+      category,
+      services,
+      consentAccepted,
+    } = req.body;
+
+    const files = req.files || {};
+    const uploadedFiles = {};
+
+    // ✅ Handle image/video update
+    for (const field of ["adImage", "adVideo"]) {
+      if (files[field] && files[field][0]) {
+        const s3Result = await uploadToS3(files[field][0], req);
+        if (s3Result.success) {
+          uploadedFiles[field] = s3Result.url;
+        } else {
+          return res.status(400).json({ message: s3Result.message });
+        }
+      }
+    }
+
+    // ✅ Parse services (Map<Boolean>)
+    let parsedServices = ad.services || {};
+    if (services) {
+      try {
+        const obj = typeof services === "string" ? JSON.parse(services) : services;
+        if (typeof obj === "object" && !Array.isArray(obj)) {
+          parsedServices = obj;
+        }
+      } catch (err) {
+        return res.status(400).json({ message: "Invalid services format." });
+      }
+    }
+
+    // ✅ Parse pagesToDisplay
+    let parsedPagesToDisplay = ad.pagesToDisplay || {};
+    if (pagesToDisplay) {
+      try {
+        const obj = typeof pagesToDisplay === "string" ? JSON.parse(pagesToDisplay) : pagesToDisplay;
+        if (typeof obj === "object" && !Array.isArray(obj)) {
+          parsedPagesToDisplay = obj;
+        }
+      } catch (err) {
+        parsedPagesToDisplay = ad.pagesToDisplay || {};
+      }
+    }
+
+    // ✅ Parse suggestedPages
+    let parsedSuggestedPages = ad.suggestedPages || [];
+    if (suggestedPages) {
+      try {
+        parsedSuggestedPages = typeof suggestedPages === "string" ? JSON.parse(suggestedPages) : suggestedPages;
+        if (!Array.isArray(parsedSuggestedPages)) parsedSuggestedPages = [];
+      } catch (err) {
+        parsedSuggestedPages = ad.suggestedPages || [];
+      }
+    }
+
+    // ✅ Update ad fields
+    ad.title = title || ad.title;
+    ad.redirectUrl = redirectUrl || ad.redirectUrl;
+    ad.suggestedPages = parsedSuggestedPages;
+    ad.pagesToDisplay = parsedPagesToDisplay;
+    ad.startDate = startDate || ad.startDate;
+    ad.endDate = endDate || ad.endDate;
+    ad.billingModel = billingModel || ad.billingModel;
+    ad.bidAmount = bidAmount || ad.bidAmount;
+    ad.dailyBudget = dailyBudget || ad.dailyBudget;
+    ad.totalBudget = totalBudget || ad.totalBudget;
+    ad.city = city || ad.city;
+    ad.category = category || ad.category;
+    ad.services = parsedServices;
+    ad.consentAccepted = consentAccepted !== undefined ? consentAccepted : ad.consentAccepted;
+
+    // ✅ Keep old image/video if not replaced
+    ad.image = uploadedFiles.adImage || ad.image;
+    ad.video = uploadedFiles.adVideo || ad.video;
+
+    await ad.save();
+
+    res.status(200).json({
+      message: "✅ Ad updated successfully.",
+      ad,
+    });
+  } catch (error) {
+    console.error("❌ updateAd error:", error.message);
+    res.status(500).json({ message: "Server error while updating ad." });
+  }
+};
+
+
+//delete the adds
+  export const deleteAd = async (req, res) => {
+    try {
+      const { adId } = req.params; // Get adId from URL parameters
+  
+      // Find the ad by ID
+      const ad = await Advertisement.findById(adId);
+      if (!ad) {
+        return res.status(404).json({ message: "Ad not found" });
+      }
+      await ad.remove();
+
+      res.status(200).json({ message: "✅ Ad deleted successfully." });
+    } catch (error) {
+      console.error("❌ deleteAd error:", error.message);
+      res.status(500).json({ message: "Server error while deleting ad." });
+    }
+  };
