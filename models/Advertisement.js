@@ -8,6 +8,8 @@ const advertisementSchema = new mongoose.Schema(
       ref: "User",
       required: true, // track which user created the ad
     },
+    adType: { type: String, enum: ["customer", "admin", "superadmin"]},
+
     tittle:{type :String},
     image: {
       type: String, // S3 image URL
@@ -30,6 +32,20 @@ const advertisementSchema = new mongoose.Schema(
     // SuperAdmin final selection ✅
     pagesToDisplay: {
       type: [String], // ["home", "billing", "search", "category:health", "location:delhi"]
+      default: [],
+    },
+
+     /* ---------- New targeting fields ---------- */
+    cities: {
+      type: [String], // ["Delhi", "Mumbai"]
+      default: [],
+    },
+    categories: {
+      type: [String], // ["Health", "Education"]
+      default: [],
+    },
+    subCategories: {
+      type: [String], // ["Hospital", "Gym"]
       default: [],
     },
 
@@ -103,8 +119,7 @@ const advertisementSchema = new mongoose.Schema(
     /* ---------- Consent ---------- */
     consentAccepted: {
       type: Boolean,
-      
-      default: false, // user must tick this before ad can go live
+       required: [true, "User must accept the consent to create an advertisement."],
     },
   },
   { timestamps: true }

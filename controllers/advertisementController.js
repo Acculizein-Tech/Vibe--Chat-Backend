@@ -8,26 +8,19 @@ import moment from "moment-timezone";
  */
 export const createAd = async (req, res) => {
   try {
-    const { tittle,
+    const { 
+      title,
       redirectUrl, suggestedPages, 
       startDate, endDate, billingModel, bidAmount, 
-      dailyBudget, totalBudget, consentGiven 
+      dailyBudget, totalBudget, consentGiven, cities,
+      categories,
+      subCategories 
     } = req.body;
-
-    if (!consentGiven) {
-      return res.status(400).json({ message: "Consent is required to create an advertisement." });
-    }
-
-    // Ensure only paid plan users can create ads
-    const user = await User.findById(req.user.id);
-    if (!user || user.plan === 0) {
-      return res.status(403).json({ message: "Upgrade plan to create advertisements." });
-    }
 
     const uploadedFiles = {};
     const files = req.files || {};
 
-    // Process image and video uploads if present
+    // ✅ Process image and video uploads if present
     for (const field of ["adImage", "adVideo"]) {
       if (files[field] && files[field][0]) {
         const s3Result = await uploadToS3(files[field][0], req);
@@ -39,29 +32,66 @@ export const createAd = async (req, res) => {
       }
     }
 
+    // ✅ Admin / SuperAdmin ads (no budget needed)
+    if (req.user.role === "admin" || req.user.role === "superadmin") {
+      const ad = new Advertisement({
+        userId: req.user._id,
+        adType: req.user.role, // save actual role
+        title,
+        image: uploadedFiles.adImage || null,
+        video: uploadedFiles.adVideo || null,
+        redirectUrl,
+        suggestedPages: suggestedPages || [],
+        startDate,
+        endDate,cities: cities || [],
+        categories: categories || [],
+        subCategories: subCategories || [],
+        consentAccepted: true, // force true
+        status: "active"       // auto-active
+      });
+      await ad.save();
+
+      return res.status(201).json({
+        message: `✅ ${req.user.role} Ad created successfully.`,
+        ad
+      });
+    }
+
+    // ✅ Customer Ads (consent + budget required)
+    if (req.user.role === "customer" && !consentGiven) {
+      return res.status(400).json({ message: "Consent is required to create an advertisement." });
+    }
+
+    if (!req.user || req.user.plan === 0) {
+      return res.status(403).json({ message: "Upgrade plan to create advertisements." });
+    }
+
     const ad = new Advertisement({
-      userId: req.user.id,
-      tittle,
+      userId: req.user._id,
+      adType: "customer",
+      title,
       image: uploadedFiles.adImage || null,
       video: uploadedFiles.adVideo || null,
       redirectUrl,
       suggestedPages: suggestedPages || [],
       startDate,
       endDate,
-      billingModel: billingModel || "CPD",
+      billingModel: billingModel || "CPC",
       bidAmount: bidAmount || 5,
       dailyBudget: dailyBudget || 0,
       totalBudget: totalBudget || 0,
-      status: "pending"
+      cities: cities || [],
+      categories: categories || [],
+      subCategories: subCategories || [],
+      consentAccepted: !!consentGiven,
+      status: "pending" // customers ka ad pending rahega
     });
 
     await ad.save();
 
     res.status(201).json({
-      message: "✅ Advertisement created successfully.",
-      ad,
-      // uploadedFiles,
-      // createdAt: moment().tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss")
+      message: "✅ Customer Ad created successfully.",
+      ad
     });
 
   } catch (error) {
@@ -69,6 +99,8 @@ export const createAd = async (req, res) => {
     res.status(500).json({ message: "Server error while creating ad." });
   }
 };
+
+
 
 /**
  * @desc Get all ads for current user
