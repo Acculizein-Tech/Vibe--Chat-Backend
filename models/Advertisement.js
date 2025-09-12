@@ -11,11 +11,10 @@ const advertisementSchema = new mongoose.Schema(
     tittle:{type :String},
     image: {
       type: String, // S3 image URL
-      required: false,
+      
     },
     video: {
       type: String, // S3 video URL
-      required: false,
     },
     redirectUrl: {
       type: String, // Landing page when clicked
@@ -36,11 +35,11 @@ const advertisementSchema = new mongoose.Schema(
 
     startDate: {
       type: Date,
-      required: true,
+     
     },
     endDate: {
       type: Date,
-      required: true,
+     
     },
 
     adminApproved: {
@@ -104,7 +103,7 @@ const advertisementSchema = new mongoose.Schema(
     /* ---------- Consent ---------- */
     consentAccepted: {
       type: Boolean,
-      required: true,
+      
       default: false, // user must tick this before ad can go live
     },
   },
