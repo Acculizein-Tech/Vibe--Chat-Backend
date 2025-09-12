@@ -12,10 +12,18 @@ export const createAd = async (req, res) => {
       title,
       redirectUrl, suggestedPages, 
       startDate, endDate, billingModel, bidAmount, 
-      dailyBudget, totalBudget, consentGiven, cities,
+      dailyBudget, totalBudget, cities,
       categories,
       subCategories 
     } = req.body;
+
+    // assuming destructured from req.body
+const { consentAccepted } = req.body;
+
+// If consentAccepted might be a string or boolean, do:
+if (consentAccepted !== true && consentAccepted !== "true") {
+  return res.status(400).json({ message: "Consent is required to create an advertisement." });
+}
 
     const uploadedFiles = {};
     const files = req.files || {};
@@ -83,7 +91,7 @@ export const createAd = async (req, res) => {
       cities: cities || [],
       categories: categories || [],
       subCategories: subCategories || [],
-      consentAccepted: !!consentGiven,
+      consentAccepted: !!consentAccepted,
       status: "pending" // customers ka ad pending rahega
     });
 
@@ -173,5 +181,54 @@ export const pauseAd = async (req, res) => {
     res.json({ message: "✅ Ad paused successfully.", ad });
   } catch (error) {
     res.status(500).json({ message: "Error pausing ad." });
+  }
+};
+
+
+
+//countig details for superadmin dashboard
+export const getAdStats = async (req, res) => {
+  try {
+    // ✅ Count ads by status
+    const totalCampaigns = await Advertisement.countDocuments({});
+    const activeAds = await Advertisement.countDocuments({ status: "active" });
+    const pendingAds = await Advertisement.countDocuments({ status: "pending" });
+    const expiredAds = await Advertisement.countDocuments({ status: "expired" });
+
+    // ✅ Get recently added ads (sorted by createdAt descending)
+    const recentAds = await Advertisement.find({})
+      .sort({ createdAt: -1 })
+      .limit(10) // last 10 ads
+      .select("title status pagesToDisplay redirectUrl cities categories subCategories startDate endDate image video");
+
+    // Map _id to id for frontend
+    const recent = recentAds.map(ad => ({
+      id: ad._id,
+      title: ad.title,
+      status: ad.status,
+      pages: ad.pagesToDisplay,
+      redirectUrl: ad.redirectUrl,
+      cities: ad.cities,
+      categories: ad.categories,
+      subCategories: ad.subCategories,
+      startDate: ad.startDate,
+      endDate: ad.endDate,
+      image: ad.image,
+      video: ad.video
+    }));
+
+    res.status(200).json({
+      stats: {
+        totalCampaigns,
+        activeAds,
+        pendingAds,
+        expiredAds
+      },
+      recent
+    });
+
+  } catch (error) {
+    console.error("❌ getAdStats error:", error.message);
+    res.status(500).json({ message: "Server error while fetching ad stats." });
   }
 };

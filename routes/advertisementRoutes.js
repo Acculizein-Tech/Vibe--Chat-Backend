@@ -8,6 +8,7 @@ import {
   approveAd,
   trackAdEvent,
   pauseAd,
+  getAdStats
 } from "../controllers/advertisementController.js";
 import { protect } from '../middlewares/auth.js';
 import  role  from '../middlewares/roles.js';
@@ -54,6 +55,7 @@ const handleUpload = (req, res, next) => {
 // User routes
 router.post("/", protect, handleUpload, createAd); // ✅ handle file uploads here
 router.get("/", protect, getUserAds);
+router.get("/stats", protect, role('superadmin'), getAdStats);
 router.post("/track", trackAdEvent);
 router.patch("/:adId/pause", protect, pauseAd);
 
