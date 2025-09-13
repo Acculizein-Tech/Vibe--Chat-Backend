@@ -289,29 +289,34 @@ export const createAd = async (req, res) => {
  */
 export const getUserAds = async (req, res) => {
   try {
-    const ads = await Advertisement.find({ userId: req.user.id });
+    // Get all ads from the collection (no user filter)
+    const ads = await Advertisement.find();
 
     // Transform data into carousel format
     const carouselAds = ads.map(ad => ({
-      id: ad._id,                // or ad.id
+      id: ad._id,
       title: ad.title,
-      image: ad.image || "/ads-images/default.jpg", // fallback if no image
-  
+      image: ad.image || "/ads-images/default.jpg",
       link: ad.redirectUrl,
       pagesToDisplay: ad.pagesToDisplay,
       category: ad.category,
       city: ad.city,
       clicks: ad.clicks,
-      impressions: ad.impressions,  // you can add more fields anytime
+      impressions: ad.impressions,
       status: ad.status,
     }));
 
-    res.json(carouselAds);
+    res.json({
+      status: "success",
+      total: carouselAds.length,
+      ads: carouselAds
+    });
   } catch (error) {
     console.error("❌ getUserAds error:", error.message);
     res.status(500).json({ message: "Server error while fetching ads." });
   }
 };
+
 
 
 /**
