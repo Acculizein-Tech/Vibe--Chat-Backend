@@ -290,7 +290,7 @@ export const createAd = async (req, res) => {
 export const getUserAds = async (req, res) => {
   try {
     // Get all ads from the collection (no user filter)
-    const ads = await Advertisement.find();
+    const ads = await Advertisement.find().limit(5).sort({ createdAt: -1 });
 
     // Transform data into carousel format
     const carouselAds = ads.map(ad => ({
