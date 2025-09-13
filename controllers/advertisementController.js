@@ -251,7 +251,7 @@ export const createAd = async (req, res) => {
     const ad = new Advertisement({
       userId: req.user._id,
       adType: "customer",
-      tittle: title,
+      title: title,
       image: uploadedFiles.adImage || null,
       video: uploadedFiles.adVideo || null,
       redirectUrl,
@@ -290,11 +290,29 @@ export const createAd = async (req, res) => {
 export const getUserAds = async (req, res) => {
   try {
     const ads = await Advertisement.find({ userId: req.user.id });
-    res.json(ads);
+
+    // Transform data into carousel format
+    const carouselAds = ads.map(ad => ({
+      id: ad._id,                // or ad.id
+      title: ad.title,
+      image: ad.image || "/ads-images/default.jpg", // fallback if no image
+  
+      link: ad.redirectUrl,
+      pagesToDisplay: ad.pagesToDisplay,
+      category: ad.category,
+      city: ad.city,
+      clicks: ad.clicks,
+      impressions: ad.impressions,  // you can add more fields anytime
+      status: ad.status,
+    }));
+
+    res.json(carouselAds);
   } catch (error) {
+    console.error("❌ getUserAds error:", error.message);
     res.status(500).json({ message: "Server error while fetching ads." });
   }
 };
+
 
 /**
  * @desc Superadmin approves or rejects an ad
@@ -544,3 +562,6 @@ export const updateAd = async (req, res) => {
       res.status(500).json({ message: "Server error while deleting ad." });
     }
   };
+
+
+  //routes/advertisementRoutes.js
