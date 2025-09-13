@@ -56,7 +56,7 @@ const handleUpload = (req, res, next) => {
 // User routes
 router.post("/", protect, handleUpload, createAd); // ✅ handle file uploads here
 router.get("/", protect, getUserAds);
-router.get("/stats", protect, role('superadmin'), getAdStats);
+router.get("/stats", protect, role('superadmin', 'customer'), getAdStats);
 router.post("/track", trackAdEvent);
 router.patch("/:adId/pause", protect, pauseAd);
 router.put("/:adId/update", protect, updateAd);
