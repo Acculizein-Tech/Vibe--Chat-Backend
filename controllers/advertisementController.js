@@ -151,109 +151,52 @@ export const createAd = async (req, res) => {
       consentAccepted
     } = req.body;
 
-    // ✅ Consent check
     if (consentAccepted !== true && consentAccepted !== "true") {
       return res.status(400).json({ message: "Consent is required to create an advertisement." });
     }
 
-    const uploadedFiles = {};
-    const files = req.files || {};
-
-    // ✅ Upload image/video
-    for (const field of ["adImage", "adVideo"]) {
-      if (files[field] && files[field][0]) {
-        const s3Result = await uploadToS3(files[field][0], req);
-        if (s3Result.success) {
-          uploadedFiles[field] = s3Result.url;
-        } else {
-          return res.status(400).json({ message: s3Result.message });
-        }
-      }
-    }
-
-    // ✅ Parse services (Map<Boolean>)
+    // ✅ Parse services
     let parsedServices = {};
     if (services) {
       try {
         const obj = typeof services === "string" ? JSON.parse(services) : services;
-        if (typeof obj === "object" && !Array.isArray(obj)) {
-          parsedServices = obj;
-        }
-      } catch (err) {
-        return res.status(400).json({ message: "Invalid services format." });
+        parsedServices = (typeof obj === "object" && !Array.isArray(obj)) ? obj : {};
+      } catch {
+        parsedServices = {};
       }
     }
 
-    // ✅ Parse pagesToDisplay (Map<Boolean>)
+    // ✅ Parse pagesToDisplay
     let parsedPagesToDisplay = {};
     if (pages) {
       try {
         const obj = typeof pages === "string" ? JSON.parse(pages) : pages;
-        if (typeof obj === "object" && !Array.isArray(obj)) {
-          parsedPagesToDisplay = obj;
-        }
-      } catch (err) {
+        parsedPagesToDisplay = (typeof obj === "object" && !Array.isArray(obj)) ? obj : {};
+      } catch {
         parsedPagesToDisplay = {};
       }
     }
 
-    // ✅ Parse suggestedPages (Array)
+    // ✅ Parse suggestedPages
     let parsedSuggestedPages = [];
     if (suggestedPages) {
       try {
-        parsedSuggestedPages = typeof suggestedPages === "string" ? JSON.parse(suggestedPages) : suggestedPages;
-        if (!Array.isArray(parsedSuggestedPages)) parsedSuggestedPages = [];
-      } catch (err) {
+        const obj = typeof suggestedPages === "string" ? JSON.parse(suggestedPages) : suggestedPages;
+        parsedSuggestedPages = Array.isArray(obj) ? obj : [];
+      } catch {
         parsedSuggestedPages = [];
       }
     }
 
-    // ✅ City (String only)
     const parsedCity = typeof city === "string" ? city : "";
 
-    // ✅ Admin / SuperAdmin ads (no budget required)
-    if (req.user.role === "admin" || req.user.role === "superadmin") {
-      const ad = new Advertisement({
-        userId: req.user._id,
-        adType: req.user.role,
-        title:title,
-        image: uploadedFiles.adImage || null,
-        video: uploadedFiles.adVideo || null,
-        redirectUrl,
-        suggestedPages: parsedSuggestedPages,
-        pagesToDisplay: parsedPagesToDisplay,
-        startDate,
-        endDate,
-        city: parsedCity,
-        category,
-        services: parsedServices,
-        consentAccepted: true,
-        status: "active"
-      });
-      await ad.save();
-
-      return res.status(201).json({
-        message: `✅ ${req.user.role} Ad created successfully.`,
-        ad
-      });
-    }
-
-    // ✅ Customer validation
-    if (req.user.role === "customer" && !consentAccepted) {
-      return res.status(400).json({ message: "Consent is required to create an advertisement." });
-    }
-
-    if (!req.user || req.user.plan === 0) {
-      return res.status(403).json({ message: "Upgrade plan to create advertisements." });
-    }
-
-    // ✅ Customer Ad
+    // ✅ Create ad with placeholders (null for image/video initially)
     const ad = new Advertisement({
       userId: req.user._id,
-      adType: "customer",
-      title: title,
-      image: uploadedFiles.adImage || null,
-      video: uploadedFiles.adVideo || null,
+      adType: req.user.role === "admin" || req.user.role === "superadmin" ? req.user.role : "customer",
+      title,
+      image: null,
+      video: null,
       redirectUrl,
       suggestedPages: parsedSuggestedPages,
       pagesToDisplay: parsedPagesToDisplay,
@@ -266,22 +209,39 @@ export const createAd = async (req, res) => {
       city: parsedCity,
       category,
       services: parsedServices,
-      consentAccepted: !!consentAccepted,
-      status: "pending"
+      consentAccepted: true,
+      status: req.user.role === "customer" ? "pending" : "active"
     });
 
     await ad.save();
 
+    // ✅ Send response immediately (~2 sec)
     res.status(201).json({
-      message: "✅ Customer Ad created successfully.",
+      message: `✅ ${ad.adType} Ad created successfully. Upload in progress...`,
       ad
     });
+
+    // ✅ Handle upload in background (non-blocking)
+    const files = req.files || {};
+    for (const field of ["adImage", "adVideo"]) {
+      if (files[field] && files[field][0]) {
+        uploadToS3(files[field][0], req).then(async (s3Result) => {
+          if (s3Result.success) {
+            ad[field === "adImage" ? "image" : "video"] = s3Result.url;
+            await ad.save(); // update with uploaded file URL
+          } else {
+            console.error("❌ Upload failed:", s3Result.message);
+          }
+        });
+      }
+    }
 
   } catch (error) {
     console.error("❌ createAd error:", error.message);
     res.status(500).json({ message: "Server error while creating ad." });
   }
 };
+
 
 
 /**
