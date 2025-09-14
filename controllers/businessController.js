@@ -1882,6 +1882,133 @@ export const getBusinessId = async (req, res) => {
 
 
 
+// export const searchBusinesses = async (req, res) => {
+//   try {
+//     const { keyword = "", location = "" } = req.query;
+
+//     if (!keyword && !location) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Please provide a keyword or location to search."
+//       });
+//     }
+
+//     const keywordRegex = keyword ? new RegExp(keyword, "i") : null;
+//     const exactKeywordRegex = keyword ? new RegExp(`^${keyword}$`, "i") : null;
+//     const locationRegex = location ? new RegExp(location, "i") : null;
+
+//     let results = [];
+
+//     // -----------------------
+//     // CASE 1: Keyword matches CATEGORY
+//     // -----------------------
+//     if (keyword) {
+//       // Step 1: Category + Location together
+//       results = await Business.find({
+//         category: exactKeywordRegex,
+//         ...(location && {
+//           $or: [
+//             { "location.city": locationRegex },
+//             { "location.state": locationRegex },
+//             { "location.pincode": locationRegex },
+//             { "location.address": locationRegex }
+//           ]
+//         })
+//       })
+//         .sort({ averageRating: -1, views: -1 })
+//         .limit(50)
+//         .lean();
+
+//       // Step 2: If no results with location → fallback only category
+//       if (results.length === 0) {
+//         results = await Business.find({
+//           category: exactKeywordRegex
+//         })
+//           .sort({ averageRating: -1, views: -1 })
+//           .limit(50)
+//           .lean();
+//       }
+//     }
+
+//     // -----------------------
+//     // CASE 2: Keyword in Services OR Name OR Description
+//     // -----------------------
+//     if (results.length === 0 && keyword) {
+//       results = await Business.find({
+//         $or: [
+//           { name: keywordRegex },
+//           { description: keywordRegex },
+//           { [`services.${keyword}`]: { $exists: true, $eq: true } }
+//         ],
+//         ...(location && {
+//           $or: [
+//             { "location.city": locationRegex },
+//             { "location.state": locationRegex },
+//             { "location.pincode": locationRegex },
+//             { "location.address": locationRegex }
+//           ]
+//         })
+//       })
+//         .sort({ averageRating: -1, views: -1 })
+//         .limit(50)
+//         .lean();
+//     }
+
+//     // -----------------------
+//     // CASE 3: Only Location Search
+//     // -----------------------
+//     if (results.length === 0 && !keyword && location) {
+//       results = await Business.find({
+//         $or: [
+//           { "location.city": locationRegex },
+//           { "location.state": locationRegex },
+//           { "location.pincode": locationRegex },
+//           { "location.address": locationRegex }
+//         ]
+//       })
+//         .sort({ averageRating: -1, views: -1 })
+//         .limit(50)
+//         .lean();
+//     }
+
+//     // -----------------------
+//     // CASE 4: Fallback - Show Popular Businesses
+//     // -----------------------
+//     if (results.length === 0) {
+//       results = await Business.find({})
+//         .sort({ averageRating: -1, views: -1 })
+//         .limit(20)
+//         .lean();
+//     }
+
+//     // -----------------------
+//     // Response
+//     // -----------------------
+//     return res.status(200).json({
+//       status: "success",
+//       count: results.length,
+//       results: results.map(b => ({
+//         _id: b._id,
+//         name: b.name,
+//         profileImage: b.profileImage,
+//         category: b.category,
+//         services: b.services,
+//         location: b.location,
+//         averageRating: b.averageRating,
+//         views: b.views
+//       }))
+//     });
+
+//   } catch (error) {
+//     console.error("Search Error:", error);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Something went wrong",
+//       error: error.message
+//     });
+//   }
+// };
+
 export const searchBusinesses = async (req, res) => {
   try {
     const { keyword = "", location = "" } = req.query;
@@ -1889,7 +2016,7 @@ export const searchBusinesses = async (req, res) => {
     if (!keyword && !location) {
       return res.status(400).json({
         status: "error",
-        message: "Please provide a keyword or location to search."
+        message: "Please provide a keyword or location to search.",
       });
     }
 
@@ -1905,15 +2032,16 @@ export const searchBusinesses = async (req, res) => {
     if (keyword) {
       // Step 1: Category + Location together
       results = await Business.find({
+        deleteBusiness: false, // ✅ validation to hide deleted businesses
         category: exactKeywordRegex,
         ...(location && {
           $or: [
             { "location.city": locationRegex },
             { "location.state": locationRegex },
             { "location.pincode": locationRegex },
-            { "location.address": locationRegex }
-          ]
-        })
+            { "location.address": locationRegex },
+          ],
+        }),
       })
         .sort({ averageRating: -1, views: -1 })
         .limit(50)
@@ -1922,7 +2050,8 @@ export const searchBusinesses = async (req, res) => {
       // Step 2: If no results with location → fallback only category
       if (results.length === 0) {
         results = await Business.find({
-          category: exactKeywordRegex
+          deleteBusiness: false, // ✅ validation
+          category: exactKeywordRegex,
         })
           .sort({ averageRating: -1, views: -1 })
           .limit(50)
@@ -1935,19 +2064,20 @@ export const searchBusinesses = async (req, res) => {
     // -----------------------
     if (results.length === 0 && keyword) {
       results = await Business.find({
+        deleteBusiness: false, // ✅ validation
         $or: [
           { name: keywordRegex },
           { description: keywordRegex },
-          { [`services.${keyword}`]: { $exists: true, $eq: true } }
+          { [`services.${keyword}`]: { $exists: true, $eq: true } },
         ],
         ...(location && {
           $or: [
             { "location.city": locationRegex },
             { "location.state": locationRegex },
             { "location.pincode": locationRegex },
-            { "location.address": locationRegex }
-          ]
-        })
+            { "location.address": locationRegex },
+          ],
+        }),
       })
         .sort({ averageRating: -1, views: -1 })
         .limit(50)
@@ -1959,12 +2089,13 @@ export const searchBusinesses = async (req, res) => {
     // -----------------------
     if (results.length === 0 && !keyword && location) {
       results = await Business.find({
+        deleteBusiness: false, // ✅ validation
         $or: [
           { "location.city": locationRegex },
           { "location.state": locationRegex },
           { "location.pincode": locationRegex },
-          { "location.address": locationRegex }
-        ]
+          { "location.address": locationRegex },
+        ],
       })
         .sort({ averageRating: -1, views: -1 })
         .limit(50)
@@ -1975,7 +2106,9 @@ export const searchBusinesses = async (req, res) => {
     // CASE 4: Fallback - Show Popular Businesses
     // -----------------------
     if (results.length === 0) {
-      results = await Business.find({})
+      results = await Business.find({
+        deleteBusiness: false, // ✅ validation
+      })
         .sort({ averageRating: -1, views: -1 })
         .limit(20)
         .lean();
@@ -1987,7 +2120,7 @@ export const searchBusinesses = async (req, res) => {
     return res.status(200).json({
       status: "success",
       count: results.length,
-      results: results.map(b => ({
+      results: results.map((b) => ({
         _id: b._id,
         name: b.name,
         profileImage: b.profileImage,
@@ -1995,20 +2128,18 @@ export const searchBusinesses = async (req, res) => {
         services: b.services,
         location: b.location,
         averageRating: b.averageRating,
-        views: b.views
-      }))
+        views: b.views,
+      })),
     });
-
   } catch (error) {
     console.error("Search Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Something went wrong",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
 
 
 export const getBusinessBySalesId = asyncHandler(async (req, res) => {
@@ -2154,6 +2285,7 @@ export const softDeleteBusiness = asyncHandler(async (req, res) => {
 
 
 //switch businesss plan id
+//switch business plan id
 export const switchBusinessPlan = asyncHandler(async (req, res) => {
   const { businessId } = req.body;
 
@@ -2175,12 +2307,13 @@ export const switchBusinessPlan = asyncHandler(async (req, res) => {
   }
 
   // 4️⃣ Check if already Premium
-  if (business.plan?.toString() === newPlanId) {
+  if (business.plan?.toString() === newPlanId && business.isPremium === true) {
     return res.status(400).json({ message: "This business is already on the Premium plan." });
   }
 
-  // 5️⃣ Update business plan atomically
+  // 5️⃣ Update business plan + isPremium flag atomically
   business.plan = new mongoose.Types.ObjectId(newPlanId);
+  business.isPremium = true; // ✅ Mark as Premium
   await business.save();
 
   // 6️⃣ Response
@@ -2189,6 +2322,7 @@ export const switchBusinessPlan = asyncHandler(async (req, res) => {
     business,
   });
 });
+
 
 
 
