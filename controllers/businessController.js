@@ -981,6 +981,15 @@ export const createBusiness = async (req, res) => {
       }
     }
 
+    // Create Business Entry (FAST)
+// ===============================
+let isPremium = false;
+
+// ✅ Plan check
+if (validPlan && validPlan.priceName && validPlan.priceName.toLowerCase() !== "basic") {
+  isPremium = true;
+}
+
     // ===============================
     // Create Business Entry (FAST)
     // ===============================
