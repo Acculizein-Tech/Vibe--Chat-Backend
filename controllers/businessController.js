@@ -2495,3 +2495,28 @@ export const getBusinessCities = asyncHandler(async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
+
+export const updatePremiumBusinesses = async (req, res) => {
+  try {
+    // Basic Plan ID
+    const basicPlanId = "6878aac279d292a31fc19fdf";
+
+    // ✅ Update all businesses where plan is not "Basic"
+    const result = await Business.updateMany(
+      { plan: { $ne: basicPlanId } }, // not equal condition
+      { $set: { isPremium: true } }
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: `✅ ${result.modifiedCount} businesses updated to Premium`,
+    });
+  } catch (error) {
+    console.error("❌ Error updating businesses:", error.message);
+    res.status(500).json({
+      status: "error",
+      message: "Something went wrong while updating businesses",
+    });
+  }
+};
