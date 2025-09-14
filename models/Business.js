@@ -176,6 +176,15 @@ const businessSchema = new mongoose.Schema(
         },
       },
     ],
+    deleteBusiness: {
+  type: Boolean,
+  default: false,
+},
+isPremium: {
+  type: Boolean,
+  default: false,
+},
+
     pricing: {
   label: { type: String, trim: true }, // e.g., "Consultation Fee", "Per Hour", "Per Day", "Per Month"
   amount: { type: Number, min: 0 },

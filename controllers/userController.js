@@ -220,7 +220,7 @@ export const getUserListings = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   try {
-    const listings = await Business.find({ owner: userId })
+    const listings = await Business.find({ owner: userId, deleteBusiness: false })
       .select('-__v') // optional: exclude Mongoose version key
       .populate('categoryRef') // optional: load category info if needed
       .sort({ createdAt: -1 }); // newest first
