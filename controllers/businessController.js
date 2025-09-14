@@ -2500,7 +2500,7 @@ export const getBusinessCities = asyncHandler(async (req, res) => {
 export const updatePremiumBusinesses = async (req, res) => {
   try {
     // Basic Plan ID
-    const basicPlanId = "6878aac279d292a31fc19fdf";
+    const basicPlanId = "68778345507abcae7fa7a612";
 
     // ✅ Update all businesses where plan is not "Basic"
     const result = await Business.updateMany(
@@ -2520,3 +2520,5 @@ export const updatePremiumBusinesses = async (req, res) => {
     });
   }
 };
+
+
