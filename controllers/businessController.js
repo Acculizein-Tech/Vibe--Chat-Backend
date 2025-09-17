@@ -1029,7 +1029,13 @@ if (validPlan && validPlan.priceName && validPlan.priceName.toLowerCase() !== "b
     // 🆕 QR Code Generate & Save
 try {
   const qrUrl = await generateAndUploadQrCode(business._id, category);
-  await Business.findByIdAndUpdate(business._id, { $set: { qrCodeUrl: qrUrl.url } });
+  // await Business.findByIdAndUpdate(business._id, { $set: { qrCodeUrl: qrUrl.url } });
+   await Business.findByIdAndUpdate(business._id, {
+    $set: {
+      qrCodeUrl: qrUrl.qrCodeUrl,  // S3 image
+      quickLink: qrUrl.quickLink   // direct link
+    }
+  });
 } catch (qrErr) {
   console.warn("⚠️ QR Code generation failed:", qrErr.message);
 }

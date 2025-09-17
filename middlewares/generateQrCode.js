@@ -26,7 +26,12 @@ export const generateAndUploadQrCode = async (businessId, categorySlug) => {
 
     // Step 4: Upload to S3
     const s3Data = await uploadToS3(fakeFile);
-    return s3Data; // ⚡ contains { success: true, url: 'S3 URL' }
+    // return s3Data; // ⚡ contains { success: true, url: 'S3 URL' }
+     return { 
+      success: true, 
+      qrCodeUrl: s3Data.url,   // S3 QR Code
+      quickLink: profileUrl    // Direct profile URL
+    };
   } catch (err) {
     console.error("❌ QR Code generation failed:", err.message);
     throw new Error("QR Code generation failed");

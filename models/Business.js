@@ -161,7 +161,7 @@ const businessSchema = new mongoose.Schema(
   type: String,
   default: null,
 },
-
+quickLink: { type: String },
     // ✅ New fields for tracking views
     views: {
       type: Number,
