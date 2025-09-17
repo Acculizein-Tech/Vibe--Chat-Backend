@@ -157,6 +157,11 @@ const businessSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    qrCodeUrl: {
+  type: String,
+  default: null,
+},
+
     // ✅ New fields for tracking views
     views: {
       type: Number,

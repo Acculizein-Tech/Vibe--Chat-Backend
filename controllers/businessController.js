@@ -41,6 +41,7 @@ import EVChargingPoint from '../models/EVChargingPoint.js'; // Import EVCharging
 import MarketingBranding from '../models/MarketingBranding.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
+import { generateAndUploadQrCode } from "../middlewares/generateQrCode.js"; // 🆕 import
 import axios from 'axios'
 
 import mongoose from 'mongoose';
@@ -1020,6 +1021,21 @@ if (validPlan && validPlan.priceName && validPlan.priceName.toLowerCase() !== "b
       pricing,
       isPremium
     });
+
+     // ===============================
+    // 🆕 QR Code Generate & Save
+    // ===============================
+      // Step 5: Generate QR code & save URL
+    // 🆕 QR Code Generate & Save
+try {
+  const qrUrl = await generateAndUploadQrCode(business._id, category);
+  await Business.findByIdAndUpdate(business._id, { $set: { qrCodeUrl: qrUrl.url } });
+} catch (qrErr) {
+  console.warn("⚠️ QR Code generation failed:", qrErr.message);
+}
+
+
+
 
     // ===============================
     // Payment Update

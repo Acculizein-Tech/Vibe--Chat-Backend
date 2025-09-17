@@ -70,54 +70,123 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter });
 
 // Get correct S3 folder path
+// const getS3KeyPrefix = (req, file) => {
+//   let folder = 'others';
+
+
+//     // 🆕 Ensure req is safe
+//   const baseUrl = req?.baseUrl || "";
+//   const params = req?.params || {};
+
+//   // ✅ Dedicated folder for Business QR codes
+//   if (file.fieldname === "qrCode") {
+//     return "business-qr"; // early return
+//   }
+
+//     // 🆕 NEW: Dedicated folder for Business QR codes
+//   if (file.fieldname === 'qrCode') {
+//     folder = 'business-qr';
+//     return folder; // early return → don’t go into other logic
+//   }
+
+//    // 🟢 Dedicated handling for Advertisements
+//   if (req.baseUrl.includes("/advertisements")) {
+//     const adId = req.params.adId || "temp"; // "temp" if creating ad before saving DB
+
+//     switch (file.fieldname) {
+//       case "image":
+//         folder = `advertisements/${adId}/images`;
+//         break;
+//       case "video":
+//         folder = `advertisements/${adId}/videos`;
+//         break;
+//       default:
+//         folder = `advertisements/${adId}/others`;
+//     }
+
+//     return folder; // 🟢 early return → avoid breaking other logic
+//   }
+
+//   if (file.fieldname === 'profileImage') {
+//     folder = req.baseUrl.includes('/user')
+//       ? 'profile-user'
+//       : req.baseUrl.includes('/business')
+//         ? 'profile-business'
+//         : folder;
+//   } else if (file.fieldname === 'coverImage') {
+//     folder = 'cover-image';
+//   } else if (file.fieldname === 'certificateImages') {
+//     folder = 'certificates';
+//   } else if (file.fieldname === 'galleryImages') {
+//     folder = 'gallery-images';
+//   } else if (file.fieldname === 'eventImages') {
+//     folder = 'events-photo';
+//   } else if (file.fieldname === 'aadhaarFront') {
+//     folder = 'aadhaar/front';
+//   } else if (file.fieldname === 'aadhaarBack') {
+//     folder = 'aadhaar/back';
+//   } else if (file.fieldname === 'driverPhoto') {
+//     folder = 'driver/photo';
+//   } else if (file.fieldname === 'licenseCopy') {
+//     folder = 'driver/license';
+//   }
+
+//   return folder;
+// };
+
 const getS3KeyPrefix = (req, file) => {
-  let folder = 'others';
+  let folder = "others";
 
+  // 🆕 Ensure req is safe
+  const baseUrl = req?.baseUrl || "";
+  const params = req?.params || {};
 
-   // 🟢 Dedicated handling for Advertisements
-  if (req.baseUrl.includes("/advertisements")) {
-    const adId = req.params.adId || "temp"; // "temp" if creating ad before saving DB
+  // ✅ Dedicated folder for Business QR codes
+  if (file.fieldname === "qrCode") {
+    return "business-qr"; // early return
+  }
+
+  // 🟢 Dedicated handling for Advertisements
+  if (baseUrl.includes("/advertisements")) {
+    const adId = params.adId || "temp"; // "temp" if creating ad before saving DB
 
     switch (file.fieldname) {
       case "image":
-        folder = `advertisements/${adId}/images`;
-        break;
+        return `advertisements/${adId}/images`;
       case "video":
-        folder = `advertisements/${adId}/videos`;
-        break;
+        return `advertisements/${adId}/videos`;
       default:
-        folder = `advertisements/${adId}/others`;
+        return `advertisements/${adId}/others`;
     }
-
-    return folder; // 🟢 early return → avoid breaking other logic
   }
 
-  if (file.fieldname === 'profileImage') {
-    folder = req.baseUrl.includes('/user')
-      ? 'profile-user'
-      : req.baseUrl.includes('/business')
-        ? 'profile-business'
-        : folder;
-  } else if (file.fieldname === 'coverImage') {
-    folder = 'cover-image';
-  } else if (file.fieldname === 'certificateImages') {
-    folder = 'certificates';
-  } else if (file.fieldname === 'galleryImages') {
-    folder = 'gallery-images';
-  } else if (file.fieldname === 'eventImages') {
-    folder = 'events-photo';
-  } else if (file.fieldname === 'aadhaarFront') {
-    folder = 'aadhaar/front';
-  } else if (file.fieldname === 'aadhaarBack') {
-    folder = 'aadhaar/back';
-  } else if (file.fieldname === 'driverPhoto') {
-    folder = 'driver/photo';
-  } else if (file.fieldname === 'licenseCopy') {
-    folder = 'driver/license';
+  if (file.fieldname === "profileImage") {
+    folder = baseUrl.includes("/user")
+      ? "profile-user"
+      : baseUrl.includes("/business")
+      ? "profile-business"
+      : folder;
+  } else if (file.fieldname === "coverImage") {
+    folder = "cover-image";
+  } else if (file.fieldname === "certificateImages") {
+    folder = "certificates";
+  } else if (file.fieldname === "galleryImages") {
+    folder = "gallery-images";
+  } else if (file.fieldname === "eventImages") {
+    folder = "events-photo";
+  } else if (file.fieldname === "aadhaarFront") {
+    folder = "aadhaar/front";
+  } else if (file.fieldname === "aadhaarBack") {
+    folder = "aadhaar/back";
+  } else if (file.fieldname === "driverPhoto") {
+    folder = "driver/photo";
+  } else if (file.fieldname === "licenseCopy") {
+    folder = "driver/license";
   }
 
   return folder;
 };
+
 
 // 🟢 Upload and convert images directly from memory
 // export const uploadToS3 = async (file, req) => {
@@ -252,6 +321,9 @@ export const uploadToS3 = async (file, req) => {
 
   // 🔹 Video types
   const videoTypes = ['.mp4', '.mov', '.avi', '.mkv'];
+
+
+
 
   try {
     // 🔹 Video upload (no conversion)

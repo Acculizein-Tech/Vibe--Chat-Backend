@@ -20,6 +20,8 @@ const mediaFields = upload.fields([
    // 🟢 Advertisement fields
   { name: "adImage", maxCount: 5 },
   { name: "adVideo", maxCount: 1 },
+
+  {name : "qrCode", maxCount: 1}, // 🆕 NEW: Business QR code upload (usually 1 file
 ]);
 
 // ✅ Multer wrapper
