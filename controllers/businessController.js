@@ -2475,7 +2475,7 @@ export const getBusinessPrefillInfo = async (req, res) => {
       // ✅ Otherwise -> fetch the last created business of this user
       business = await Business.findOne(
         { owner: userId },
-        "ownerName name gender aadhaarNumber phone experience description location website email socialLinks aadhaarImages"
+        "ownerName name gender aadhaarNumber phone experience location website email aadhaarImages"
       )
         .sort({ _id: -1 }) // newest by ObjectId
         .lean();
@@ -2544,3 +2544,46 @@ export const updatePremiumBusinesses = async (req, res) => {
 };
 
 
+export const updateOldBusinessQRCodes = async (req, res) => {
+  try {
+    // ✅ Fetch all businesses where qrCodeUrl is missing
+    // const businesses = await Business.find({
+    //   $or: [{ qrCodeUrl: null }, { qrCodeUrl: null }]
+    // });
+const businesses = await Business.find({
+  $or: [
+    { qrCodeUrl: null },
+    // { quickLink: null }
+  ]
+});
+
+    if (!businesses.length) {
+      return res.json({ success: true, message: "All businesses already have QR codes" });
+    }
+
+    let updatedCount = 0;
+
+    for (const biz of businesses) {
+      // categorySlug tumhare DB me jaha save hai waha se lena padega
+      const categorySlug = biz.category || "default"; // fallback if missing
+
+      // ✅ Generate QR
+      const qrData = await generateAndUploadQrCode(biz._id, categorySlug);
+
+      // ✅ Update business with QR Code info
+      biz.qrCodeUrl = qrData.qrCodeUrl;
+      biz.quickLink = qrData.quickLink;
+      await biz.save();
+
+      updatedCount++;
+    }
+
+    return res.json({
+      success: true,
+      message: `QR Codes updated for ${updatedCount} businesses`
+    });
+  } catch (err) {
+    console.error("❌ QR Update failed:", err.message);
+    res.status(500).json({ success: false, message: "QR update failed" });
+  }
+};

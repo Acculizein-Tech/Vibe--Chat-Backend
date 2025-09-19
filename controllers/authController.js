@@ -361,6 +361,11 @@ export const login = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
   // console.log(user);
 
+  if (!user || !(await user.email)) {
+    res.status(401);
+    throw new Error("Create your account first");
+  }
+
   if (!user || !(await user.matchPassword(password))) {
     res.status(401);
     throw new Error("Invalid email or password");

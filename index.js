@@ -30,14 +30,28 @@ import KYCroute from './routes/KYCroute.js'; // Import KYC routes
 // import User from './models/user.js';
 import './cronJobs/leadReminderJob.js';
 import cors from 'cors';
-dotenv.config();
+// dotenv.config();
 
+// Must be first
+const envFile = process.env.ENV_FILE || ".env";
+
+// Force load
+const result = dotenv.config({
+  path: path.resolve(process.cwd(), envFile),
+  override: true   // 👈 force overwrite previous values
+});
+
+console.log("✅ ENV_FILE:", envFile);
+// console.log("✅ dotenv result:", result);
+console.log("✅ PORT:", process.env.PORT);
+console.log("✅ MONGO_URI:", process.env.MONGO_URI);
 
 const app = express();
 
 // Database connection
 connectDB();
 app.use(requestIp.mw());
+
 
 
 // Middleware
@@ -171,7 +185,7 @@ app.use("/invoices", express.static(path.join(path.resolve(), "invoices")));
 // Error handling
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 httpServer.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });

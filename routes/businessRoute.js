@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan, getMyBusinesses, updateBusinessPricing, getRazorpayPayments, getBusinessPrefillInfo, getBusinessCities, updatePremiumBusinesses  } from '../controllers/businessController.js';
+import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness, switchBusinessPlan, getMyBusinesses, updateBusinessPricing, getRazorpayPayments, getBusinessPrefillInfo, getBusinessCities, updatePremiumBusinesses, updateOldBusinessQRCodes } from '../controllers/businessController.js';
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
 import  roles  from '../middlewares/roles.js';
@@ -41,5 +41,7 @@ router.delete('/deleteBusiness/:id', protect, roles('superadmin', 'customer'), d
 router.delete('/softgo/:id', protect, roles('customer'), softDeleteBusiness);
 router.get('/getcities/', getBusinessCities);
 router.put("/update-premium", updatePremiumBusinesses);
+
+router.post("/update-old-qr", updateOldBusinessQRCodes);
 
 export default router;
