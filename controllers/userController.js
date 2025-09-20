@@ -1,15 +1,15 @@
 // controllers/userController.js
 
-import User from '../models/user.js';
-import asyncHandler from '../utils/asyncHandler.js';
+import User from "../models/user.js";
+import asyncHandler from "../utils/asyncHandler.js";
 
-import Business from '../models/Business.js';
-import Review from '../models/Review.js';
-import { uploadToS3 } from '../middlewares/upload.js';
-import Plan from '../models/Priceplan.js';
-import Payment from '../models/Payment.js';
-import axios from 'axios';
-import KYC from '../models/KYC.js';
+import Business from "../models/Business.js";
+import Review from "../models/Review.js";
+import { uploadToS3 } from "../middlewares/upload.js";
+import Plan from "../models/Priceplan.js";
+import Payment from "../models/Payment.js";
+import axios from "axios";
+import KYC from "../models/KYC.js";
 
 import { generateReferralCode } from "../utils/generateReferralCode.js";
 
@@ -20,31 +20,31 @@ import { generateReferralCode } from "../utils/generateReferralCode.js";
 export const getUserProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const user = await User.findById(id).select('-password -refreshTokens');
+  const user = await User.findById(id).select("-password -refreshTokens");
 
   if (!user) {
     res.status(404);
-    throw new Error('User not found');
+    throw new Error("User not found");
   }
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: user,
   });
 });
 
 // @desc    Update user profile
 
-
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
     const { fullName, email, phone, city, state, country, zipCode } = req.body;
 
     // ✅ Phone number space check
-    if (phone && phone.includes(' ')) {
+    if (phone && phone.includes(" ")) {
       return res.status(400).json({
         success: false,
-        message: 'Phone number should not contain spaces. Example: +919876543210',
+        message:
+          "Phone number should not contain spaces. Example: +919876543210",
       });
     }
 
@@ -53,7 +53,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     if (phone && !phoneRegex.test(phone)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid phone number. Example: +919876543210',
+        message: "Invalid phone number. Example: +919876543210",
       });
     }
 
@@ -68,7 +68,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       zipCode: zipCode?.trim(),
     };
 
-       // ✅ Handle avatar upload in background (non-blocking)
+    // ✅ Handle avatar upload in background (non-blocking)
     if (req.file) {
       try {
         const s3Result = await uploadToS3(req.file, req);
@@ -92,43 +92,38 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
     // ✅ Respond to client immediately (within 1–2 sec)
     res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       data: updatedUser,
     });
-
- 
-
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: 'Failed to update profile',
+      message: "Failed to update profile",
       error: err.message,
     });
   }
 });
-
-
-
-
 
 export const getUserReviews = asyncHandler(async (req, res) => {
   const ownerId = req.user._id;
 
   try {
     // 🔍 1. Get all businesses listed by the current user
-    const businesses = await Business.find({ owner: ownerId }).select('_id name');
+    const businesses = await Business.find({ owner: ownerId }).select(
+      "_id name"
+    );
 
     if (!businesses.length) {
       return res.status(200).json({
-        status: 'success',
-        message: 'No businesses listed by this user yet.',
+        status: "success",
+        message: "No businesses listed by this user yet.",
         reviews: [],
       });
     }
@@ -137,37 +132,38 @@ export const getUserReviews = asyncHandler(async (req, res) => {
 
     // 📝 2. Find all reviews on those businesses
     const reviews = await Review.find({ business: { $in: businessIds } })
-      .populate('user', 'fullName profile.avatar') // reviewer info
-      .populate('business', 'name')               // business info
-      .sort({ createdAt: -1 })                    // latest first
+      .populate("user", "fullName profile.avatar") // reviewer info
+      .populate("business", "name") // business info
+      .sort({ createdAt: -1 }) // latest first
       .lean();
 
     // 📦 3. Format the review response
     const formattedReviews = reviews.map((r) => ({
-      reviewerName: r.user?.fullName || 'Anonymous',
+      reviewerName: r.user?.fullName || "Anonymous",
       reviewerAvatar: r.user?.profile?.avatar || null,
-      businessName: r.business?.name || 'Unknown',
+      businessName: r.business?.name || "Unknown",
       comment: r.comment,
       rating: r.rating,
       time: r.createdAt,
     }));
 
     return res.status(200).json({
-      status: 'success',
+      status: "success",
       total: formattedReviews.length,
       reviews: formattedReviews,
     });
-
   } catch (error) {
-    console.error('❌ Error while fetching reviews for user businesses:', error);
+    console.error(
+      "❌ Error while fetching reviews for user businesses:",
+      error
+    );
     return res.status(500).json({
-      status: 'error',
-      message: 'Server error while fetching business reviews.',
+      status: "error",
+      message: "Server error while fetching business reviews.",
       error: error.message,
     });
   }
 });
-
 
 //get the business by use id
 // export const getUserBusinesses = asyncHandler(async (req, res) => {
@@ -205,15 +201,14 @@ export const getUserReviews = asyncHandler(async (req, res) => {
 // });
 
 //better error handling
-export const handleError = (error, res) => {  
-  console.error('❌ Error:', error.message || error);
+export const handleError = (error, res) => {
+  console.error("❌ Error:", error.message || error);
   res.status(500).json({
-    status: 'error',
-    message: 'An unexpected error occurred. Please try again later.',
-    error: error.message || 'Unknown error',
+    status: "error",
+    message: "An unexpected error occurred. Please try again later.",
+    error: error.message || "Unknown error",
   });
-}
-
+};
 
 // @desc    Get all business listings created by the current user
 // @route   GET /api/user/listings
@@ -222,94 +217,91 @@ export const getUserListings = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   try {
-    const listings = await Business.find({ owner: userId, deleteBusiness: false })
-      .select('-__v') // optional: exclude Mongoose version key
-      .populate('categoryRef') // optional: load category info if needed
+    const listings = await Business.find({
+      owner: userId,
+      deleteBusiness: false,
+    })
+      .select("-__v") // optional: exclude Mongoose version key
+      .populate("categoryRef") // optional: load category info if needed
       .sort({ createdAt: -1 }); // newest first
 
     if (!listings.length) {
       return res.status(200).json({
-        status: 'success',
-        message: 'No business listings found for this user.',
+        status: "success",
+        message: "No business listings found for this user.",
         listings: [],
       });
     }
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       total: listings.length,
       listings,
     });
   } catch (error) {
-    console.error('❌ Error fetching user listings:', error);
+    console.error("❌ Error fetching user listings:", error);
     res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch business listings.',
+      status: "error",
+      message: "Failed to fetch business listings.",
       error: error.message,
     });
   }
 });
-
-
 
 export const getAllSalesUsers = asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?._id;
 
     const salesUsers = await User.find({
-      role: 'sales',
-      _id: { $ne: currentUserId } // Exclude current logged-in user
+      role: "sales",
+      _id: { $ne: currentUserId }, // Exclude current logged-in user
     })
-      .select('-__v')
+      .select("-__v")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       total: salesUsers.length,
       users: salesUsers,
     });
   } catch (error) {
-    console.error('❌ Error fetching sales users:', error);
+    console.error("❌ Error fetching sales users:", error);
     res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch sales users.',
+      status: "error",
+      message: "Failed to fetch sales users.",
       error: error.message,
     });
   }
 });
 
-
 //get those users who have register with sales user refferal code link
 export const getUsersByReferral = asyncHandler(async (req, res) => {
   try {
     // Ensure only sales users can access this
-    if (req.user.role !== 'sales') {
+    if (req.user.role !== "sales") {
       return res.status(403).json({
-        message: 'Access denied. Only sales users can view referred users.'
+        message: "Access denied. Only sales users can view referred users.",
       });
     }
 
     const referredUsers = await User.find({ referredBy: req.user._id })
-      .select('-password -refreshTokens -__v') // Hide sensitive fields
+      .select("-password -refreshTokens -__v") // Hide sensitive fields
       .sort({ createdAt: -1 });
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       total: referredUsers.length,
-      users: referredUsers
+      users: referredUsers,
     });
-
   } catch (error) {
-    console.error('❌ Error fetching referred users:', error);
+    console.error("❌ Error fetching referred users:", error);
     res.status(500).json({
-      status: 'error',
-      message: 'Server Error',
-      error: error.message
+      status: "error",
+      message: "Server Error",
+      error: error.message,
     });
   }
 });
-
-
 
 //get the userRefferal by user.
 
@@ -336,11 +328,9 @@ export const getWalletInfo = async (req, res) => {
         totalReferrals: 0,
       });
     }
-     // 🟢 Fetch KYC status
+    // 🟢 Fetch KYC status
     const kyc = await KYC.findOne({ userId }).select("isPaymentified");
     const isKycVerified = kyc?.isPaymentified === true;
-
-
 
     // 🟢 Count all Payment docs jaha referral.code == user.referralCode
     const totalReferrals = await Payment.countDocuments({
@@ -350,10 +340,10 @@ export const getWalletInfo = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      wallet: user.wallet,              // { balance, history }
-      referralCode: user.referralCode,  // unique referral code of user
-      totalReferrals, 
-      isPaymentified: isKycVerified,                  // count of how many times it was used
+      wallet: user.wallet, // { balance, history }
+      referralCode: user.referralCode, // unique referral code of user
+      totalReferrals,
+      isPaymentified: isKycVerified, // count of how many times it was used
     });
   } catch (error) {
     console.error("❌ Error in getWalletInfo:", error);
@@ -376,7 +366,6 @@ const razorpayX = axios.create({
 /**
  * Redeem Wallet Balance (Min ₹10)
  */
-
 
 // export const applyReferral = asyncHandler(async (req, res) => {
 //   try {
@@ -434,9 +423,7 @@ const razorpayX = axios.create({
 //   }
 // });
 
-
-////generate refferal code for superadmin 
-
+////generate refferal code for superadmin
 
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
@@ -449,39 +436,78 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // Step 1: Prevent self-referral
+    // Prevent self-referral
     if (!user_id) return res.status(400).json({ message: "User ID required" });
 
-    // Step 2: Find superadmin who has this code
-    const superAdmin = await User.findOne({ role: "superadmin" });
-    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    // --- Step 1: Check if referral code belongs to superadmin ---
+    let superAdmin = await User.findOne({
+      role: "superadmin",
+      "customCodes.generatedCode": referral_code.trim().toUpperCase()
+    });
 
-    // Step 3: Find code in superadmin's customCodes
-    const customCode = superAdmin.customCodes.find(
-      c => c.generatedCode === referral_code && c.isActive
-    );
+    if (superAdmin) {
+      // Find exact active code
+      const customCode = superAdmin.customCodes.find(
+        (c) =>
+          c.generatedCode.toUpperCase() === referral_code.trim().toUpperCase() &&
+          c.isActive
+      );
 
-    if (!customCode) return res.status(404).json({ message: "Invalid or inactive code" });
+      if (!customCode)
+        return res.status(404).json({ message: "Invalid or inactive code" });
 
-    // Step 4: Check validity
-    if (customCode.validity && new Date() > customCode.validity) {
-      return res.status(400).json({ message: "Referral code expired" });
+      // Check validity
+      if (customCode.validity && new Date() > customCode.validity) {
+        return res.status(400).json({ message: "Referral code expired" });
+      }
+
+      // Apply flat discount
+      let updatedAmount = total_plan_amount - customCode.codeValue;
+      if (updatedAmount < 0) updatedAmount = 0;
+
+      return res.status(200).json({
+        success: true,
+        message: "Referral code applied successfully",
+        updatedAmount,
+        appliedCode: {
+          codeName: customCode.codeName,
+          codeValue: customCode.codeValue,
+          generatedCode: customCode.generatedCode,
+          validity: customCode.validity,
+        },
+      });
     }
 
-    // Step 5: Apply flat discount
-    let updatedAmount = total_plan_amount - customCode.codeValue;
+    // --- Step 2: Check if referral code belongs to normal user ---
+    const referralProvider = await User.findOne({ referralCode: referral_code.trim() });
+    if (!referralProvider) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid referral code",
+      });
+    }
+
+    // Prevent self-use
+    if (referralProvider._id.toString() === user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot use your own referral code",
+      });
+    }
+
+    // Apply default referral bonus (can adjust)
+    const bonusAmount = 300;
+    let updatedAmount = total_plan_amount - bonusAmount;
     if (updatedAmount < 0) updatedAmount = 0;
 
-    // Step 6: Return updated amount and code info
     return res.status(200).json({
       success: true,
       message: "Referral code applied successfully",
       updatedAmount,
-      appliedCode: {
-        codeName: customCode.codeName,
-        codeValue: customCode.codeValue,
-        generatedCode: customCode.generatedCode,
-        validity: customCode.validity,
+      referralProvider: {
+        id: referralProvider._id,
+        name: referralProvider.fullName,
+        referralCode: referralProvider.referralCode,
       },
     });
 
@@ -496,25 +522,25 @@ export const applyReferral = asyncHandler(async (req, res) => {
 
 
 
-
-
-
-
-
 export const createCustomCode = async (req, res) => {
   try {
     const { codeName, codeValue, validity, codeLength } = req.body;
 
     if (!req.user || req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "Only superadmin can generate codes" });
+      return res
+        .status(403)
+        .json({ message: "Only superadmin can generate codes" });
     }
 
     if (!codeName || typeof codeValue !== "number" || codeValue <= 0) {
-      return res.status(400).json({ message: "Code name and flat discount amount required" });
+      return res
+        .status(400)
+        .json({ message: "Code name and flat discount amount required" });
     }
 
     const superAdmin = await User.findById(req.user._id);
-    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if (!superAdmin)
+      return res.status(404).json({ message: "Superadmin not found" });
 
     // ✅ Generate unique code
     let generatedCode;
@@ -524,7 +550,9 @@ export const createCustomCode = async (req, res) => {
     while (!isUnique) {
       const tempCode = generateReferralCode(length);
       // check duplicate in superAdmin customCodes
-      const exists = superAdmin.customCodes.some(c => c.generatedCode === tempCode);
+      const exists = superAdmin.customCodes.some(
+        (c) => c.generatedCode === tempCode
+      );
       if (!exists) {
         generatedCode = tempCode;
         isUnique = true;
@@ -535,7 +563,7 @@ export const createCustomCode = async (req, res) => {
       codeName,
       codeValue,
       validity: validity ? new Date(validity) : null,
-      generatedCode
+      generatedCode,
     };
 
     superAdmin.customCodes.push(newCode);
@@ -543,9 +571,8 @@ export const createCustomCode = async (req, res) => {
 
     res.status(201).json({
       message: "Custom code generated successfully",
-      customCode: newCode
+      customCode: newCode,
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error generating code" });
