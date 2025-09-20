@@ -109,7 +109,7 @@ payoutHistory: [
 customCodes: [
   {
     codeName: { type: String, required: true },      // Superadmin ka display name
-    codeValue: { type: Number, required: true },     // Flat discount amount
+    codeValue: { type: String, required: true },     // Flat discount amount
     validity: { type: Date, default: null },         // null => unlimited
     isActive: { type: Boolean, default: true },      // active/inactive
     generatedCode: { type: String, required: true }, // format: 6 capital + 2 numeric

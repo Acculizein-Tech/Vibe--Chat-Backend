@@ -1,6 +1,6 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
-import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, applyReferral, createCustomCode } from '../controllers/userController.js';
+import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, applyReferral, createCustomCode, getCustomCodes } from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';
@@ -28,6 +28,7 @@ router.get('/getbusinessbyid', protect, getUserListings);
 router.get('/getAllSalesUsers', protect, getAllSalesUsers);
 router.get('/getWalletInfo', protect, getWalletInfo);
 router.get('/getreferralUser', protect, getUsersByReferral); // Get users by referral code
+router.get('/codes', protect, getCustomCodes); // Get custom codes for superadmin
 
 //addrefferal
 router.post("/apply-referral", protect, applyReferral);

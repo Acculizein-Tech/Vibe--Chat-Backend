@@ -524,32 +524,35 @@ export const applyReferral = asyncHandler(async (req, res) => {
 
 export const createCustomCode = async (req, res) => {
   try {
-    const { codeName, codeValue, validity, codeLength } = req.body;
+    const { codename, amount, validity, codelength } = req.body;
 
+    // 🛑 Only superadmin allowed
     if (!req.user || req.user.role !== "superadmin") {
       return res
         .status(403)
         .json({ message: "Only superadmin can generate codes" });
     }
 
-    if (!codeName || typeof codeValue !== "number" || codeValue <= 0) {
+    // 🛑 Validation
+    if (!codename || !amount) {
       return res
         .status(400)
         .json({ message: "Code name and flat discount amount required" });
     }
 
+    // ✅ Find superadmin
     const superAdmin = await User.findById(req.user._id);
-    if (!superAdmin)
+    if (!superAdmin) {
       return res.status(404).json({ message: "Superadmin not found" });
+    }
 
     // ✅ Generate unique code
     let generatedCode;
     let isUnique = false;
-    const length = codeLength || 8; // default 8 chars
+    const length = codelength || "8"; // default string "8"
 
     while (!isUnique) {
-      const tempCode = generateReferralCode(length);
-      // check duplicate in superAdmin customCodes
+      const tempCode = generateReferralCode(Number(length)); // generator numeric lega
       const exists = superAdmin.customCodes.some(
         (c) => c.generatedCode === tempCode
       );
@@ -560,21 +563,68 @@ export const createCustomCode = async (req, res) => {
     }
 
     const newCode = {
-      codeName,
-      codeValue,
+      codeName: codename,
+      codeValue: amount, // 👈 string hi store hoga
       validity: validity ? new Date(validity) : null,
       generatedCode,
+      isActive: true,
     };
 
     superAdmin.customCodes.push(newCode);
     await superAdmin.save();
 
     res.status(201).json({
+      success: true,
       message: "Custom code generated successfully",
       customCode: newCode,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error in createCustomCode:", error);
     res.status(500).json({ message: "Server error generating code" });
   }
 };
+
+
+// ✅ Get custom codes for superadmin (production ready)
+export const getCustomCodes = async (req, res) => {
+  try {
+    // 🛑 Ensure user is superadmin
+    if (!req.user || req.user.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only superadmin can access custom codes",
+      });
+    }
+
+    // ✅ Fetch superadmin from DB
+    const superAdmin = await User.findById(req.user._id).lean();
+    if (!superAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: "Superadmin not found",
+      });
+    }
+
+    // ✅ Filter only safe fields from customCodes
+    const safeCustomCodes = superAdmin.customCodes.map((code) => ({
+      codeName: code.codeName,
+      codeValue: code.codeValue,
+      validity: code.validity,
+      generatedCode: code.generatedCode,
+      isActive: code.isActive,
+      createdAt: code.createdAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      customCodes: safeCustomCodes,
+    });
+  } catch (error) {
+    console.error("Error in getCustomCodes:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error fetching custom codes",
+    });
+  }
+};
+
