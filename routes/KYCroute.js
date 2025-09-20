@@ -13,9 +13,9 @@ router.post("/submit", protect, submitKyc);
 router.get("/my", protect, getMyKyc);
 
 // Admin fetch all KYC requests
-router.get("/", protect, role("superadmin"), getAllKyc);
+router.get("/", protect, role("superadmin", "admin"), getAllKyc);
 
 // Admin verify KYC
-router.put("/:id/verify", protect, role("superadmin"), verifyKyc);
+router.put("/:id/verify", protect, role("superadmin", "admin"), verifyKyc);
 
 export default router;

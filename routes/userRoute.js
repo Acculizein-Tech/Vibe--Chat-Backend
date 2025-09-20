@@ -1,9 +1,10 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
-import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, applyReferral } from '../controllers/userController.js';
+import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, applyReferral, createCustomCode } from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';
+import roles from '../middlewares/roles.js';
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.get('/getreferralUser', protect, getUsersByReferral); // Get users by ref
 
 //addrefferal
 router.post("/apply-referral", protect, applyReferral);
+router.post("/custom-code", protect, roles('superadmin'), createCustomCode);
 
 
 export default router;

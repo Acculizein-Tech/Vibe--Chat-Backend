@@ -104,6 +104,19 @@ payoutHistory: [
   }
 ],
 
+//custom code
+// models/User.js ke andar, last me add kar do
+customCodes: [
+  {
+    codeName: { type: String, required: true },      // Superadmin ka display name
+    codeValue: { type: Number, required: true },     // Flat discount amount
+    validity: { type: Date, default: null },         // null => unlimited
+    isActive: { type: Boolean, default: true },      // active/inactive
+    generatedCode: { type: String, required: true }, // format: 6 capital + 2 numeric
+    createdAt: { type: Date, default: Date.now },
+  }
+],
+
   
 
 

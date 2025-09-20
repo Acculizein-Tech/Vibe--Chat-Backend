@@ -59,7 +59,7 @@ const businessSchema = new mongoose.Schema(
     },
     experience: { type: String },
     description: { type: String },
-    phone: { type: Number },
+    phone: { type: String },
     website: String,
     email: {
       type: String,

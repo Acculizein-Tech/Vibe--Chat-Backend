@@ -11,6 +11,8 @@ import Payment from '../models/Payment.js';
 import axios from 'axios';
 import KYC from '../models/KYC.js';
 
+import { generateReferralCode } from "../utils/generateReferralCode.js";
+
 // @desc    Get current user details
 // @route   GET /api/user/profile/:id
 // @access  Private
@@ -374,85 +376,72 @@ const razorpayX = axios.create({
 /**
  * Redeem Wallet Balance (Min ₹10)
  */
-// export const redeemWallet = asyncHandler(async (req, res) => {
+
+
+// export const applyReferral = asyncHandler(async (req, res) => {
 //   try {
-//     const userId = req.user._id; // from auth middleware
-//     const { amount, fund_account_id } = req.body; // fund_account_id = RazorpayX Fund Account (bank/UPI)
+//     const { referral_code, user_id, total_plan_amount } = req.body;
 
-//     const user = await User.findById(userId);
-
-//     if (!user) {
-//       return res.status(404).json({ success: false, message: "User not found" });
-//     }
-
-//     // ✅ Check wallet balance
-//     if (user.wallet.balance < 10) {
+//     // 🛑 Validation
+//     if (!referral_code || !user_id || !total_plan_amount) {
 //       return res.status(400).json({
 //         success: false,
-//         message: "Minimum ₹10 balance required to redeem",
+//         message: "Referral code, user_id and total_plan_amount are required",
 //       });
 //     }
 
-//     if (amount > user.wallet.balance) {
-//       return res.status(400).json({
+//     // 🎯 Step 1: Check if referral code exists in DB
+//     const referralProvider = await User.findOne({ referralCode: referral_code });
+//     if (!referralProvider) {
+//       return res.status(404).json({
 //         success: false,
-//         message: "Insufficient wallet balance",
+//         message: "Invalid referral code",
 //       });
 //     }
 
-//     // ✅ Create Payout Request to RazorpayX
-//     const payoutData = {
-//       account_number: process.env.RAZORPAYX_ACCOUNT_NUMBER, // Virtual account no.
-//       fund_account_id, // saved fund account of user (UPI/Bank)
-//       amount: amount * 100, // in paise
-//       currency: "INR",
-//       mode: "UPI", // or "IMPS"/"NEFT"
-//       purpose: "payout",
-//       queue_if_low_balance: true,
-//       reference_id: `redeem_${userId}_${Date.now()}`,
-//       narration: "Wallet Redeem",
-//     };
+//     // 🎯 Step 2: Ensure user is not using own referral code
+//     if (referralProvider._id.toString() === user_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You cannot use your own referral code",
+//       });
+//     }
 
-//     const payoutResponse = await razorpayX.post("/payouts", payoutData);
+//     // 🎯 Step 3: Just calculate referral bonus (do NOT update wallet here)
+//     const bonusAmount = 300;
 
-//     // ✅ Deduct balance & save transaction
-//     user.wallet.balance -= amount;
-//     user.wallet.history.push({
-//       amount,
-//       type: "debit",
-//       description: "Wallet Redeem",
-//       transactionId: payoutResponse.data.id,
-//       createdAt: new Date(),
-//     });
+//     // 🎯 Step 4: Apply discount to current user's plan
+//     let updatedAmount = total_plan_amount - bonusAmount;
+//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
 
-//     await user.save();
-
+//     // 🎯 Step 5: Return updated amount and referral info (no wallet change)
 //     return res.status(200).json({
 //       success: true,
-//       message: "Redeem successful",
-//       payout: payoutResponse.data,
-//       balance: user.wallet.balance,
+//       message: "Referral applied successfully",
+//       updatedAmount,
+//       referralProvider: {
+//         id: referralProvider._id,
+//         name: referralProvider.fullName,
+//         referralCode: referralProvider.referralCode,
+//       },
 //     });
 //   } catch (error) {
-//     console.error("Redeem Error:", error.response?.data || error.message);
-
-//     return res.status(500).json({
+//     console.error("Error in applyReferral:", error);
+//     res.status(500).json({
 //       success: false,
-//       message: "Redeem failed",
-//       error: error.response?.data || error.message,
+//       message: "Server error applying referral",
 //     });
 //   }
 // });
 
 
-//apply referal code
+////generate refferal code for superadmin 
 
 
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
     const { referral_code, user_id, total_plan_amount } = req.body;
 
-    // 🛑 Validation
     if (!referral_code || !user_id || !total_plan_amount) {
       return res.status(400).json({
         success: false,
@@ -460,41 +449,42 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // 🎯 Step 1: Check if referral code exists in DB
-    const referralProvider = await User.findOne({ referralCode: referral_code });
-    if (!referralProvider) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid referral code",
-      });
+    // Step 1: Prevent self-referral
+    if (!user_id) return res.status(400).json({ message: "User ID required" });
+
+    // Step 2: Find superadmin who has this code
+    const superAdmin = await User.findOne({ role: "superadmin" });
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+
+    // Step 3: Find code in superadmin's customCodes
+    const customCode = superAdmin.customCodes.find(
+      c => c.generatedCode === referral_code && c.isActive
+    );
+
+    if (!customCode) return res.status(404).json({ message: "Invalid or inactive code" });
+
+    // Step 4: Check validity
+    if (customCode.validity && new Date() > customCode.validity) {
+      return res.status(400).json({ message: "Referral code expired" });
     }
 
-    // 🎯 Step 2: Ensure user is not using own referral code
-    if (referralProvider._id.toString() === user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot use your own referral code",
-      });
-    }
+    // Step 5: Apply flat discount
+    let updatedAmount = total_plan_amount - customCode.codeValue;
+    if (updatedAmount < 0) updatedAmount = 0;
 
-    // 🎯 Step 3: Just calculate referral bonus (do NOT update wallet here)
-    const bonusAmount = 300;
-
-    // 🎯 Step 4: Apply discount to current user's plan
-    let updatedAmount = total_plan_amount - bonusAmount;
-    if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
-
-    // 🎯 Step 5: Return updated amount and referral info (no wallet change)
+    // Step 6: Return updated amount and code info
     return res.status(200).json({
       success: true,
-      message: "Referral applied successfully",
+      message: "Referral code applied successfully",
       updatedAmount,
-      referralProvider: {
-        id: referralProvider._id,
-        name: referralProvider.fullName,
-        referralCode: referralProvider.referralCode,
+      appliedCode: {
+        codeName: customCode.codeName,
+        codeValue: customCode.codeValue,
+        generatedCode: customCode.generatedCode,
+        validity: customCode.validity,
       },
     });
+
   } catch (error) {
     console.error("Error in applyReferral:", error);
     res.status(500).json({
@@ -503,3 +493,61 @@ export const applyReferral = asyncHandler(async (req, res) => {
     });
   }
 });
+
+
+
+
+
+
+
+
+export const createCustomCode = async (req, res) => {
+  try {
+    const { codeName, codeValue, validity, codeLength } = req.body;
+
+    if (!req.user || req.user.role !== "superadmin") {
+      return res.status(403).json({ message: "Only superadmin can generate codes" });
+    }
+
+    if (!codeName || typeof codeValue !== "number" || codeValue <= 0) {
+      return res.status(400).json({ message: "Code name and flat discount amount required" });
+    }
+
+    const superAdmin = await User.findById(req.user._id);
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+
+    // ✅ Generate unique code
+    let generatedCode;
+    let isUnique = false;
+    const length = codeLength || 8; // default 8 chars
+
+    while (!isUnique) {
+      const tempCode = generateReferralCode(length);
+      // check duplicate in superAdmin customCodes
+      const exists = superAdmin.customCodes.some(c => c.generatedCode === tempCode);
+      if (!exists) {
+        generatedCode = tempCode;
+        isUnique = true;
+      }
+    }
+
+    const newCode = {
+      codeName,
+      codeValue,
+      validity: validity ? new Date(validity) : null,
+      generatedCode
+    };
+
+    superAdmin.customCodes.push(newCode);
+    await superAdmin.save();
+
+    res.status(201).json({
+      message: "Custom code generated successfully",
+      customCode: newCode
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error generating code" });
+  }
+};
