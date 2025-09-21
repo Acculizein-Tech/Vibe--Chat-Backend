@@ -679,8 +679,6 @@ export const createCustomCode = async (req, res) => {
 
 
 
-
-
 // ✅ Get custom codes for superadmin (production ready)
 export const getCustomCodes = async (req, res) => {
   try {
@@ -693,7 +691,7 @@ export const getCustomCodes = async (req, res) => {
     }
 
     // ✅ Fetch superadmin from DB
-    const superAdmin = await User.findById(req.user._id).lean();
+    const superAdmin = await User.findById(req.user._id).lean().sort({ createdAt: -1 });
     if (!superAdmin) {
       return res.status(404).json({
         success: false,
@@ -705,7 +703,7 @@ export const getCustomCodes = async (req, res) => {
     const safeCustomCodes = superAdmin.customCodes.map((code) => ({
       codeName: code.codeName,
       codeValue: code.codeValue,
-      validity: code.validity,
+      validity: code.validity ? new Date(code.validity).toISOString().split("T")[0] : null, // ✅ only date,
       generatedCode: code.generatedCode,
       isActive: code.isActive,
       createdAt: code.createdAt,

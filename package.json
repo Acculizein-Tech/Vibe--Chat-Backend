@@ -7,7 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev:prod": "cross-env ENV_FILE=.env.production nodemon index.js",
+    "dev:prod": "cross-env ENV_FILE=.env nodemon index.js",
     "dev:test": "cross-env ENV_FILE=.env.test nodemon index.js"
   },
   "keywords": [],

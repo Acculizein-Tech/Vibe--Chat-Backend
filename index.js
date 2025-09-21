@@ -59,21 +59,48 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // startLeadReminderCron(); // ✅ This starts the cron job at 9:00 AM daily
 // CORS
+
+const allowedOrigins = [
+  'https://bizvility.com',
+  'https://testing.bizvility.com',
+
+];
+// app.use(cors({
+//   origin:  '*',
+//   methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+//   credentials: true,
+//   exposedHeaders: ['Content-Type']
+// }));
+
+
 app.use(cors({
-  origin:  '*',
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  exposedHeaders: ['Content-Type']
+  credentials: true
 }));
 
 // ✅ Create HTTP server and bind to Express
 const httpServer = http.createServer(app);
 
 // 🔌 Setup Socket.IO server
+// const io = new Server(httpServer, {
+//   cors: {
+//     origin: '*', // Adjust as needed for frontend domain
+//     methods: ['GET', 'POST']
+//   }
+// });
+
 const io = new Server(httpServer, {
   cors: {
-    origin: '*', // Adjust as needed for frontend domain
+    origin: allowedOrigins,
     methods: ['GET', 'POST']
   }
 });
