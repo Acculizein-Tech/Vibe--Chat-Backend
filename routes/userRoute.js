@@ -1,6 +1,7 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
-import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral, getWalletInfo, applyReferral, createCustomCode, getCustomCodes } from '../controllers/userController.js';
+import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral,
+   getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode, DeleteCustomCode } from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';
@@ -33,6 +34,7 @@ router.get('/codes', protect, getCustomCodes); // Get custom codes for superadmi
 //addrefferal
 router.post("/apply-referral", protect, applyReferral);
 router.post("/custom-code", protect, roles('superadmin'), createCustomCode);
-
+router.delete("/delete-code/customcode", protect, roles('superadmin'), DeleteCustomCode);
+router.put("/update-code/customcode", protect, roles('superadmin'), UpdateCustomCode);
 
 export default router;
