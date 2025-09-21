@@ -63,7 +63,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const allowedOrigins = [
   'https://bizvility.com',
   'https://testing.bizvility.com',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://localhost:4173'
 
 ];
 // app.use(cors({
