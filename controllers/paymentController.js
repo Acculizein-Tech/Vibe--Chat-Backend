@@ -8,8 +8,10 @@ import { generateInvoicePDF } from "../utils/pdfInvoiceGenerator.js"; // ✅ Adj
 import Business from "../models/Business.js";
 import InvoiceCounter from "../models/InvoiceCounter.js"; // ✅ NEW IMPORT
 import User from "../models/user.js";
+import Priceplan from "../models/Priceplan.js";
 import Razorpay from "razorpay";
 import Kyc from '../models/KYC.js';
+import RedeemRequest from "../models/RedeemRequest.js";
 import axios from "axios";
 
 
@@ -874,6 +876,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     const {
       razorpay: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
       business,
+      planId,
       companyData,
     } = req.body;
 
@@ -930,26 +933,56 @@ console.log("🔹 notes object:", order.notes);
 
     // ✅ Step 4: Referral handling
   // Step 4: Referral handling
-    let referralData = {};
-    if (referralCode) {
-      const referrer = await User.findOne({ referralCode });
-      if (referrer) {
-        referrer.wallet.balance += 300;
-        referrer.wallet.history.push({
-          amount: 300,
-          type: "credit",
-          description: `Referral bonus from user ${userId}`,
-          fromUser: userId,
-        });
-        await referrer.save();
+    // let referralData = {};
+    // if (referralCode) {
+    //   const referrer = await User.findOne({ referralCode });
+    //   if (referrer) {
+    //     referrer.wallet.balance += 300;
+    //     referrer.wallet.history.push({
+    //       amount: 300,
+    //       type: "credit",
+    //       description: `Referral bonus from user ${userId}`,
+    //       fromUser: userId,
+    //     });
+    //     await referrer.save();
 
-        referralData = {
-          code: referralCode,
-          referrer: referrer._id,
-          bonusAmount: 300,
-        };
-      }
-    }
+    //     referralData = {
+    //       code: referralCode,
+    //       referrer: referrer._id,
+    //       bonusAmount: 300,
+    //     };
+    //   }
+    // }
+
+    // --- Referral handling ---
+let referralData = {};
+if (referralCode) {
+  const referrer = await User.findOne({ referralCode });
+  if (referrer) {
+    // ✅ Fetch plan commission
+    const plan = planId 
+      ? await Priceplan.findById(planId) 
+      : await Priceplan.findOne({ price: totalAmount });
+
+    const commission = plan?.commission || 0;
+
+    referrer.wallet.balance += commission;
+    referrer.wallet.history.push({
+      amount: commission,
+      type: "credit",
+      description: `Referral bonus from user ${userId}`,
+      fromUser: userId,
+    });
+    await referrer.save();
+
+    referralData = {
+      code: referralCode,
+      referrer: referrer._id,
+      bonusAmount: commission,
+    };
+  }
+}
+
 
     // Step 5: Invoice n
 
@@ -1306,36 +1339,99 @@ const razorpayX = new Razorpay({
 //   }
 // });
 
+// export const redeemBalance = asyncHandler(async (req, res) => {
+//   const { userId, amount } = req.body;
+//   // const userId = req.user._id; // ✅ agar auth middleware use karna ho
+// try {
+//   if (!amount || isNaN(amount) || amount <= 0) {
+//     return res.status(400).json({ message: "Invalid redeem amount" });
+//   }
+
+//   if (amount < 10000) {
+//     return res.status(400).json({ message: "Minimum redeem amount is ₹10000" });
+//   }
+
+//   const user = await User.findById(userId);
+//   if (!user) {
+//     return res.status(404).json({ message: "User not found" });
+//   }
+
+//   // ✅ Get KYC details
+//   const kyc = await Kyc.findOne({ userId });
+//   if (!kyc || !kyc.isPaymentified) {
+//     return res.status(400).json({ message: "KYC not verified for payouts" });
+//   }
+
+//   if (user.wallet.balance < amount) {
+//     return res.status(400).json({ message: "Insufficient wallet balance" });
+//   }
+//   res.status(200).json({ message: `Redeem request is being processed. Please wait upto 7 business working days for your amount ₹${amount} INR` });
+// } catch (error) {
+//   console.error("❌ Error occurred while redeeming balance:", error);
+//   return res.status(500).json({ message: "Internal server error" });
+// }
+
+// });
+
+
 export const redeemBalance = asyncHandler(async (req, res) => {
   const { userId, amount } = req.body;
-  // const userId = req.user._id; // ✅ agar auth middleware use karna ho
-try {
-  if (!amount || isNaN(amount) || amount <= 0) {
-    return res.status(400).json({ message: "Invalid redeem amount" });
-  }
 
-  if (amount < 10000) {
-    return res.status(400).json({ message: "Minimum redeem amount is ₹10000" });
-  }
+  try {
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Invalid redeem amount" });
+    }
 
-  const user = await User.findById(userId);
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
+    if (amount < 300) {
+      return res.status(400).json({ message: "Minimum redeem amount is ₹300" });
+    }
 
-  // ✅ Get KYC details
-  const kyc = await Kyc.findOne({ userId });
-  if (!kyc || !kyc.isPaymentified) {
-    return res.status(400).json({ message: "KYC not verified for payouts" });
-  }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-  if (user.wallet.balance < amount) {
-    return res.status(400).json({ message: "Insufficient wallet balance" });
-  }
-  res.status(200).json({ message: `Redeem request is being processed. Please wait upto 7 business working days for your amount ₹${amount} INR` });
-} catch (error) {
-  console.error("❌ Error occurred while redeeming balance:", error);
-  return res.status(500).json({ message: "Internal server error" });
-}
+    const kyc = await Kyc.findOne({ userId });
+    if (!kyc || !kyc.isPaymentified) {
+      return res.status(400).json({ message: "KYC not verified for payouts" });
+    }
 
+    if (user.wallet.balance < amount) {
+      return res.status(400).json({ message: "Insufficient wallet balance" });
+    }
+
+    // ✅ Deduct balance
+    user.wallet.balance -= amount;
+    await user.save();
+
+    // ✅ Store separate redeem request
+    const redeemRequest = await RedeemRequest.create({
+      user: userId,
+      amount,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Your redeem amount will be transferred within 7 working days.",
+      requestDate: redeemRequest.requestedAt,
+      redeemRequest,
+    });
+  } catch (error) {
+    console.error("❌ Error occurred while redeeming balance:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 });
+
+
+
+// GET /api/redeem-requests for superadmin
+export const getAllRedeemRequests = async (req, res) => {  
+  const requests = await RedeemRequest.find()
+    .populate("user", "fullName email wallet")
+    .sort({ requestedAt: -1 });
+  res.status(200).json({
+    success: true,
+    count: requests.length,
+    requests,
+  });
+};

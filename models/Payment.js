@@ -34,6 +34,13 @@ const paymentSchema = new mongoose.Schema(
       enum: ["success", "failed", "pending"],
       default: "pending",
     },
+     // --- Redeem specific fields ---
+    redeemStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "transferred"],
+      default: null,
+    },
+    processedAt: { type: Date }, // when superadmin processes payout
 
     billingDetails: {
       businessName: String,

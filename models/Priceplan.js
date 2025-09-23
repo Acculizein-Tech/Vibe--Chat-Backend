@@ -24,6 +24,9 @@ const pricePlanSchema = new mongoose.Schema(
     discount:{
       type: Number,
     },
+    commission:{
+      type: Number,
+    },
     duration: {
       type: String,
      

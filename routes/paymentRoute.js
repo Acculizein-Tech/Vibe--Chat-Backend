@@ -9,7 +9,8 @@ import {
   getAllVerifiedPayments,
   getAllPayments,
   getPaymentByPaymentId,
-  redeemBalance
+  redeemBalance,
+  getAllRedeemRequests
 } from "../controllers/paymentController.js";
 
 import { protect } from "../middlewares/auth.js";
@@ -28,5 +29,6 @@ router.get('/all', protect, roles('superadmin'), getAllPayments);
 
 router.get("/:paymentId", protect, roles('customer', 'superadmin'), getPaymentByPaymentId);
 router.post('/redeem', protect, redeemBalance);
+router.get('/redeem-requests', protect, roles('superadmin'), getAllRedeemRequests)
 
 export default router;

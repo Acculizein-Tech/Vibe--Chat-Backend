@@ -10,6 +10,7 @@ import Plan from "../models/Priceplan.js";
 import Payment from "../models/Payment.js";
 import axios from "axios";
 import KYC from "../models/KYC.js";
+import Priceplan from "../models/Priceplan.js";
 
 import { generateNameBasedCode } from "../utils/generateReferralCode.js";
 
@@ -425,9 +426,107 @@ const razorpayX = axios.create({
 
 ////generate refferal code for superadmin
 
+// export const applyReferral = asyncHandler(async (req, res) => {
+//   try {
+//     const { referral_code, user_id, total_plan_amount } = req.body;
+
+//     if (!referral_code || !user_id || !total_plan_amount) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Referral code, user_id and total_plan_amount are required",
+//       });
+//     }
+
+//     // Prevent self-referral
+//     if (!user_id) return res.status(400).json({ message: "User ID required" });
+
+//     // --- Step 1: Check if referral code belongs to superadmin ---
+//     let superAdmin = await User.findOne({
+//       role: "superadmin",
+//       "customCodes.generatedCode": referral_code.trim().toUpperCase()
+//     });
+
+//     if (superAdmin) {
+//       // Find exact active code
+//       const customCode = superAdmin.customCodes.find(
+//         (c) =>
+//           c.generatedCode.toUpperCase() === referral_code.trim().toUpperCase() &&
+//           c.isActive
+//       );
+
+//       if (!customCode)
+//         return res.status(404).json({ message: "Invalid or inactive code" });
+
+//       // Check validity
+//       if (customCode.validity && new Date() > customCode.validity) {
+//         return res.status(400).json({ message: "Referral code expired" });
+//       }
+
+//       // Apply flat discount
+//       let updatedAmount = total_plan_amount - customCode.codeValue;
+//       if (updatedAmount < 0) updatedAmount = 0;
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "Referral code applied successfully",
+//         updatedAmount,
+//         appliedCode: {
+//           codeName: customCode.codeName,
+//           codeValue: customCode.codeValue,
+//           generatedCode: customCode.generatedCode,
+//           validity: customCode.validity,
+//         },
+//       });
+//     }
+
+//     // --- Step 2: Check if referral code belongs to normal user ---
+//     const referralProvider = await User.findOne({ referralCode: referral_code.trim() });
+//     if (!referralProvider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invalid referral code",
+//       });
+//     }
+
+//     // Prevent self-use
+//     if (referralProvider._id.toString() === user_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You cannot use your own referral code",
+//       });
+//     }
+
+//     // Apply default referral bonus (can adjust)
+//     const bonusAmount = 300;
+//     let updatedAmount = total_plan_amount - bonusAmount;
+//     if (updatedAmount < 0) updatedAmount = 0;
+
+//     return res.status(200).json({   
+//       success: true,
+//       message: "Referral code applied successfully",
+//       updatedAmount,
+//       referralProvider: {
+//         id: referralProvider._id,
+//         name: referralProvider.fullName,
+//         referralCode: referralProvider.referralCode,
+//       },
+//     });
+
+//   } catch (error) {
+//     console.error("Error in applyReferral:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error applying referral",
+//     });
+//   }
+// });
+
+
+
+
 export const applyReferral = asyncHandler(async (req, res) => {
   try {
-    const { referral_code, user_id, total_plan_amount } = req.body;
+    const { referral_code, user_id, total_plan_amount, plan_id } = req.body;
 
     if (!referral_code || !user_id || !total_plan_amount) {
       return res.status(400).json({
@@ -436,17 +535,13 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // Prevent self-referral
-    if (!user_id) return res.status(400).json({ message: "User ID required" });
-
-    // --- Step 1: Check if referral code belongs to superadmin ---
+    // --- Step 1: Superadmin referral (same as before) ---
     let superAdmin = await User.findOne({
       role: "superadmin",
       "customCodes.generatedCode": referral_code.trim().toUpperCase()
     });
 
     if (superAdmin) {
-      // Find exact active code
       const customCode = superAdmin.customCodes.find(
         (c) =>
           c.generatedCode.toUpperCase() === referral_code.trim().toUpperCase() &&
@@ -456,12 +551,10 @@ export const applyReferral = asyncHandler(async (req, res) => {
       if (!customCode)
         return res.status(404).json({ message: "Invalid or inactive code" });
 
-      // Check validity
       if (customCode.validity && new Date() > customCode.validity) {
         return res.status(400).json({ message: "Referral code expired" });
       }
 
-      // Apply flat discount
       let updatedAmount = total_plan_amount - customCode.codeValue;
       if (updatedAmount < 0) updatedAmount = 0;
 
@@ -478,26 +571,25 @@ export const applyReferral = asyncHandler(async (req, res) => {
       });
     }
 
-    // --- Step 2: Check if referral code belongs to normal user ---
+    // --- Step 2: User referral with commission ---
     const referralProvider = await User.findOne({ referralCode: referral_code.trim() });
     if (!referralProvider) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid referral code",
-      });
+      return res.status(404).json({ success: false, message: "Invalid referral code" });
     }
 
-    // Prevent self-use
     if (referralProvider._id.toString() === user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot use your own referral code",
-      });
+      return res.status(400).json({ success: false, message: "You cannot use your own referral code" });
     }
 
-    // Apply default referral bonus (can adjust)
-    const bonusAmount = 300;
-    let updatedAmount = total_plan_amount - bonusAmount;
+    // ✅ Fetch plan commission
+    const plan = plan_id ? await Priceplan.findById(plan_id) : await Priceplan.findOne({ price: total_plan_amount });
+    if (!plan) {
+      return res.status(404).json({ success: false, message: "Plan not found" });
+    }
+
+    const commission = plan.commission || 0;
+
+    let updatedAmount = total_plan_amount - commission;
     if (updatedAmount < 0) updatedAmount = 0;
 
     return res.status(200).json({
@@ -509,6 +601,7 @@ export const applyReferral = asyncHandler(async (req, res) => {
         name: referralProvider.fullName,
         referralCode: referralProvider.referralCode,
       },
+      commissionApplied: commission
     });
 
   } catch (error) {

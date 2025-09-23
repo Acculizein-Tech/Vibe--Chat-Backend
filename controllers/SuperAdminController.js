@@ -179,9 +179,9 @@ export const deleteBusinessListingById = asyncHandler(async (req, res) => {
 //add new user
 export const addNewUser = asyncHandler(async (req, res) => {
   // Check if user is superadmin
-  if (req.user.role !== 'superadmin') {
-    return res.status(403).json({ message: 'Access denied: SuperAdmin only.' });
-  }
+  // if (req.user.role !== 'superadmin') {
+  //   return res.status(403).json({ message: 'Access denied: SuperAdmin only.' });
+  // }
 
   // Define allowed fields for the user
   const allowedFields = ['fullName', 'email', 'password', 'role', 'city', 'state', 'country', 'zipCode'];

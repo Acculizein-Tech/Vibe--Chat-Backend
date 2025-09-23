@@ -26,7 +26,7 @@ import Priceplan from "../models/Priceplan.js";
 // };
 export const createPricePlan = async (req, res) => {
   try {
-    let { priceName, price, duration, isService, features, discount } = req.body;
+    let { priceName, price, duration, commission, isService, features, discount } = req.body;
 
     // Convert features array of strings to array of objects if needed
     if (Array.isArray(features) && typeof features[0] === "string") {
@@ -37,6 +37,7 @@ export const createPricePlan = async (req, res) => {
       priceName,
       price,
       discount,
+      commission,
       duration,
       isService,
       features
