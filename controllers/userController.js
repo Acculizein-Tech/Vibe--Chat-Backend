@@ -615,49 +615,78 @@ export const applyReferral = asyncHandler(async (req, res) => {
 
 
 
+
+
+
 // export const createCustomCode = async (req, res) => {
 //   try {
 //     const { codename, amount, validity, codelength } = req.body;
 
-//     // 🛑 Only superadmin allowed
+//     // ✅ Only superadmin allowed
 //     if (!req.user || req.user.role !== "superadmin") {
-//       return res
-//         .status(403)
-//         .json({ message: "Only superadmin can generate codes" });
+//       return res.status(403).json({
+//         success: false,
+//         message: "❌ Only superadmin can generate codes",
+//       });
 //     }
 
-//     // 🛑 Validation
+//     // ✅ Validation
 //     if (!codename || !amount) {
-//       return res
-//         .status(400)
-//         .json({ message: "Code name and flat discount amount required" });
+//       return res.status(400).json({
+//         success: false,
+//         message: "❌ Code name and flat discount amount required",
+//       });
+//     }
+
+//     if (typeof codename !== "string" || codename.trim().length < 2) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "❌ Codename must be a valid string with at least 2 characters",
+//       });
+//     }
+
+//     const codeLengthNum = Number(codelength) || 6; // default 6
+
+//     if (isNaN(codeLengthNum) || codeLengthNum < 4 || codeLengthNum > 9) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "❌ Code length must be a number between 4 and 9",
+//       });
 //     }
 
 //     // ✅ Find superadmin
 //     const superAdmin = await User.findById(req.user._id);
 //     if (!superAdmin) {
-//       return res.status(404).json({ message: "Superadmin not found" });
+//       return res.status(404).json({
+//         success: false,
+//         message: "❌ Superadmin not found",
+//       });
 //     }
 
 //     // ✅ Generate unique code
 //     let generatedCode;
-//     let isUnique = false;
-//     const length = codelength || "8"; // default string "8"
+//     let tries = 0;
+//     const maxTries = 5;
 
-//     while (!isUnique) {
-//       const tempCode = generateNameBasedCode(Number(length)); // generator numeric lega
+//     do {
+//       generatedCode = generateNameBasedCode(codename, codeLengthNum);
 //       const exists = superAdmin.customCodes.some(
-//         (c) => c.generatedCode === tempCode
+//         (c) => c.generatedCode === generatedCode
 //       );
-//       if (!exists) {
-//         generatedCode = tempCode;
-//         isUnique = true;
-//       }
+//       if (!exists) break;
+//       tries++;
+//     } while (tries < maxTries);
+
+//     if (tries === maxTries) {
+//       return res.status(500).json({
+//         success: false,
+//         message: "❌ Failed to generate a unique code, please try again",
+//       });
 //     }
 
 //     const newCode = {
 //       codeName: codename,
-//       codeValue: amount, // 👈 string hi store hoga
+//       codeValue: amount,
 //       validity: validity ? new Date(validity) : null,
 //       generatedCode,
 //       isActive: true,
@@ -666,22 +695,26 @@ export const applyReferral = asyncHandler(async (req, res) => {
 //     superAdmin.customCodes.push(newCode);
 //     await superAdmin.save();
 
-//     res.status(201).json({
+//     return res.status(201).json({
 //       success: true,
-//       message: "Custom code generated successfully",
+//       message: `✅ Custom code generated successfully with length ${codeLengthNum}`,
 //       customCode: newCode,
 //     });
 //   } catch (error) {
 //     console.error("Error in createCustomCode:", error);
-//     res.status(500).json({ message: "Server error generating code" });
+//     return res.status(500).json({
+//       success: false,
+//       message: "❌ Server error generating code",
+//     });
 //   }
 // };
 
 
 
+
 export const createCustomCode = async (req, res) => {
   try {
-    const { codename, amount, validity, codelength } = req.body;
+    const { codename, amount, validity } = req.body;
 
     // ✅ Only superadmin allowed
     if (!req.user || req.user.role !== "superadmin") {
@@ -706,15 +739,6 @@ export const createCustomCode = async (req, res) => {
       });
     }
 
-    const codeLengthNum = Number(codelength) || 6; // default 6
-
-    if (isNaN(codeLengthNum) || codeLengthNum < 4 || codeLengthNum > 9) {
-      return res.status(400).json({
-        success: false,
-        message: "❌ Code length must be a number between 4 and 9",
-      });
-    }
-
     // ✅ Find superadmin
     const superAdmin = await User.findById(req.user._id);
     if (!superAdmin) {
@@ -724,24 +748,17 @@ export const createCustomCode = async (req, res) => {
       });
     }
 
-    // ✅ Generate unique code
-    let generatedCode;
-    let tries = 0;
-    const maxTries = 5;
+    // ✅ Generated code = same as codename
+    const generatedCode = codename;
 
-    do {
-      generatedCode = generateNameBasedCode(codename, codeLengthNum);
-      const exists = superAdmin.customCodes.some(
-        (c) => c.generatedCode === generatedCode
-      );
-      if (!exists) break;
-      tries++;
-    } while (tries < maxTries);
-
-    if (tries === maxTries) {
-      return res.status(500).json({
+    // ✅ Check duplicate
+    const exists = superAdmin.customCodes.some(
+      (c) => c.generatedCode === generatedCode
+    );
+    if (exists) {
+      return res.status(400).json({
         success: false,
-        message: "❌ Failed to generate a unique code, please try again",
+        message: "❌ Code already exists, please choose another name",
       });
     }
 
@@ -758,7 +775,7 @@ export const createCustomCode = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `✅ Custom code generated successfully with length ${codeLengthNum}`,
+      message: `✅ Custom code "${generatedCode}" generated successfully`,
       customCode: newCode,
     });
   } catch (error) {
@@ -769,6 +786,12 @@ export const createCustomCode = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
 
 
 
