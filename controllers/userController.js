@@ -842,7 +842,7 @@ export const getCustomCodes = async (req, res) => {
 // Delete Custom Code
 export const DeleteCustomCode = async (req, res) => {
   try {
-    const { generatedCode } = req.body; // client se
+    const { generatedCode } = req.body;
 
     if (!req.user || req.user.role !== "superadmin") {
       return res.status(403).json({
@@ -858,34 +858,22 @@ export const DeleteCustomCode = async (req, res) => {
       });
     }
 
-    // Find superadmin document
-    const superAdmin = await User.findById(req.user._id);
-    if (!superAdmin) {
+    // ✅ Direct delete from DB using $pull
+    const result = await User.updateOne(
+      { _id: req.user._id },
+      { $pull: { customCodes: { generatedCode } } }
+    );
+
+    if (result.modifiedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "❌ Superadmin not found",
+        message: "❌ Custom code not found",
       });
     }
 
-    // Filter out the custom code to delete
-    // const initialLength = superAdmin.customCodes.length;
-    // superAdmin.customCodes = superAdmin.customCodes.filter(
-    //   (c) => c.generatedCode !== generatedCode
-    // );  
-
-    // if (superAdmin.customCodes.length === initialLength) {
-    //   return res.status(404).json({
-    //     success: false,
-    //     message: "❌ Custom code not found",
-    //   });
-    // }
-
-    // Save document
-    await superAdmin.save();
-
     return res.status(200).json({
       success: true,
-      message: `✅ Custom code with generatedCode ${generatedCode} deleted successfully`,
+      message: `✅ Custom code "${generatedCode}" deleted successfully`,
     });
   } catch (error) {
     console.error("Error in DeleteCustomCode:", error);
@@ -895,6 +883,7 @@ export const DeleteCustomCode = async (req, res) => {
     });
   }
 };
+
 
 
 
