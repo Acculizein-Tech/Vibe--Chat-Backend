@@ -838,7 +838,7 @@ export const getCustomCodes = async (req, res) => {
   }
 };
 
-//Delete Custom code  
+ 
 // Delete Custom Code
 export const DeleteCustomCode = async (req, res) => {
   try {
@@ -868,17 +868,17 @@ export const DeleteCustomCode = async (req, res) => {
     }
 
     // Filter out the custom code to delete
-    const initialLength = superAdmin.customCodes.length;
-    superAdmin.customCodes = superAdmin.customCodes.filter(
-      (c) => c.generatedCode !== generatedCode
-    );
+    // const initialLength = superAdmin.customCodes.length;
+    // superAdmin.customCodes = superAdmin.customCodes.filter(
+    //   (c) => c.generatedCode !== generatedCode
+    // );  
 
-    if (superAdmin.customCodes.length === initialLength) {
-      return res.status(404).json({
-        success: false,
-        message: "❌ Custom code not found",
-      });
-    }
+    // if (superAdmin.customCodes.length === initialLength) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "❌ Custom code not found",
+    //   });
+    // }
 
     // Save document
     await superAdmin.save();
