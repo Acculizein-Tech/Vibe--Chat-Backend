@@ -18,7 +18,7 @@ router.use(protect); // Ensure only logged-in users access
 
 router.post('/', createLead);            // Create a lead
 router.get('/', getLeadsForUser);        // Fetch all leads for a user
-router.put('/assign', protect, roles('superadmin'), assignLeadsToSalesUser);
+router.put('/assign', protect, roles('superadmin', 'admin'), assignLeadsToSalesUser);
 router.put('/:id', updateLead);          // Update a lead
 router.delete('/:id', deleteLead);       // Delete a lead
 router.get('/stats', getLeadStats);    // Get lead statistics (if implemented)

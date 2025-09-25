@@ -817,6 +817,7 @@ export const getCustomCodes = async (req, res) => {
 
     // ✅ Filter only safe fields from customCodes
     const safeCustomCodes = superAdmin.customCodes.map((code) => ({
+      _id: code._id,
       codeName: code.codeName,
       codeValue: code.codeValue,
       validity: code.validity ? new Date(code.validity).toISOString().split("T")[0] : null, // ✅ only date,
@@ -842,8 +843,9 @@ export const getCustomCodes = async (req, res) => {
 // Delete Custom Code
 export const DeleteCustomCode = async (req, res) => {
   try {
-    const { generatedCode } = req.body;
+    const { id } = req.body;
 
+    // ✅ Check if user is superadmin
     if (!req.user || req.user.role !== "superadmin") {
       return res.status(403).json({
         success: false,
@@ -851,17 +853,17 @@ export const DeleteCustomCode = async (req, res) => {
       });
     }
 
-    if (!generatedCode) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "❌ generatedCode is required to delete custom code",
+        message: "❌ id is required to delete custom code",
       });
     }
 
-    // ✅ Direct delete from DB using $pull
+    // ✅ Delete code by _id
     const result = await User.updateOne(
       { _id: req.user._id },
-      { $pull: { customCodes: { generatedCode } } }
+      { $pull: { customCodes: { _id: id } } }
     );
 
     if (result.modifiedCount === 0) {
@@ -873,8 +875,9 @@ export const DeleteCustomCode = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `✅ Custom code "${generatedCode}" deleted successfully`,
+      message: "✅ Custom code deleted successfully",
     });
+
   } catch (error) {
     console.error("Error in DeleteCustomCode:", error);
     return res.status(500).json({
@@ -887,11 +890,77 @@ export const DeleteCustomCode = async (req, res) => {
 
 
 
+
 //update the custom code
 // Update Custom Code
+// export const UpdateCustomCode = async (req, res) => {
+//   try {
+//     const { generatedCode, codeName, codeValue, validity, isActive } = req.body;
+
+//     // ✅ Superadmin check
+//     if (!req.user || req.user.role !== "superadmin") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "❌ Only superadmin can update custom codes",
+//       });
+//     }
+
+//     // ✅ generatedCode required
+//     if (!generatedCode) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "❌ generatedCode is required to update custom code",
+//       });
+//     }
+
+//     // ✅ Find superadmin document
+//     const superAdmin = await User.findById(req.user._id);
+//     if (!superAdmin) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "❌ Superadmin not found",
+//       });
+//     }
+
+//     // ✅ Find specific custom code
+//     const codeIndex = superAdmin.customCodes.findIndex(
+//       (c) => c.generatedCode === generatedCode
+//     );
+
+//     if (codeIndex === -1) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "❌ Custom code not found",
+//       });
+//     }
+
+//     // ✅ Update fields if provided
+//     if (codeName !== undefined) superAdmin.customCodes[codeIndex].codeName = codeName;
+//     if (codeValue !== undefined) superAdmin.customCodes[codeIndex].codeValue = codeValue;
+//     if (validity !== undefined) superAdmin.customCodes[codeIndex].validity = new Date(validity);
+//     if (isActive !== undefined) superAdmin.customCodes[codeIndex].isActive = isActive;
+
+//     // ✅ Save changes
+//     await superAdmin.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `✅ Custom code ${generatedCode} updated successfully`,
+//       updatedCode: superAdmin.customCodes[codeIndex],
+//     });
+//   } catch (error) {
+//     console.error("Error in UpdateCustomCode:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "❌ Server error while updating custom code",
+//     });
+//   }
+// };
+
+
 export const UpdateCustomCode = async (req, res) => {
   try {
-    const { generatedCode, codeName, codeValue, validity, isActive } = req.body;
+    const { id, codeName, codeValue, validity, isActive } = req.body;
 
     // ✅ Superadmin check
     if (!req.user || req.user.role !== "superadmin") {
@@ -901,15 +970,14 @@ export const UpdateCustomCode = async (req, res) => {
       });
     }
 
-    // ✅ generatedCode required
-    if (!generatedCode) {
+    if (!id || !codeName) {
       return res.status(400).json({
         success: false,
-        message: "❌ generatedCode is required to update custom code",
+        message: "❌ id and codeName are required",
       });
     }
 
-    // ✅ Find superadmin document
+    // ✅ Find superadmin
     const superAdmin = await User.findById(req.user._id);
     if (!superAdmin) {
       return res.status(404).json({
@@ -918,32 +986,32 @@ export const UpdateCustomCode = async (req, res) => {
       });
     }
 
-    // ✅ Find specific custom code
-    const codeIndex = superAdmin.customCodes.findIndex(
-      (c) => c.generatedCode === generatedCode
-    );
-
-    if (codeIndex === -1) {
+    // ✅ Find code by unique _id
+    const code = superAdmin.customCodes.id(id); // mongoose built-in method
+    if (!code) {
       return res.status(404).json({
         success: false,
         message: "❌ Custom code not found",
       });
     }
 
-    // ✅ Update fields if provided
-    if (codeName !== undefined) superAdmin.customCodes[codeIndex].codeName = codeName;
-    if (codeValue !== undefined) superAdmin.customCodes[codeIndex].codeValue = codeValue;
-    if (validity !== undefined) superAdmin.customCodes[codeIndex].validity = new Date(validity);
-    if (isActive !== undefined) superAdmin.customCodes[codeIndex].isActive = isActive;
+    // ✅ Update codeName & generatedCode
+    code.codeName = codeName;
+    code.generatedCode = codeName;
 
-    // ✅ Save changes
+    // ✅ Optional fields
+    if (codeValue !== undefined) code.codeValue = codeValue;
+    if (validity !== undefined) code.validity = new Date(validity);
+    if (isActive !== undefined) code.isActive = isActive;
+
     await superAdmin.save();
 
     return res.status(200).json({
       success: true,
-      message: `✅ Custom code ${generatedCode} updated successfully`,
-      updatedCode: superAdmin.customCodes[codeIndex],
+      message: "✅ Custom code updated successfully",
+      updatedCode: code,
     });
+
   } catch (error) {
     console.error("Error in UpdateCustomCode:", error);
     return res.status(500).json({
@@ -952,3 +1020,10 @@ export const UpdateCustomCode = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
