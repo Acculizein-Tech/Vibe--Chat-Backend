@@ -2,6 +2,8 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import Lead from '../models/Leads.js';
 import User from '../models/user.js';
+import mongoose from "mongoose";
+
 
 // ✅ Create a new lead
 // ✅ Create a new lead
@@ -66,38 +68,81 @@ export const getLeadsForUser = asyncHandler(async (req, res) => {
 // });
 
 
+// export const updateLead = asyncHandler(async (req, res) => {
+//   const { id } = req.params;
+//   const { name, contact, businessType, status, followUpDate, notes } = req.body;
+
+//   const query = { _id: id };
+
+//   // Only restrict by salesUser if the user is a sales role
+//   if (req.user.role === 'sales') {
+//     query.salesUser = req.user._id;
+//   }
+
+//   let lead = await Lead.findOneAndUpdate(
+//     query,
+//     { name, contact, businessType, status, followUpDate, notes },
+//     { new: true }
+//   ).populate("salesUser", "fullName"); // 👉 yaha sirf name field populate hoga
+
+//   if (!lead) {
+//     res.status(404);
+//     throw new Error('Lead not found or unauthorized');
+//   }
+
+//   // custom format me response bhejna
+//   const responseLead = {
+//     ...lead.toObject(),
+  
+//   };
+
+//   res.status(200).json({ message: "Lead updated", lead: responseLead });
+// });
+
+
 export const updateLead = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { name, contact, businessType, status, followUpDate, notes } = req.body;
+  const { name, contact, businessType, status, followUpDate, notes, salesUser } = req.body;
+
+  // Validate Lead ID
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "Invalid Lead ID" });
+  }
 
   const query = { _id: id };
 
-  // Only restrict by salesUser if the user is a sales role
-  if (req.user.role === 'sales') {
+  // Sales role can only update their own leads (not reassign)
+  if (req.user.role === "sales") {
     query.salesUser = req.user._id;
   }
 
-  let lead = await Lead.findOneAndUpdate(
-    query,
-    { name, contact, businessType, status, followUpDate, notes },
-    { new: true }
-  ).populate("salesUser", "fullName"); // 👉 yaha sirf name field populate hoga
+  // Prepare update object
+  const updateData = { name, contact, businessType, status, followUpDate, notes };
 
-  if (!lead) {
-    res.status(404);
-    throw new Error('Lead not found or unauthorized');
+  // Only admin/manager can reassign salesUser
+  if (salesUser && req.user.role !== "sales") {
+    if (!mongoose.Types.ObjectId.isValid(salesUser)) {
+      return res.status(400).json({ message: "Invalid salesUser ID" });
+    }
+
+    // ✅ ensure user exists and is actually a sales user
+    const assignedUser = await User.findOne({ _id: salesUser, role: "sales" });
+    if (!assignedUser) {
+      return res.status(400).json({ message: "Invalid salesUser: must be an active sales user" });
+    }
+
+    updateData.salesUser = salesUser;
   }
 
-  // custom format me response bhejna
-  const responseLead = {
-    ...lead.toObject(),
-  
-  };
+  // Update lead
+  const lead = await Lead.findOneAndUpdate(query, updateData, { new: true }).populate("salesUser", "fullName");
 
-  res.status(200).json({ message: "Lead updated", lead: responseLead });
+  if (!lead) {
+    return res.status(404).json({ message: "Lead not found or unauthorized" });
+  }
+
+  res.status(200).json({ message: "Lead updated successfully", lead });
 });
-
-
 
 
 
