@@ -39,13 +39,20 @@ export const getLeadsForUser = asyncHandler(async (req, res) => {
 
 
 
-// ✅ Update a lead
+
 // export const updateLead = asyncHandler(async (req, res) => {
 //   const { id } = req.params;
 //   const { name, contact, businessType, status, followUpDate, notes } = req.body;
 
+//   const query = { _id: id };
+
+//   // Only restrict by salesUser if the user is a sales role
+//   if (req.user.role === 'sales') {
+//     query.salesUser = req.user._id;
+//   }
+
 //   const lead = await Lead.findOneAndUpdate(
-//     { _id: id, salesUser: req.user._id },
+//     query,
 //     { name, contact, businessType, status, followUpDate, notes },
 //     { new: true }
 //   );
@@ -58,18 +65,6 @@ export const getLeadsForUser = asyncHandler(async (req, res) => {
 //   res.status(200).json({ message: 'Lead updated', lead });
 // });
 
-// ✅ Delete a lead
-// export const deleteLead = asyncHandler(async (req, res) => {
-//   const { id } = req.params;
-//   const lead = await Lead.findOneAndDelete({ _id: id, salesUser: req.user._id });
-
-//   if (!lead) {
-//     res.status(404);
-//     throw new Error('Lead not found or unauthorized');
-//   }
-
-//   res.status(200).json({ message: 'Lead deleted successfully' });
-// });
 
 export const updateLead = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -82,19 +77,29 @@ export const updateLead = asyncHandler(async (req, res) => {
     query.salesUser = req.user._id;
   }
 
-  const lead = await Lead.findOneAndUpdate(
+  let lead = await Lead.findOneAndUpdate(
     query,
     { name, contact, businessType, status, followUpDate, notes },
     { new: true }
-  );
+  ).populate("salesUser", "fullName"); // 👉 yaha sirf name field populate hoga
 
   if (!lead) {
     res.status(404);
     throw new Error('Lead not found or unauthorized');
   }
 
-  res.status(200).json({ message: 'Lead updated', lead });
+  // custom format me response bhejna
+  const responseLead = {
+    ...lead.toObject(),
+  
+  };
+
+  res.status(200).json({ message: "Lead updated", lead: responseLead });
 });
+
+
+
+
 
 export const deleteLead = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -209,7 +214,7 @@ export const getLeadCountsPerSalesUser = asyncHandler(async (req, res) => {
         totalLeads: { $sum: 1 }
       }
     },
-    {
+    {  
       $lookup: {
         from: 'users',
         localField: '_id',
