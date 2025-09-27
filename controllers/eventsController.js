@@ -184,8 +184,11 @@ export const updateEvent = asyncHandler(async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Event updated successfully",
-      data: updatedEvent,
-      redirectPath, // send redirect path
+       data: {
+    ...updatedEvent,       // existing event fields
+    redirectPath,          // redirectPath ko data ke andar include karo
+  }
+       // send redirect path
     });
 
   } catch (err) {
