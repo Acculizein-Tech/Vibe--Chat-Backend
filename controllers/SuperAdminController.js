@@ -2,11 +2,14 @@
 // controllers/SuperAdminController.js
 
 import Business from '../models/Business.js';
+import Event from '../models/Events.js';
+import Review from '../models/Review.js';
 import User from '../models/user.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import sendEmail from '../utils/emailSender.js';
 import Health from '../models/Health.js'; // Assuming you have a HealthMedical model
 import DeleteRequest from '../models/DeleteRequest.js';
+
 
 
 // get all users
@@ -161,20 +164,45 @@ export const deleteUserById = asyncHandler(async (req, res) => {
 });
 
 //delete the listing by id
+// export const deleteBusinessListingById = asyncHandler(async (req, res) => {
+//   const { id } = req.params;
+
+//   const businessListing = await Business.findByIdAndDelete(id);
+
+//   if (!businessListing) {
+//     return res.status(404).json({ message: 'Business listing not found.' });
+//   }
+
+//   res.status(200).json({
+//     success: true,
+//     message: 'Business listing deleted successfully.'
+//   });
+// });
+
 export const deleteBusinessListingById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const businessListing = await Business.findByIdAndDelete(id);
-
+  // ✅ Find the business first
+  const businessListing = await Business.findById(id);
   if (!businessListing) {
     return res.status(404).json({ message: 'Business listing not found.' });
   }
 
+  // 🔹 Delete all associated events
+  await Event.deleteMany({ business: id });
+
+  // 🔹 Delete all associated reviews
+  await Review.deleteMany({ business: id });
+
+  // 🔹 Finally delete the business itself
+  await Business.findByIdAndDelete(id);
+
   res.status(200).json({
     success: true,
-    message: 'Business listing deleted successfully.'
+    message: 'Business and all associated events & reviews deleted successfully.'
   });
 });
+
 
 //add new user
 export const addNewUser = asyncHandler(async (req, res) => {
