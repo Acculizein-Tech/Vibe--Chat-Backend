@@ -107,7 +107,7 @@ export const createEvent = asyncHandler(async (req, res) => {
     }
 
     // 🔹 Construct redirect path
-    const redirectPath = `/${business.category}/${business._id}`;
+    const redirectPath = `/categories/${business.category}/${business._id}`;
 
     // 🔹 Create event
     const newEvent = new Event({
@@ -176,7 +176,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
     // 🔹 Construct redirect path
     const category = updatedEvent.business?.category || 'general';
     const businessId = updatedEvent.business?._id || id;
-    const redirectPath = `/${category}/${businessId}`;
+    const redirectPath = `/categories/${category}/${businessId}`;
 
     console.log("Updated Event:", updatedEvent);
     console.log("Redirect Path:", redirectPath);
