@@ -948,12 +948,12 @@ export const createBusiness = async (req, res) => {
       }
       salesExecutive = refUser._id;
     }
-    if (!salesExecutive) {
-      const salesUsers = await User.find({ role: "sales" });
-      if (salesUsers.length > 0) {
-        salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
-      }
-    }
+    // if (!salesExecutive) {
+    //   const salesUsers = await User.find({ role: "sales" });
+    //   if (salesUsers.length > 0) {
+    //     salesExecutive = salesUsers[Math.floor(Math.random() * salesUsers.length)]._id;
+    //   }
+    // }
 
     // ===============================
     // Plan validation
