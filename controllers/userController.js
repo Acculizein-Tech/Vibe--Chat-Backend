@@ -368,160 +368,6 @@ const razorpayX = axios.create({
  * Redeem Wallet Balance (Min ₹10)
  */
 
-// export const applyReferral = asyncHandler(async (req, res) => {
-//   try {
-//     const { referral_code, user_id, total_plan_amount } = req.body;
-
-//     // 🛑 Validation
-//     if (!referral_code || !user_id || !total_plan_amount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral code, user_id and total_plan_amount are required",
-//       });
-//     }
-
-//     // 🎯 Step 1: Check if referral code exists in DB
-//     const referralProvider = await User.findOne({ referralCode: referral_code });
-//     if (!referralProvider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid referral code",
-//       });
-//     }
-
-//     // 🎯 Step 2: Ensure user is not using own referral code
-//     if (referralProvider._id.toString() === user_id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You cannot use your own referral code",
-//       });
-//     }
-
-//     // 🎯 Step 3: Just calculate referral bonus (do NOT update wallet here)
-//     const bonusAmount = 300;
-
-//     // 🎯 Step 4: Apply discount to current user's plan
-//     let updatedAmount = total_plan_amount - bonusAmount;
-//     if (updatedAmount < 0) updatedAmount = 0; // Prevent negative
-
-//     // 🎯 Step 5: Return updated amount and referral info (no wallet change)
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral applied successfully",
-//       updatedAmount,
-//       referralProvider: {
-//         id: referralProvider._id,
-//         name: referralProvider.fullName,
-//         referralCode: referralProvider.referralCode,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in applyReferral:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error applying referral",
-//     });
-//   }
-// });
-
-////generate refferal code for superadmin
-
-// export const applyReferral = asyncHandler(async (req, res) => {
-//   try {
-//     const { referral_code, user_id, total_plan_amount } = req.body;
-
-//     if (!referral_code || !user_id || !total_plan_amount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral code, user_id and total_plan_amount are required",
-//       });
-//     }
-
-//     // Prevent self-referral
-//     if (!user_id) return res.status(400).json({ message: "User ID required" });
-
-//     // --- Step 1: Check if referral code belongs to superadmin ---
-//     let superAdmin = await User.findOne({
-//       role: "superadmin",
-//       "customCodes.generatedCode": referral_code.trim().toUpperCase()
-//     });
-
-//     if (superAdmin) {
-//       // Find exact active code
-//       const customCode = superAdmin.customCodes.find(
-//         (c) =>
-//           c.generatedCode.toUpperCase() === referral_code.trim().toUpperCase() &&
-//           c.isActive
-//       );
-
-//       if (!customCode)
-//         return res.status(404).json({ message: "Invalid or inactive code" });
-
-//       // Check validity
-//       if (customCode.validity && new Date() > customCode.validity) {
-//         return res.status(400).json({ message: "Referral code expired" });
-//       }
-
-//       // Apply flat discount
-//       let updatedAmount = total_plan_amount - customCode.codeValue;
-//       if (updatedAmount < 0) updatedAmount = 0;
-
-//       return res.status(200).json({
-//         success: true,
-//         message: "Referral code applied successfully",
-//         updatedAmount,
-//         appliedCode: {
-//           codeName: customCode.codeName,
-//           codeValue: customCode.codeValue,
-//           generatedCode: customCode.generatedCode,
-//           validity: customCode.validity,
-//         },
-//       });
-//     }
-
-//     // --- Step 2: Check if referral code belongs to normal user ---
-//     const referralProvider = await User.findOne({ referralCode: referral_code.trim() });
-//     if (!referralProvider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid referral code",
-//       });
-//     }
-
-//     // Prevent self-use
-//     if (referralProvider._id.toString() === user_id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You cannot use your own referral code",
-//       });
-//     }
-
-//     // Apply default referral bonus (can adjust)
-//     const bonusAmount = 300;
-//     let updatedAmount = total_plan_amount - bonusAmount;
-//     if (updatedAmount < 0) updatedAmount = 0;
-
-//     return res.status(200).json({   
-//       success: true,
-//       message: "Referral code applied successfully",
-//       updatedAmount,
-//       referralProvider: {
-//         id: referralProvider._id,
-//         name: referralProvider.fullName,
-//         referralCode: referralProvider.referralCode,
-//       },
-//     });
-
-//   } catch (error) {
-//     console.error("Error in applyReferral:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error applying referral",
-//     });
-//   }
-// });
-
-
 
 
 export const applyReferral = asyncHandler(async (req, res) => {
@@ -536,40 +382,42 @@ export const applyReferral = asyncHandler(async (req, res) => {
     }
 
     // --- Step 1: Superadmin referral (same as before) ---
-    let superAdmin = await User.findOne({
-      role: "superadmin",
-      "customCodes.generatedCode": referral_code.trim().toUpperCase()
-    });
+    // --- Step 1: Superadmin referral (case-insensitive) ---
+let superAdmin = await User.findOne({
+  role: "superadmin",
+  // 🔹 Case-insensitive match using regex
+  "customCodes.generatedCode": { $regex: `^${referral_code.trim()}$`, $options: "i" }
+});
 
-    if (superAdmin) {
-      const customCode = superAdmin.customCodes.find(
-        (c) =>
-          c.generatedCode.toUpperCase() === referral_code.trim().toUpperCase() &&
-          c.isActive
-      );
+if (superAdmin) {
+  const customCode = superAdmin.customCodes.find(
+    // 🔹 Direct exact match, case-insensitive not needed here as query already matched
+    (c) => c.generatedCode === referral_code.trim() && c.isActive
+  );
 
-      if (!customCode)
-        return res.status(404).json({ message: "Invalid or inactive code" });
+  if (!customCode)
+    return res.status(404).json({ message: "Invalid or inactive code" });
 
-      if (customCode.validity && new Date() > customCode.validity) {
-        return res.status(400).json({ message: "Referral code expired" });
-      }
+  if (customCode.validity && new Date() > customCode.validity) {
+    return res.status(400).json({ message: "Referral code expired" });
+  }
 
-      let updatedAmount = total_plan_amount - customCode.codeValue;
-      if (updatedAmount < 0) updatedAmount = 0;
+  let updatedAmount = total_plan_amount - customCode.codeValue;
+  if (updatedAmount < 0) updatedAmount = 0;
 
-      return res.status(200).json({
-        success: true,
-        message: "Referral code applied successfully",
-        updatedAmount,
-        appliedCode: {
-          codeName: customCode.codeName,
-          codeValue: customCode.codeValue,
-          generatedCode: customCode.generatedCode,
-          validity: customCode.validity,
-        },
-      });
-    }
+  return res.status(200).json({
+    success: true,
+    message: "Referral code applied successfully",
+    updatedAmount,
+    appliedCode: {
+      codeName: customCode.codeName,
+      codeValue: customCode.codeValue,
+      generatedCode: customCode.generatedCode,
+      validity: customCode.validity,
+    },
+  });
+}
+
 
     // --- Step 2: User referral with commission ---
     const referralProvider = await User.findOne({ referralCode: referral_code.trim() });
@@ -615,103 +463,6 @@ export const applyReferral = asyncHandler(async (req, res) => {
 
 
 
-
-
-
-// export const createCustomCode = async (req, res) => {
-//   try {
-//     const { codename, amount, validity, codelength } = req.body;
-
-//     // ✅ Only superadmin allowed
-//     if (!req.user || req.user.role !== "superadmin") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "❌ Only superadmin can generate codes",
-//       });
-//     }
-
-//     // ✅ Validation
-//     if (!codename || !amount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "❌ Code name and flat discount amount required",
-//       });
-//     }
-
-//     if (typeof codename !== "string" || codename.trim().length < 2) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "❌ Codename must be a valid string with at least 2 characters",
-//       });
-//     }
-
-//     const codeLengthNum = Number(codelength) || 6; // default 6
-
-//     if (isNaN(codeLengthNum) || codeLengthNum < 4 || codeLengthNum > 9) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "❌ Code length must be a number between 4 and 9",
-//       });
-//     }
-
-//     // ✅ Find superadmin
-//     const superAdmin = await User.findById(req.user._id);
-//     if (!superAdmin) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "❌ Superadmin not found",
-//       });
-//     }
-
-//     // ✅ Generate unique code
-//     let generatedCode;
-//     let tries = 0;
-//     const maxTries = 5;
-
-//     do {
-//       generatedCode = generateNameBasedCode(codename, codeLengthNum);
-//       const exists = superAdmin.customCodes.some(
-//         (c) => c.generatedCode === generatedCode
-//       );
-//       if (!exists) break;
-//       tries++;
-//     } while (tries < maxTries);
-
-//     if (tries === maxTries) {
-//       return res.status(500).json({
-//         success: false,
-//         message: "❌ Failed to generate a unique code, please try again",
-//       });
-//     }
-
-//     const newCode = {
-//       codeName: codename,
-//       codeValue: amount,
-//       validity: validity ? new Date(validity) : null,
-//       generatedCode,
-//       isActive: true,
-//     };
-
-//     superAdmin.customCodes.push(newCode);
-//     await superAdmin.save();
-
-//     return res.status(201).json({
-//       success: true,
-//       message: `✅ Custom code generated successfully with length ${codeLengthNum}`,
-//       customCode: newCode,
-//     });
-//   } catch (error) {
-//     console.error("Error in createCustomCode:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "❌ Server error generating code",
-//     });
-//   }
-// };
-
-
-
-
 export const createCustomCode = async (req, res) => {
   try {
     const { codename, amount, validity } = req.body;
@@ -736,6 +487,15 @@ export const createCustomCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "❌ Codename must be a valid string with at least 2 characters",
+      });
+    }
+
+     // 🚫 Allow only alphanumeric (no spaces, no underscores, no special chars)
+    if (!/^[A-Za-z0-9]+$/.test(codename)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "❌ Code name must only contain letters and numbers (no spaces or special characters).",
       });
     }
 
@@ -786,8 +546,6 @@ export const createCustomCode = async (req, res) => {
     });
   }
 };
-
-
 
 
 

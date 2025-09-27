@@ -7,38 +7,131 @@ import { notifyRole } from "../utils/sendNotification.js";
 import { uploadToS3 } from "../middlewares/upload.js";
 import fs from "fs";
 
+// export const createEvent = asyncHandler(async (req, res) => {
+//   try {
+//     const { title, description, date, location, ...otherFields } = req.body;
+
+//     let eventImages = "";
+
+//     // if (req.file) {
+//     //   const s3Url = await uploadToS3(req.file, req); // Returns full S3 URL
+//     //   eventImages = s3Url;
+//     // }
+//     if (req.file) {
+//       const s3Response = await uploadToS3(req.file, req);
+//       eventImages = s3Response.url; // ✅ only the string
+//     }
+
+//     const newEvent = new Event({
+//       title,
+//       description,
+//       date,
+//       location,
+//       eventImages: eventImages,
+//       ...otherFields,
+//     });
+
+//     const savedEvent = await newEvent.save();
+//     res.status(201).json({
+//       success: true,
+//       message: "Event created successfully",
+//       // imageUrl: eventsImage,
+//       data: savedEvent,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Event creation failed",
+//       error: err.message,
+//     });
+//   }
+// });
+
+//update the event
+// export const updateEvent = asyncHandler(async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     let updatedData = { ...req.body };
+
+//     if (req.file) {
+//       const s3Response = await uploadToS3(req.file, req); // { url: "https://..." }
+//       updatedData.eventImages = s3Response.url; // ✅ fixed field name
+//     }
+
+//     const updatedEvent = await Event.findByIdAndUpdate(id, updatedData, {
+//       new: true,
+//       runValidators: true,
+//     });
+
+//     if (!updatedEvent) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Event not found",
+//       });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Event updated successfully",
+//       data: updatedEvent,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Event update failed",
+//       error: err.message,
+//     });
+//   }
+// });  
+
+
+
 export const createEvent = asyncHandler(async (req, res) => {
   try {
-    const { title, description, date, location, ...otherFields } = req.body;
+    const { title, description, startTime, endTime, location, business: businessId, ...otherFields } = req.body;
 
-    let eventImages = "";
-
-    // if (req.file) {
-    //   const s3Url = await uploadToS3(req.file, req); // Returns full S3 URL
-    //   eventImages = s3Url;
-    // }
-    if (req.file) {
-      const s3Response = await uploadToS3(req.file, req);
-      eventImages = s3Response.url; // ✅ only the string
+    if (!businessId) {
+      return res.status(400).json({ success: false, message: "Business ID is required" });
     }
 
+    let eventImages = "";
+    if (req.file) {
+      const s3Response = await uploadToS3(req.file, req); // Returns full S3 URL
+      eventImages = s3Response.url;
+    }
+
+    // 🔹 Fetch business category
+    const business = await Business.findById(businessId).select('category');
+    if (!business) {
+      return res.status(404).json({ success: false, message: "Business not found" });
+    }
+
+    // 🔹 Construct redirect path
+    const redirectPath = `/${business.category}/${business._id}`;
+
+    // 🔹 Create event
     const newEvent = new Event({
       title,
       description,
-      date,
+      startTime,
+      endTime,
       location,
-      eventImages: eventImages,
+      business: businessId,
+      eventImages,
+      redirectPath,  // save redirect path in DB
       ...otherFields,
     });
 
     const savedEvent = await newEvent.save();
+
     res.status(201).json({
       success: true,
       message: "Event created successfully",
-      // imageUrl: eventsImage,
       data: savedEvent,
     });
+
   } catch (err) {
+    console.error("Event creation error:", err);
     res.status(500).json({
       success: false,
       message: "Event creation failed",
@@ -47,21 +140,31 @@ export const createEvent = asyncHandler(async (req, res) => {
   }
 });
 
-//update the event
+
 export const updateEvent = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     let updatedData = { ...req.body };
 
+    // 🔹 Handle eventImages update (file upload)
     if (req.file) {
       const s3Response = await uploadToS3(req.file, req); // { url: "https://..." }
-      updatedData.eventImages = s3Response.url; // ✅ fixed field name
+      updatedData.eventImages = s3Response.url; // ✅ save in correct field
     }
 
-    const updatedEvent = await Event.findByIdAndUpdate(id, updatedData, {
+    // 🔹 Prevent overwriting business field
+    if (updatedData.business) delete updatedData.business;
+
+    // 🔹 Update the event without populating
+    await Event.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true,
     });
+
+    // 🔹 Fetch updated event with populated business category
+    const updatedEvent = await Event.findById(id)
+      .populate('business', 'category') // fetch only category
+      .lean(); // JS object for easy access
 
     if (!updatedEvent) {
       return res.status(404).json({
@@ -70,12 +173,23 @@ export const updateEvent = asyncHandler(async (req, res) => {
       });
     }
 
+    // 🔹 Construct redirect path
+    const category = updatedEvent.business?.category || 'general';
+    const businessId = updatedEvent.business?._id || id;
+    const redirectPath = `/${category}/${businessId}`;
+
+    console.log("Updated Event:", updatedEvent);
+    console.log("Redirect Path:", redirectPath);
+
     res.status(200).json({
       success: true,
       message: "Event updated successfully",
       data: updatedEvent,
+      redirectPath, // send redirect path
     });
+
   } catch (err) {
+    console.error("Event update error:", err);
     res.status(500).json({
       success: false,
       message: "Event update failed",
@@ -83,6 +197,10 @@ export const updateEvent = asyncHandler(async (req, res) => {
     });
   }
 });
+
+
+
+
 
 
 // ✅ Delete event

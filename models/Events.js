@@ -34,6 +34,10 @@ const eventSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  redirectPath: {
+  type: String,
+  default: ''
+},
 
   // Flag for admin approval
   isApproved: {
