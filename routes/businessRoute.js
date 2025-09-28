@@ -2,7 +2,7 @@ import express from 'express';
 import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, 
   searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness,
    switchBusinessPlan, getMyBusinesses, updateBusinessPricing, getRazorpayPayments, getBusinessPrefillInfo,
-    getBusinessCities, updatePremiumBusinesses, updateOldBusinessQRCodes, getBusinessesByFilter } from '../controllers/businessController.js';
+    getBusinessCities, updatePremiumBusinesses, updateOldBusinessQRCodes, getBusinessesByFilter, getBusinessesByCategory } from '../controllers/businessController.js';
 
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
@@ -49,5 +49,6 @@ router.put("/update-premium", updatePremiumBusinesses);
 router.post("/update-old-qr", updateOldBusinessQRCodes);
 
 router.get('/bizByFilter', getBusinessesByFilter )
+router.get('/bizByCategory', getBusinessesByCategory )
 
 export default router;
