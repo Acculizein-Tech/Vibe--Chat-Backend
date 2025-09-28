@@ -2591,7 +2591,7 @@ const businesses = await Business.find({
 //get data according to filter
 export const getBusinessesByFilter = async (req, res) => {
   try {
-    const { BizFilter } = req.query;
+    const { bizFilter } = req.query;
 
     // ✅ Always only active businesses
     const businesses = await Business.find({ deleteBusiness: false }).lean();
@@ -2599,8 +2599,8 @@ export const getBusinessesByFilter = async (req, res) => {
     // If no filter, keep all (but still add categoryDetails below)
     let filtered = businesses;
 
-    if (BizFilter && BizFilter.trim()) {
-      const f = BizFilter.trim().toLowerCase();
+    if (bizFilter && bizFilter.trim()) {
+      const f = bizFilter.trim().toLowerCase();
 
       filtered = businesses.filter((biz) => {
         const services = biz.services;
