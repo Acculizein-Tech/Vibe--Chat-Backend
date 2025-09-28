@@ -2587,3 +2587,104 @@ const businesses = await Business.find({
     res.status(500).json({ success: false, message: "QR update failed" });
   }
 };
+
+//get data according to filter
+export const getBusinessesByFilter = async (req, res) => {
+  try {
+    const { BizFilter } = req.query;
+
+    // ✅ Always only active businesses
+    const businesses = await Business.find({ deleteBusiness: false }).lean();
+
+    // If no filter, keep all (but still add categoryDetails below)
+    let filtered = businesses;
+
+    if (BizFilter && BizFilter.trim()) {
+      const f = BizFilter.trim().toLowerCase();
+
+      filtered = businesses.filter((biz) => {
+        const services = biz.services;
+        if (!services) return false;
+
+        // If services is an array (e.g. [{name:"Hair Cut", ...}, ...])
+        if (Array.isArray(services)) {
+          return services.some((s) => {
+            if (!s) return false;
+            // if element is string
+            if (typeof s === "string") return s.toLowerCase().includes(f);
+            // if element has name property
+            if (s.name && typeof s.name === "string" && s.name.toLowerCase().includes(f)) return true;
+            // check keys & nested string values inside object element
+            for (const k in s) {
+              if (k.toLowerCase().includes(f)) return true;
+              const val = s[k];
+              if (typeof val === "string" && val.toLowerCase().includes(f)) return true;
+              if (Array.isArray(val) && val.some(v => typeof v === "string" && v.toLowerCase().includes(f))) return true;
+            }
+            return false;
+          });
+        }
+
+        // If services is an object (like your example: { B2B: true, _training_center: true, ... })
+        if (typeof services === "object") {
+          for (const key in services) {
+            if (!Object.prototype.hasOwnProperty.call(services, key)) continue;
+            // match against key name
+            if (key.toLowerCase().includes(f)) return true;
+
+            const val = services[key];
+
+            // if value is string, match it
+            if (typeof val === "string" && val.toLowerCase().includes(f)) return true;
+
+            // if value is array, check its string items
+            if (Array.isArray(val) && val.some(v => typeof v === "string" && v.toLowerCase().includes(f))) return true;
+
+            // if nested object, check its keys/strings
+            if (typeof val === "object" && val !== null) {
+              for (const nk in val) {
+                if (nk.toLowerCase().includes(f)) return true;
+                const nv = val[nk];
+                if (typeof nv === "string" && nv.toLowerCase().includes(f)) return true;
+              }
+            }
+          }
+        }
+
+        // If services is a string
+        if (typeof services === "string") return services.toLowerCase().includes(f);
+
+        return false;
+      });
+    }
+
+    // Attach categoryDetails exactly like before
+    const businessesWithCategoryDetails = await Promise.all(
+      filtered.map(async (business) => {
+        const CategoryModel = categoryModels[business.categoryModel];
+        let categoryDetails = {};
+
+        if (CategoryModel && business.categoryRef) {
+          const categoryDoc = await CategoryModel.findById(business.categoryRef).lean();
+          if (categoryDoc) categoryDetails = categoryDoc;
+        }
+
+        return {
+          ...business,
+          categoryDetails,
+        };
+      })
+    );
+
+    res.status(200).json({
+      message: "Businesses fetched successfully",
+      businesses: businessesWithCategoryDetails,
+    });
+  } catch (error) {
+    console.error("Error fetching businesses:", error);
+    res.status(500).json({
+      message: "Server error while fetching businesses",
+      error: error.message,
+    });
+  }
+};
