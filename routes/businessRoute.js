@@ -2,7 +2,7 @@ import express from 'express';
 import { createBusiness, updateBusiness, getAllBusinesses, getBusinessId, getUserBusinessViewsAnalytics, 
   searchBusinesses, getBusinessBySalesId, businessCountByCategory, deleteBusinessListingById, softDeleteBusiness,
    switchBusinessPlan, getMyBusinesses, updateBusinessPricing, getRazorpayPayments, getBusinessPrefillInfo,
-    getBusinessCities, updatePremiumBusinesses, updateOldBusinessQRCodes, getBusinessesByFilter, getBusinessesByCategory } from '../controllers/businessController.js';
+    getBusinessCities, updatePremiumBusinesses, updateOldBusinessQRCodes, getBusinessesByFilter, getBusinessesByCategory, updateCategoryAndQrBulk } from '../controllers/businessController.js';
 
 import upload from '../middlewares/upload.js';
 import { protect } from '../middlewares/auth.js';
@@ -49,6 +49,8 @@ router.put("/update-premium", updatePremiumBusinesses);
 router.post("/update-old-qr", updateOldBusinessQRCodes);
 
 router.get('/bizByFilter', getBusinessesByFilter )
-router.get('/bizByCategory', getBusinessesByCategory )
+router.get('/bizByCategory', getBusinessesByCategory );
+// Bulk update category & QR code
+router.post("/update-category-qr-bulk", updateCategoryAndQrBulk);
 
 export default router;

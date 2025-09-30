@@ -39,6 +39,7 @@ import QuickServices from '../models/QuickServices.js'; // Import QuickServices 
 import ShowroomShops from '../models/ShowroomShops.js'; // Import ShowroomShops model
 import EVChargingPoint from '../models/EVChargingPoint.js'; // Import EVChargingPoint model
 import MarketingBranding from '../models/MarketingBranding.js';
+import PeopleDirectory from '../models/PeopleDirectory.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Priceplan.js';
 import { generateAndUploadQrCode } from "../middlewares/generateQrCode.js"; // 🆕 import
@@ -67,6 +68,7 @@ const categoryModels = {
   Advocate: Advocate, // Add Advocate model here
   VehicleBooking: VehicleBooking, // Use VehicleBooking model for VehicleBooking category
   PeepalBook: PeepalBook,
+  PeopleDirectory: PeopleDirectory,
   Doctor: Doctor,
   Cafe: Cafe,
   Coaching: Coaching,
@@ -2788,5 +2790,51 @@ export const getBusinessesByCategory = async (req, res) => {
       message: "Server error while fetching businesses",
       error: error.message,
     });
+  }
+};
+
+//set the peepalbook to direactory
+export const updateCategoryAndQrBulk = async (req, res) => {
+  try {
+    const { oldCategory, newCategory } = req.body;
+
+    if (!oldCategory || !newCategory) {
+      return res.status(400).json({ message: "oldCategory and newCategory are required" });
+    }
+
+    // Find all businesses with oldCategory
+    const businesses = await Business.find({ category: oldCategory });
+    if (!businesses.length) {
+      return res.status(404).json({ message: "No businesses found for the old category" });
+    }
+
+    const updatedBusinesses = [];
+
+    for (const business of businesses) {
+      // Update category & categoryModel
+      business.category = newCategory;
+      business.categoryModel = newCategory;
+
+      // Generate new QR code
+      try {
+        const qrData = await generateAndUploadQrCode(business._id, newCategory);
+        business.qrCodeUrl = qrData.qrCodeUrl;
+        business.quickLink = qrData.quickLink;
+      } catch (err) {
+        console.warn(`QR code generation failed for business ${business._id}:`, err.message);
+      }
+
+      await business.save();
+      updatedBusinesses.push(business._id);
+    }
+
+    res.status(200).json({
+      message: `Successfully updated ${updatedBusinesses.length} businesses`,
+      updatedBusinesses
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Something went wrong", error: err.message });
   }
 };
