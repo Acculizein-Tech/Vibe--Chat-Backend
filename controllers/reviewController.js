@@ -110,6 +110,9 @@ export const createReview = async (req, res) => {
     if (!business) {
       return res.status(404).json({ message: 'Business not found' });
     }
+    console.log("Business Owner:", business.owner);
+console.log("Reviewer:", req.user._id);
+
 
     // 📝 Create review
     const review = new Review({

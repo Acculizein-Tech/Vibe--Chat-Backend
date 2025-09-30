@@ -214,6 +214,41 @@ export const handleError = (error, res) => {
 // @desc    Get all business listings created by the current user
 // @route   GET /api/user/listings
 // @access  Private
+// export const getUserListings = asyncHandler(async (req, res) => {
+//   const userId = req.user._id;
+
+//   try {
+//     const listings = await Business.find({
+//       owner: userId,
+//       deleteBusiness: false,
+//     })
+//       .select("-__v") // optional: exclude Mongoose version key
+//       .populate("categoryRef") // optional: load category info if needed
+//       .sort({ createdAt: -1 }); // newest first
+
+//     if (!listings.length) {
+//       return res.status(200).json({
+//         status: "success",
+//         message: "No business listings found for this user.",
+//         listings: [],
+//       });
+//     }
+
+//     res.status(200).json({
+//       status: "success",
+//       total: listings.length,
+//       listings,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error fetching user listings:", error);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Failed to fetch business listings.",
+//       error: error.message,
+//     });
+//   }
+// });
+
 export const getUserListings = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
@@ -222,9 +257,9 @@ export const getUserListings = asyncHandler(async (req, res) => {
       owner: userId,
       deleteBusiness: false,
     })
-      .select("-__v") // optional: exclude Mongoose version key
-      .populate("categoryRef") // optional: load category info if needed
-      .sort({ createdAt: -1 }); // newest first
+      .select("-__v")
+      .populate("categoryRef")
+      .sort({ createdAt: -1 });
 
     if (!listings.length) {
       return res.status(200).json({
@@ -234,10 +269,21 @@ export const getUserListings = asyncHandler(async (req, res) => {
       });
     }
 
+    // 🔄 transform categoryRef -> categoryData (skip _id inside)
+    const transformedListings = listings.map((listing) => {
+      const obj = listing.toObject();
+      if (obj.categoryRef) {
+        obj.categoryData = obj.categoryRef.toObject ? obj.categoryRef.toObject() : obj.categoryRef;
+        delete obj.categoryData._id;   // 🚫 remove inner _id
+        delete obj.categoryRef;        // remove old key
+      }
+      return obj;
+    });
+
     res.status(200).json({
       status: "success",
-      total: listings.length,
-      listings,
+      total: transformedListings.length,
+      listings: transformedListings,
     });
   } catch (error) {
     console.error("❌ Error fetching user listings:", error);
@@ -248,6 +294,8 @@ export const getUserListings = asyncHandler(async (req, res) => {
     });
   }
 });
+
+
 
 export const getAllSalesUsers = asyncHandler(async (req, res) => {
   try {
