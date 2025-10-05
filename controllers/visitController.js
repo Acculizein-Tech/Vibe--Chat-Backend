@@ -2,6 +2,7 @@ import Visit from '../models/Visit.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import Business from '../models/Business.js';
 import Review from '../models/Review.js';
+import Lead from '../models/Leads.js';   
 import user from '../models/user.js';
 import mongoose from 'mongoose';
 
@@ -357,6 +358,94 @@ export const getUserBusinessAnalytics = asyncHandler(async (req, res) => {
   });
 });
 
+
+export const getAdminBusinessAnalytics = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  // Step 1: Get all business listings of the logged-in user
+  const businesses = await Business.find({ owner: userId }).select("_id name category isPremium createdAt");
+
+  if (!businesses.length) {
+    return res.status(404).json({ message: "No listings found for user" });
+  }
+
+  // Step 2: Collect all business IDs
+  const businessIds = businesses.map(b => b._id);
+
+  // Step 3: Get visit count per business
+  const visits = await Visit.aggregate([
+    { $match: { business: { $in: businessIds } } },
+    {
+      $group: {
+        _id: "$business",
+        visitCount: { $sum: 1 }
+      }
+    }
+  ]);
+
+  // Step 4: Get review count per business
+  const reviews = await Review.aggregate([
+    { $match: { business: { $in: businessIds } } },
+    {
+      $group: {
+        _id: "$business",
+        reviewCount: { $sum: 1 }
+      }
+    }
+  ]);
+
+  // ✅ Step 5: Get average rating across all businesses
+  const allRatings = await Review.find({ business: { $in: businessIds } }).select("rating");
+  const totalRating = allRatings.reduce((sum, r) => sum + (r.rating || 0), 0);
+  const averageRating = allRatings.length > 0 ? parseFloat((totalRating / allRatings.length).toFixed(1)) : 0;
+
+  // ✅ Step 6: Merge business info
+  const listings = businesses.map(biz => {
+    const visitEntry = visits.find(v => v._id.toString() === biz._id.toString());
+    const reviewEntry = reviews.find(r => r._id.toString() === biz._id.toString());
+
+    return {
+      businessId: biz._id,
+      name: biz.name,
+      category: biz.category,
+      visits: visitEntry?.visitCount || 0,
+      reviews: reviewEntry?.reviewCount || 0,
+      isPremium: biz.isPremium || false,
+      createdAt: biz.createdAt
+    };
+  });
+
+  // ✅ Step 7: Totals
+  const totalViews = listings.reduce((acc, curr) => acc + curr.visits, 0);
+  const totalReviews = listings.reduce((acc, curr) => acc + curr.reviews, 0);
+  const totalListings = listings.length;
+  const paidListings = await Business.countDocuments({ isPremium: true }); // ✅ Global paid listings
+
+  // ✅ Step 8: Fetch totals from other collections
+  const totalUsers = await user.countDocuments();
+  const totalLeads = await Lead.countDocuments();
+
+  // ✅ Step 9: Global recent 5 listings (latest across all businesses)
+  const recentListings = await Business.find({})
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .select("_id name category createdAt");
+
+  // ✅ Step 10: Final structured response
+  res.status(200).json({
+    message: "User business analytics fetched successfully",
+    data: {
+      totalCounts: {
+        totalListings,
+        paidListings,
+        totalUsers,
+        totalLeads
+      },
+      listings,
+      recentListings
+    }
+  });
+});
 
 
 

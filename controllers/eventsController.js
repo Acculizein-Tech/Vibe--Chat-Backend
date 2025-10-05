@@ -222,7 +222,7 @@ export const deleteEvent = asyncHandler(async (req, res) => {
 export const getEventsByBusiness = asyncHandler(async (req, res) => {
   const { businessId } = req.params;
 
-  const events = await Event.find({ business: businessId }).sort({
+  const events = await Event.find({ business: businessId, isApproved: true }).sort({
     startTime: 1,
   });
 

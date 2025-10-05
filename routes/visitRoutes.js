@@ -1,5 +1,5 @@
 import express from 'express';
-import { trackVisit, getVisitAnalytics, getUserBusinessAnalytics } from '../controllers/visitController.js';
+import { trackVisit, getVisitAnalytics, getUserBusinessAnalytics, getAdminBusinessAnalytics } from '../controllers/visitController.js';
 import { protect } from '../middlewares/auth.js';
 import roles from '../middlewares/roles.js';
 
@@ -17,6 +17,11 @@ router.get(
   roles('customer'), // or any role you allow
   getUserBusinessAnalytics
 );
-
+router.get(
+  '/admin-analytics',
+  protect, // user must be logged in
+  roles('admin'), // or any role you allow
+  getAdminBusinessAnalytics
+);
 
 export default router;

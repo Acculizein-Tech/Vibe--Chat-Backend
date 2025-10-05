@@ -1200,7 +1200,6 @@ try {
 
 
 
-
 export const updateBusiness = async (req, res) => {
   try {
     const { id } = req.params;
