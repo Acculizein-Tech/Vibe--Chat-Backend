@@ -362,11 +362,11 @@ export const getUserBusinessAnalytics = asyncHandler(async (req, res) => {
 export const getAdminBusinessAnalytics = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
-  // Step 1: Get all business listings of the logged-in user
-  const businesses = await Business.find({ owner: userId }).select("_id name category isPremium createdAt");
+  // ✅ Step 1: Get all business listings (since this is for admin)
+  const businesses = await Business.find({}).select("_id name category isPremium createdAt owner");
 
   if (!businesses.length) {
-    return res.status(404).json({ message: "No listings found for user" });
+    return res.status(404).json({ message: "No listings found in system" });
   }
 
   // Step 2: Collect all business IDs
@@ -408,6 +408,7 @@ export const getAdminBusinessAnalytics = asyncHandler(async (req, res) => {
       businessId: biz._id,
       name: biz.name,
       category: biz.category,
+      owner: biz.owner,
       visits: visitEntry?.visitCount || 0,
       reviews: reviewEntry?.reviewCount || 0,
       isPremium: biz.isPremium || false,
@@ -415,17 +416,17 @@ export const getAdminBusinessAnalytics = asyncHandler(async (req, res) => {
     };
   });
 
-  // ✅ Step 7: Totals
+  // ✅ Step 7: Totals (now considering ALL businesses)
   const totalViews = listings.reduce((acc, curr) => acc + curr.visits, 0);
   const totalReviews = listings.reduce((acc, curr) => acc + curr.reviews, 0);
   const totalListings = listings.length;
-  const paidListings = await Business.countDocuments({ isPremium: true }); // ✅ Global paid listings
+  const paidListings = await Business.countDocuments({ isPremium: true });
 
   // ✅ Step 8: Fetch totals from other collections
   const totalUsers = await user.countDocuments();
   const totalLeads = await Lead.countDocuments();
 
-  // ✅ Step 9: Global recent 5 listings (latest across all businesses)
+  // ✅ Step 9: Global recent 5 listings
   const recentListings = await Business.find({})
     .sort({ createdAt: -1 })
     .limit(5)
@@ -433,19 +434,21 @@ export const getAdminBusinessAnalytics = asyncHandler(async (req, res) => {
 
   // ✅ Step 10: Final structured response
   res.status(200).json({
-    message: "User business analytics fetched successfully",
+    message: "Admin business analytics fetched successfully",
     data: {
       totalCounts: {
         totalListings,
         paidListings,
         totalUsers,
-        totalLeads
+        totalLeads,
+        
       },
-      listings,
-      recentListings
+      recentListings,
+      
     }
   });
 });
+
 
 
 
