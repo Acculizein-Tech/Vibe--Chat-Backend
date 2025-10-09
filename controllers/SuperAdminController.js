@@ -19,7 +19,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
   // }
 
   // Get all users without sensitive fields
-  const users = await User.find().select('-password -refreshTokens -emailVerifyOTP -resetPasswordOTP -emailVerifyExpires -resetPasswordExpires');
+  const users = await User.find().select(' -refreshTokens -emailVerifyOTP -resetPasswordOTP -emailVerifyExpires -resetPasswordExpires').sort({ createdAt: -1 });
 
   // For each user, count how many businesses they own
   const usersWithBusinessCounts = await Promise.all(
