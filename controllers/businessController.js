@@ -1098,7 +1098,7 @@ try {
         // Upload optional gallery images
         if (files.galleryImages?.length) {
           const galleryUrls = await Promise.all(
-            files.galleryImages.slice(0, 10).map(file => uploadToS3(file, req))
+            files.galleryImages.slice(0, 100).map(file => uploadToS3(file, req))
           );
           await Business.findByIdAndUpdate(business._id, {
             $set: { galleryImages: galleryUrls.map(r => r.url) }

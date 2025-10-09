@@ -8,7 +8,7 @@ const mediaFields = upload.fields([
   { name: "profileImage", maxCount: 1 },
   { name: "coverImage", maxCount: 1 },
   { name: "certificateImages", maxCount: 5 },
-  { name: "galleryImages", maxCount: 10 },
+  { name: "galleryImages", maxCount: 100 },
   { name: "eventsImage", maxCount: 1 },
   { name: "aadhaarFront", maxCount: 1 }, // ✅ Aadhaar front photo
   { name: "aadhaarBack", maxCount: 1 }, // ✅ Aadhaar back photo
@@ -34,7 +34,7 @@ const handleUpload = (req, res, next) => {
       ) {
         return res.status(400).json({
           success: false,
-          message: "❌ You can upload maximum 10 images in galleryImages",
+          message: "❌ You can upload maximum 100 images in galleryImages",
         });
       }
       if (err.code === "LIMIT_FILE_SIZE") {

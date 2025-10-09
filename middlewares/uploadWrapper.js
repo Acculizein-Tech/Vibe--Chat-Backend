@@ -8,7 +8,7 @@ export const handleUpload = (mediaFields) => {
           if (err.field === "galleryImages") {
             return res.status(400).json({
               success: false,
-              message: "❌ You can upload maximum 10 images in galleryImages",
+              message: "❌ You can upload maximum 100 images in galleryImages",
             });
           }
 
@@ -39,10 +39,10 @@ export const handleUpload = (mediaFields) => {
       }
 
       // ✅ Manual check for galleryImages max 10
-      if (req.files?.galleryImages && req.files.galleryImages.length > 10) {
+      if (req.files?.galleryImages && req.files.galleryImages.length > 100) {
         return res.status(400).json({
           success: false,
-          message: "❌ You can upload maximum 10 images in galleryImages",
+          message: "❌ You can upload maximum 100 images in galleryImages",
         });
       }
 
