@@ -111,9 +111,9 @@ const businessSchema = new mongoose.Schema(
       type: [String],
       validate: {
         validator: function (val) {
-          return val.length <= 10;
+          return val.length <= 100;
         },
-        message: "galleryImages exceeds the limit of 10",
+        message: "galleryImages exceeds the limit of 100",
       },
     },
     aadhaarImages: {
