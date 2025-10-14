@@ -2,7 +2,7 @@
 // routes/superAdminRoutes.js
 
 import express from 'express';
-import { getAllUsers, getAllBusinessListings, updateUserProfile, deleteBusinessListingById, addNewUser, createUserBySuperAdmin, handleDeleteRequest, handleDeleteRequestforBusiness, deleteUserById, redeemRequests } from '../controllers/SuperAdminController.js';
+import { getAllUsers, getAllBusinessListings, updateUserProfile, deleteBusinessListingById, addNewUser, createUserBySuperAdmin, handleDeleteRequest, handleDeleteRequestforBusiness, deleteUserById, redeemRequests, updateRedeemStatus  } from '../controllers/SuperAdminController.js';
 import { protect } from '../middlewares/auth.js';          // JWT verify
 import  roles  from '../middlewares/roles.js';   // role guard
 import upload from '../middlewares/upload.js';
@@ -35,6 +35,6 @@ router.put(
 );
 router.put('/delete-requests/:requestId', protect, roles('superadmin'), handleDeleteRequestforBusiness);
 router.get('/redeemRequests', protect, roles('superadmin', 'admin'), redeemRequests);
-// router.put('/redeemRequests/:requestId', protect, roles('superadmin', 'admin'), redeemRequestsUpdate);
+router.put('/approveRedeem/:requestId', protect, roles('superadmin', 'admin'), updateRedeemStatus);
 
 export default router;

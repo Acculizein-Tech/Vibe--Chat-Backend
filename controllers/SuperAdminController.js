@@ -402,3 +402,50 @@ export const redeemRequests = asyncHandler(async (req, res) => {
 });
 
 
+export const updateRedeemStatus = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params; // ✅ Only redeem request ID
+
+    // Find the request by ID
+    const request = await RedeemRequest.findById(id).populate("user", "fullName email");
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Redeem request not found",
+      });
+    }
+
+    // If already approved
+    if (request.status === "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Redeem request is already approved",
+      });
+    }
+
+    // If pending → approve it
+    if (request.status === "pending") {
+      request.status = "approved";
+      await request.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Redeem request approved successfully",
+        data: request,
+      });
+    }
+
+    // If status is something else (like rejected)
+    res.status(400).json({
+      success: false,
+      message: `Cannot approve a request with status "${request.status}"`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error updating redeem request status",
+      error: error.message,
+    });
+  }
+});
