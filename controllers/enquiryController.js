@@ -245,7 +245,7 @@ export const createEnquiry = async (req, res) => {
         },
       }),
     ]);
-
+ 
     // 📧 Send confirmation email to user
     try {
       const transporter = nodemailer.createTransport({

@@ -9,6 +9,7 @@ import asyncHandler from '../utils/asyncHandler.js';
 import sendEmail from '../utils/emailSender.js';
 import Health from '../models/Health.js'; // Assuming you have a HealthMedical model
 import DeleteRequest from '../models/DeleteRequest.js';
+import RedeemRequest from '../models/RedeemRequest.js';
 
 
 
@@ -375,3 +376,29 @@ export const handleDeleteRequestforBusiness = async (req, res) => {
     request
   });
 };
+
+
+//   
+
+
+export const redeemRequests = asyncHandler(async (req, res) => {
+  try {
+    const requests = await RedeemRequest.find()
+      .populate('user', 'fullName email') // ✅ populate user details
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: 'All redeem requests retrieved successfully',
+      data: requests
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving redeem requests',
+      error: error.message
+    });
+  }
+});
+
+
