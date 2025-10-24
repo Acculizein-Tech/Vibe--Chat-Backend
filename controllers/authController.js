@@ -488,14 +488,15 @@ export const verifyForgotOTP = asyncHandler(async (req, res) => {
 });
 
 export const logout = asyncHandler(async (req, res) => {
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization; // Already lowercased
+  console.log("Logout - Auth Header:", authHeader); // Add this log
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith('Bearer ')) { // Strict with space
     res.status(401);
     throw new Error("No token found");
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.split(' ')[1].trim();
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findById(decoded.id);
 
@@ -504,13 +505,11 @@ export const logout = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
-  // Remove only the matching refresh token
-  user.refreshTokens = user.refreshTokens.filter((rt) => rt !== token);
+  user.refreshTokens = [];
   await user.save();
 
   res.json({ message: "Logged out successfully" });
 });
-
 //resend OTP for email verification
 // export const resendOTP = asyncHandler(async (req, res) => {
 //   const { email } = req.body;
