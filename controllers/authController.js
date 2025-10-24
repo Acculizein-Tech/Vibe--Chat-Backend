@@ -4,8 +4,8 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendEmail from "../utils/emailSender.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import Lead from "../models/Leads.js"; // Import Lead  model
-import { notifyUser, notifyRole } from "../utils/sendNotification.js"; // Import notification functions
+// import Lead from "../models/Leads.js"; // Import Lead  model
+// import { notifyUser, notifyRole } from "../utils/sendNotification.js"; // Import notification functions
 
 // Helper: Generate JWT
 const generateToken = (id, expiresIn) => {
@@ -269,40 +269,40 @@ export const register = asyncHandler(async (req, res) => {
   });
 
   // 📌 Create a lead with follow-up reminder
-  await Lead.create({
-    name: user.fullName,
-    contact: user.email,
-    businessType: "Unknown",
-    status: "Interested",
-    notes: "Signed up on website",
-    salesUser: null,
-    followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
-  });
+  // await Lead.create({
+  //   name: user.fullName,
+  //   contact: user.email,
+  //   businessType: "Unknown",
+  //   status: "Interested",
+  //   notes: "Signed up on website",
+  //   salesUser: null,
+  //   followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
+  // });
 
-  // 🔔 Notifications
-  const notificationData = {
-    userId: user._id,
-    userName: user.fullName,
-    userEmail: user.email,
-    redirectPath: `/admin/users/${user._id}`,
-  };
+  // // 🔔 Notifications
+  // const notificationData = {
+  //   userId: user._id,
+  //   userName: user.fullName,
+  //   userEmail: user.email,
+  //   redirectPath: `/admin/users/${user._id}`,
+  // };
 
-  await Promise.all([
-    notifyRole({
-      role: "admin",
-      type: "LEAD_GENERATED",
-      title: "🆕 New User Registered",
-      message: `"${user.fullName}" registered as a customer.`,
-      data: notificationData,
-    }),
-    notifyRole({
-      role: "superadmin",
-      type: "LEAD_GENERATED",
-      title: "🆕 New User Registered",
-      message: `"${user.fullName}" registered as a customer.`,
-      data: notificationData,
-    }),
-  ]);
+  // await Promise.all([
+  //   notifyRole({
+  //     role: "admin",
+  //     type: "LEAD_GENERATED",
+  //     title: "🆕 New User Registered",
+  //     message: `"${user.fullName}" registered as a customer.`,
+  //     data: notificationData,
+  //   }),
+  //   notifyRole({
+  //     role: "superadmin",
+  //     type: "LEAD_GENERATED",
+  //     title: "🆕 New User Registered",
+  //     message: `"${user.fullName}" registered as a customer.`,
+  //     data: notificationData,
+  //   }),
+  // ]);
 
   // 📧 Send OTP email
   await sendEmail({

@@ -25,12 +25,12 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'business', 'support', 'admin', 'superadmin', 'sales'],
     default: 'customer'
   },
-   referralCode: { type: String, unique: true, sparse: true }, // ✅ Unique referral code
-   referredBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User',
-  default: null
-},
+  //  referralCode: { type: String, unique: true, sparse: true }, // ✅ Unique referral code
+//    referredBy: {
+//   type: mongoose.Schema.Types.ObjectId,
+//   ref: 'User',
+//   default: null
+// },
 
 phone: {
     type: String,

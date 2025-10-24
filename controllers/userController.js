@@ -3,14 +3,14 @@
 import User from "../models/user.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
-import Business from "../models/Business.js";
-import Review from "../models/Review.js";
+// import Business from "../models/Business.js";
+// import Review from "../models/Review.js";
 import { uploadToS3 } from "../middlewares/upload.js";
-import Plan from "../models/Priceplan.js";
-import Payment from "../models/Payment.js";
+// import Plan from "../models/Priceplan.js";
+// import Payment from "../models/Payment.js";
 import axios from "axios";
-import KYC from "../models/KYC.js";
-import Priceplan from "../models/Priceplan.js";
+// import KYC from "../models/KYC.js";
+// import Priceplan from "../models/Priceplan.js";
 
 import { generateNameBasedCode } from "../utils/generateReferralCode.js";
 
