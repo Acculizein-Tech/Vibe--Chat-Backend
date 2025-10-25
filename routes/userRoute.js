@@ -1,7 +1,7 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
 import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral,
-   getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode, DeleteCustomCode } from '../controllers/userController.js';
+   getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode, DeleteCustomCode, blockUser, unblockUser, getBlockedUsers } from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';
@@ -36,5 +36,10 @@ router.post("/apply-referral", protect, applyReferral);
 router.post("/custom-code", protect, roles('superadmin'), createCustomCode);
 router.delete("/delete-code/customcode", protect, roles('superadmin'), DeleteCustomCode);
 router.put("/update-code/customcode", protect, roles('superadmin'), UpdateCustomCode);
+
+
+router.post("/block", blockUser);
+router.post("/unblock", unblockUser);
+router.get("/blocked/:userId", getBlockedUsers);
 
 export default router;

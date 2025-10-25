@@ -694,76 +694,6 @@ export const DeleteCustomCode = async (req, res) => {
 };
 
 
-
-
-
-//update the custom code
-// Update Custom Code
-// export const UpdateCustomCode = async (req, res) => {
-//   try {
-//     const { generatedCode, codeName, codeValue, validity, isActive } = req.body;
-
-//     // ✅ Superadmin check
-//     if (!req.user || req.user.role !== "superadmin") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "❌ Only superadmin can update custom codes",
-//       });
-//     }
-
-//     // ✅ generatedCode required
-//     if (!generatedCode) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "❌ generatedCode is required to update custom code",
-//       });
-//     }
-
-//     // ✅ Find superadmin document
-//     const superAdmin = await User.findById(req.user._id);
-//     if (!superAdmin) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "❌ Superadmin not found",
-//       });
-//     }
-
-//     // ✅ Find specific custom code
-//     const codeIndex = superAdmin.customCodes.findIndex(
-//       (c) => c.generatedCode === generatedCode
-//     );
-
-//     if (codeIndex === -1) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "❌ Custom code not found",
-//       });
-//     }
-
-//     // ✅ Update fields if provided
-//     if (codeName !== undefined) superAdmin.customCodes[codeIndex].codeName = codeName;
-//     if (codeValue !== undefined) superAdmin.customCodes[codeIndex].codeValue = codeValue;
-//     if (validity !== undefined) superAdmin.customCodes[codeIndex].validity = new Date(validity);
-//     if (isActive !== undefined) superAdmin.customCodes[codeIndex].isActive = isActive;
-
-//     // ✅ Save changes
-//     await superAdmin.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: `✅ Custom code ${generatedCode} updated successfully`,
-//       updatedCode: superAdmin.customCodes[codeIndex],
-//     });
-//   } catch (error) {
-//     console.error("Error in UpdateCustomCode:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "❌ Server error while updating custom code",
-//     });
-//   }
-// };
-
-
 export const UpdateCustomCode = async (req, res) => {
   try {
     const { id, codeName, codeValue, validity, isActive } = req.body;
@@ -827,6 +757,91 @@ export const UpdateCustomCode = async (req, res) => {
   }
 };
 
+
+
+// ✅ Block a user
+export const blockUser = async (req, res) => {
+  try {
+    const { userId, blockedUserId } = req.body;
+
+    // Prevent blocking self
+    if (userId === blockedUserId) {
+      return res.status(400).json({ message: "You cannot block yourself." });
+    }
+
+    const user = await User.findById(userId);
+    const blockedUser = await User.findById(blockedUserId);
+
+    if (!user || !blockedUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Already blocked check
+    if (user.blockedUsers.includes(blockedUserId)) {
+      return res.status(400).json({ message: "User already blocked." });
+    }
+
+    user.blockedUsers.push(blockedUserId);
+    await user.save();
+
+    return res.status(200).json({
+      message: "User blocked successfully.",
+      blockedUsers: user.blockedUsers,
+    });
+  } catch (error) {
+    console.error("Error blocking user:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ✅ Unblock a user
+export const unblockUser = async (req, res) => {
+  try {
+    const { userId, blockedUserId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    user.blockedUsers = user.blockedUsers.filter(
+      (id) => id.toString() !== blockedUserId
+    );
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "User unblocked successfully.",
+      blockedUsers: user.blockedUsers,
+    });
+  } catch (error) {
+    console.error("Error unblocking user:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ✅ Get all blocked users list
+export const getBlockedUsers = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId).populate(
+      "blockedUsers",
+      "fullName email phone profile.avatar"
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.status(200).json({
+      blockedUsers: user.blockedUsers || [],
+    });
+  } catch (error) {
+    console.error("Error fetching blocked users:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
 
 
 

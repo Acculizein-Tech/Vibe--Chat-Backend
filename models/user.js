@@ -25,12 +25,7 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'business', 'support', 'admin', 'superadmin', 'sales'],
     default: 'customer'
   },
-  //  referralCode: { type: String, unique: true, sparse: true }, // ✅ Unique referral code
-//    referredBy: {
-//   type: mongoose.Schema.Types.ObjectId,
-//   ref: 'User',
-//   default: null
-// },
+
 
 phone: {
     type: String,
@@ -54,58 +49,7 @@ emailResendBlock: Date, // 🟢 Add this line
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
 
-//new
-// wallet: {
-//   balance: { type: Number, default: 0 },
-//   history: [
-//     {
-//       amount: Number,
-//       type: { type: String, enum: ["credit", "debit"] },
-//       description: String,
-//       date: { type: Date, default: Date.now },
-//     },
-//   ],
-// },
-wallet: {
-      balance: { type: Number, default: 0 },
-      history: [
-        {
-          amount: { type: Number, required: true },
-          type: { type: String, enum: ['credit', 'debit'], required: true },
-          description: String,
 
-          // track kis user se aaya
-          fromUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-          fromEmail: { type: String },
-
-          date: { type: Date, default: Date.now },
-        },
-      ],
-    },
-    userKYCDetails: {
-  panCard: String,
-  bankDetails: {
-    accountNumber: String,
-    ifsc: String,
-    accountHolderName: String,
-  },
-  fundAccountId: { type: String },   // Razorpay fund account id
-  isPaymentified: { type: Boolean, default: false }, // superadmin approve karega
-},
-
-payoutHistory: [
-  {
-    payoutId: String,
-    fundAccountId: String,
-    amount: Number,
-    status: { type: String, enum: ['pending', 'processing', 'processed', 'failed'], default: 'pending' },
-    mode: { type: String, enum: ['UPI', 'IMPS', 'NEFT', 'RTGS'] },
-    createdAt: { type: Date, default: Date.now }
-  }
-],
-
-//custom code
-// models/User.js ke andar, last me add kar do
 customCodes: [
   {
     codeName: { type: String, required: true },      // Superadmin ka display name
@@ -116,6 +60,13 @@ customCodes: [
     createdAt: { type: Date, default: Date.now },
   }
 ],
+blockedUsers: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  }
+],
+
 
   
 

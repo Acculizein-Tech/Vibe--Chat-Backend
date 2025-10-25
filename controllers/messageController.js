@@ -35,3 +35,54 @@ export const getMessages = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+
+// ✅ Edit a message
+export const editMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { text, userId } = req.body;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Only sender can edit
+    if (message.sender.toString() !== userId) {
+      return res.status(403).json({ error: "You can edit only your messages" });
+    }
+
+    message.text = text;
+    message.edited = true; // add this field in schema if not already
+    await message.save();
+
+    res.status(200).json({ message: "Message updated successfully", data: message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ✅ Delete a message
+export const deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId } = req.body;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Only sender can delete
+    if (message.sender.toString() !== userId) {
+      return res.status(403).json({ error: "You can delete only your messages" });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+
+    res.status(200).json({ message: "Message deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
