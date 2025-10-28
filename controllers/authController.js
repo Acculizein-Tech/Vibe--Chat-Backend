@@ -194,24 +194,25 @@ export const register = asyncHandler(async (req, res) => {
   } = req.body;
 
   // 🚫 Restrict admin/superadmin registration
-  if (["admin", "superadmin"].includes(role)) {
-    res.status(400);
-    throw new Error("Cannot register as admin");
-  }
+ if (["admin", "superadmin"].includes(role)) {
+  return res.status(400).json({ message: "Cannot register as admin" });
+}
 
   // 🔍 Check if email is already registered
   const existingUser = await User.findOne({ email });
   if (existingUser) {
-    if (existingUser.isVerified) {
-      res.status(400);
-      throw new Error("Email is already registered");
-    } else {
-      res.status(400);
-      throw new Error(
-        "You already registered. Please verify your email or request a new OTP"
-      );
-    }
+  if (existingUser.isVerified) {
+    return res.status(400).json({ message: "Email is already registered" });
+  } else {
+    return res
+      .status(400)
+      .json({
+        message:
+          "You already registered. Please verify your email or request a new OTP",
+      });
   }
+}
+
 
   // 🔐 Generate OTP
   const otp = generateOTP();
@@ -320,6 +321,7 @@ export const register = asyncHandler(async (req, res) => {
 
   // ✅ Send response
   res.status(201).json({
+    success: true,
     accessToken,
     refreshToken,
     message: "OTP sent to your email for verification",
@@ -350,7 +352,7 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
   user.emailVerifyExpires = undefined;
   await user.save();
 
-  res.json({ message: "Email verified successfully" });
+  res.json({ success: true,  message: "Email verified successfully" });
 });
 
 // @desc    Login user

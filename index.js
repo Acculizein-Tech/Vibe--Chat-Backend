@@ -11,13 +11,14 @@ import userRoutes from "./routes/userRoute.js";
 import conversationRoutes from "./routes/conversationRoute.js";
 import messageRoutes from "./routes/messageRoute.js";
 import { errorHandler } from "./utils/errorHandler.js";
+import contactRoutes from "./routes/contactRoute.js";
 
 dotenv.config();
 connectDB();
 
 const app = express();
-app.use(requestIp.mw());
 app.use(express.json());
+app.use(requestIp.mw());
 app.use(cors({ origin: "*", credentials: true }));
 
 const httpServer = http.createServer(app);
@@ -53,6 +54,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/conversation", conversationRoutes);
 app.use("/api/message", messageRoutes);
+app.use("/api/contacts", contactRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;

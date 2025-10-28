@@ -20,7 +20,7 @@ export const getOrCreateConversation = async (req, res) => {
       });
     }
 
-    res.json(conversation);
+    res.status(201).json(conversation);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -35,7 +35,7 @@ export const getUserConversations = async (req, res) => {
     })
       .populate("participants", "name email")
       .populate("lastMessage");
-    res.json(conversations);
+    res.status(200).json(conversations);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
