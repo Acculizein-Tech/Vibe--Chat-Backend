@@ -9,6 +9,12 @@ const conversationSchema = new mongoose.Schema(
         required: true,
       },
     ],
+     receiverPhone: { type: String }, // when user not yet registered
+    status: {
+      type: String,
+      enum: ["active", "pending", "closed"],
+      default: "active",
+    },
     lastMessage: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
@@ -24,6 +30,7 @@ const conversationSchema = new mongoose.Schema(
 
 // Optional: quick lookup optimization
 conversationSchema.index({ participants: 1 });
+conversationSchema.index({ receiverPhone: 1 });
 
 const Conversation =
   mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema);

@@ -847,28 +847,27 @@ export const getBlockedUsers = async (req, res) => {
 // ✅ Filter contacts that exist in DB
 export const filterContacts = async (req, res) => {
   try {
-    const { contacts } = req.body;
- 
+    const { contacts } = req.body; // [{ phone, name }]
+
     if (!contacts || !Array.isArray(contacts)) {
       return res.status(400).json({ message: "Contacts must be an array" });
     }
 
-    // 🔹 Normalize and extract phone numbers
-    const phoneNumbers = contacts
-      .map(c => c.phone?.replace(/\s+/g, "").replace(/^(\+91|91)/, "")) // remove +91 / 91 / spaces
-      .filter(Boolean); // remove undefined or null
+    const phoneNumbers = contacts.map(c =>
+      c.phone?.replace(/\s+/g, "").replace(/^(\+91|91|0)/, "")
+    );
 
-    // 🔹 Find users matching any of those numbers
     const matchedUsers = await User.find({
       phone: { $in: phoneNumbers }
-    }).select("_id fullName phone email profile.avatar");
+    }).select("_id fullName phone profile.avatar");
 
     return res.status(200).json({ matchedUsers });
-  } catch (error) {
-    console.error("❌ Error filtering contacts:", error);
-    return res.status(500).json({ message: "Server error" });
+  } catch (err) {
+    console.error("filterContacts error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 

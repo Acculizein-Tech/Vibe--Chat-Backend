@@ -30,6 +30,8 @@ const userSchema = new mongoose.Schema({
 phone: {
     type: String,
   },
+  phoneHash: { type: String, index: true }, // SHA256 of normalized phone
+
   city: { type: String },
   state: { type: String },
   country: { type: String },  
