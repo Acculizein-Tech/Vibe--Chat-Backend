@@ -25,7 +25,7 @@ export const getOrCreateConversation = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-
+ 
 // ✅ Get all conversations for a user
 export const getUserConversations = async (req, res) => {
   try {

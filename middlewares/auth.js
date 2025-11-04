@@ -27,12 +27,24 @@ const protect = asyncHandler(async (req, res, next) => {
       });
     }
 
+    // if (!user.refreshTokens || user.refreshTokens.length === 0) {
+    //   return res.status(401).json({
+    //     success: false,
+    //     message: 'Session expired. Please login again.'
+    //   });
+    // }
     if (!user.refreshTokens || user.refreshTokens.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Session expired. Please login again.'
-      });
-    }
+  if (req.path === '/logout') {
+    // allow logout even if session expired
+    req.user = user;
+  } else {
+    return res.status(401).json({
+      success: false,
+      message: 'Session expired. Please login again.'
+    });
+  }
+}
+
 
     req.user = user;
     next();
