@@ -2,16 +2,22 @@ import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 
 // ✅ Send a message
+// ✅ Secure version — sender from token
 export const sendMessage = async (req, res) => {
   try {
-    const { conversationId, sender, receiver, text } = req.body;
+    const sender = req.user.id || req.user._id; // from token
+    const { conversationId, receiver, text } = req.body;
+
+    if (!conversationId || !receiver || !text) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
     const message = await Message.create({
       conversationId,
       sender,
       receiver,
       text,
-    }); 
+    });
 
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: message._id,
@@ -19,9 +25,11 @@ export const sendMessage = async (req, res) => {
 
     res.status(201).json(message);
   } catch (error) {
+    console.error("❌ sendMessage error:", error);
     res.status(500).json({ error: error.message });
   }
 };
+
 
 // ✅ Fetch all messages in a conversation
 export const getMessages = async (req, res) => {

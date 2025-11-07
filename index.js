@@ -31,24 +31,36 @@ io.on("connection", (socket) => {
 
   socket.on("register", (userId) => {
     onlineUsers.set(userId, socket.id);
-    console.log(`✅ User ${userId} registered: ${socket.id}`);
+    console.log(`✅ User ${userId} registered with socket ${socket.id}`);
   });
 
   socket.on("sendMessage", (data) => {
+    console.log("📩 Message received from client:", data);
+
     const { sender, receiver, text, conversationId } = data;
     const receiverSocket = onlineUsers.get(receiver);
 
+    // 🔍 Debug: who is online
+    console.log("👥 Online users:", Array.from(onlineUsers.entries()));
+
     if (receiverSocket) {
+      console.log(`📤 Sending message to receiver ${receiver} via socket ${receiverSocket}`);
       io.to(receiverSocket).emit("receiveMessage", { sender, text, conversationId });
+    } else {
+      console.log(`⚠️ Receiver ${receiver} is offline, not delivered in real-time`);
     }
   });
 
   socket.on("disconnect", () => {
     for (const [userId, sockId] of onlineUsers.entries()) {
-      if (sockId === socket.id) onlineUsers.delete(userId);
+      if (sockId === socket.id) {
+        onlineUsers.delete(userId);
+        console.log(`🔴 User ${userId} disconnected`);
+      }
     }
   });
 });
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);

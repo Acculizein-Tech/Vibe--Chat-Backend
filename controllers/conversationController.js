@@ -2,29 +2,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 
 // ✅ Create or get existing conversation between two users
-// export const getOrCreateConversation = async (req, res) => {
-//   try {
-//     const { senderId, receiverId } = req.body;
 
-//     if (!senderId || !receiverId)
-//       return res.status(400).json({ message: "Both sender and receiver required" });
-
-//     let conversation = await Conversation.findOne({
-//       participants: { $all: [senderId, receiverId] },
-//       isGroup: false,
-//     });
-
-//     if (!conversation) {
-//       conversation = await Conversation.create({
-//         participants: [senderId, receiverId],
-//       });
-//     }
-
-//     res.status(201).json(conversation);
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
  
 // ✅ Get all conversations for a user
 export const getUserConversations = async (req, res) => {
@@ -45,8 +23,10 @@ export const getUserConversations = async (req, res) => {
 //new
 export const getOrCreateConversation = async (req, res) => {
   try {
-    const { senderId, receiverId, receiverPhone } = req.body;
-
+    // const { senderId, receiverId, receiverPhone } = req.body;
+    const senderId = req.user._id; // ✅ Extract from token
+    const { receiverId, receiverPhone } = req.body;
+    console.log("senderId:", senderId, "receiverId:", receiverId, "receiverPhone:", receiverPhone);
     if (!senderId)
       return res.status(400).json({ message: "SenderId required" });
 
@@ -103,16 +83,103 @@ export const getOrCreateConversation = async (req, res) => {
 };
 
 
-//
-// if (contact.isRegistered) {
-//   await axios.post("/conversation/getOrCreate", {
-//     senderId: currentUser._id,
-//     receiverId: contact._id,
-//   });
-// } else {
-//   await axios.post("/conversation/getOrCreate", {
-//     senderId: currentUser._id,
-//     receiverPhone: contact.phone,
-//   });
-// }
+
+// export const getOrCreateConversation = async (req, res) => {
+//   try {
+//     const senderId = req.user._id; // ✅ Extracted from token
+//     const { receiverId, receiverPhone } = req.body;
+
+//     console.log("senderId:", senderId, "receiverId:", receiverId, "receiverPhone:", receiverPhone);
+
+//     if (!senderId) {
+//       return res.status(400).json({ success: false, message: "SenderId required" });
+//     }
+
+//     // 🧩 CASE 1 — Registered user (receiverId provided)
+//     if (receiverId) {
+//       let conversation = await Conversation.findOne({
+//         participants: { $all: [senderId, receiverId] },
+//         isGroup: false,
+//       });
+
+//       if (!conversation) {
+//         conversation = await Conversation.create({
+//           participants: [senderId, receiverId],
+//           status: "active",
+//         });
+//       }
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "Active conversation ready",
+//         status: "active",
+//         conversation,
+//       });
+//     }
+
+//     // 🧩 CASE 2 — Non-registered user (receiverPhone provided)
+//     if (receiverPhone) {
+//       // 🔍 Check if a user with this phone exists
+//       const existingUser = await User.findOne({ phone: receiverPhone });
+
+//       if (existingUser) {
+//         // If user exists, behave like CASE 1
+//         let conversation = await Conversation.findOne({
+//           participants: { $all: [senderId, existingUser._id] },
+//           isGroup: false,
+//         });
+
+//         if (!conversation) {
+//           conversation = await Conversation.create({
+//             participants: [senderId, existingUser._id],
+//             status: "active",
+//           });
+//         }
+
+//         return res.status(200).json({
+//           success: true,
+//           message: "Active conversation ready (found via phone)",
+//           status: "active",
+//           conversation,
+//         });
+//       }
+
+//       // 🔗 If not registered, handle invite mode (no ObjectId)
+//       let pending = await Conversation.findOne({
+//         senderId,
+//         receiverPhone,
+//         status: "pending",
+//       });
+
+//       if (!pending) {
+//         pending = await Conversation.create({
+//           participants: [senderId], // ✅ only ObjectId here
+//           receiverPhone,
+//           status: "pending",
+//         });
+//       }
+
+//       return res.status(200).json({
+//         success: false,
+//         inviteLink: `https://yourapp.com/invite?phone=${encodeURIComponent(receiverPhone)}`,
+//         message: "Pending conversation created (user not registered yet)",
+//         status: "pending",
+//         conversation: pending,
+//       });
+//     }
+
+//     return res.status(400).json({
+//       success: false,
+//       message: "Either receiverId or receiverPhone required",
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in getOrCreateConversation:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 
