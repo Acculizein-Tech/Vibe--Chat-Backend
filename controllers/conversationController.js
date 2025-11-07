@@ -183,3 +183,46 @@ export const getOrCreateConversation = async (req, res) => {
 // };
 
 
+//get those users whose have the converstaion with the logged in user
+// Get all users who have a conversation with the logged-in user
+export const getChatUsers = async (req, res) => {
+  try {
+    const userId = req.user._id.toString(); // From auth middleware (token verified user)
+
+    // Find all conversations that include this user
+    const conversations = await Conversation.find({
+      participants: { $in: [userId] },
+    })
+      .populate("participants", "fullName email phone")
+      .lean();
+
+    // Extract the *other* user along with conversation id
+    const chatUsers = conversations
+      .map(conv => {
+        const otherUser = conv.participants.find(
+          p => p._id.toString() !== userId
+        );
+        if (otherUser) {
+          return {
+            _id: conv._id, // conversation id
+            participant: otherUser,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Remove duplicates (same user across multiple conversations)
+    const uniqueUsers = Array.from(
+      new Map(
+        chatUsers.map(item => [item.participant._id.toString(), item])
+      ).values()
+    );
+
+    res.status(200).json(uniqueUsers);
+  } catch (error) {
+    console.error("Error fetching chat users:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
