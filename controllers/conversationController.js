@@ -222,7 +222,7 @@ export const getChatUsers = async (req, res) => {
       ).values()
     );
 
-    res.status(200).json(uniqueUsers);
+    res.status(200).json({ status: "Success", uniqueUsers });
   } catch (error) {
     console.error("Error fetching chat users:", error);
     res.status(500).json({ error: error.message });
