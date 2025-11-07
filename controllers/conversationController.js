@@ -187,16 +187,14 @@ export const getOrCreateConversation = async (req, res) => {
 // Get all users who have a conversation with the logged-in user
 export const getChatUsers = async (req, res) => {
   try {
-    const userId = req.user._id.toString(); // From auth middleware (token verified user)
+    const userId = req.user._id.toString();
 
-    // Find all conversations that include this user
     const conversations = await Conversation.find({
       participants: { $in: [userId] },
     })
-      .populate("participants", "fullName email phone")
+      .populate("participants", "fullName phone")
       .lean();
 
-    // Extract the *other* user along with conversation id
     const chatUsers = conversations
       .map(conv => {
         const otherUser = conv.participants.find(
@@ -204,18 +202,23 @@ export const getChatUsers = async (req, res) => {
         );
         if (otherUser) {
           return {
-            _id: conv._id, // conversation id
-            participant: otherUser,
+            conversationId: conv._id,
+            participant: {
+              receiver: otherUser._id,
+              fullName: otherUser.fullName,
+              email: otherUser.email,
+              phone: otherUser.phone,
+            },
           };
         }
         return null;
       })
       .filter(Boolean);
 
-    // Remove duplicates (same user across multiple conversations)
+    // ✅ Fixed duplicate removal
     const uniqueUsers = Array.from(
       new Map(
-        chatUsers.map(item => [item.participant._id.toString(), item])
+        chatUsers.map(item => [item.participant.receiver.toString(), item])
       ).values()
     );
 
@@ -225,4 +228,5 @@ export const getChatUsers = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
