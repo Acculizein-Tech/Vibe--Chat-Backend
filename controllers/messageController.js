@@ -72,6 +72,30 @@ export const editMessage = async (req, res) => {
 };
 
 // ✅ Delete a message
+// export const deleteMessage = async (req, res) => {
+//   try {
+//     const { messageId } = req.params;
+//     const { userId } = req.body;
+
+//     const message = await Message.findById(messageId);
+//     if (!message) {
+//       return res.status(404).json({ error: "Message not found" });
+//     }
+
+//     // Only sender can delete
+//     if (message.sender.toString() !== userId) {
+//       return res.status(403).json({ error: "You can delete only your messages" });
+//     }
+
+//     await Message.findByIdAndDelete(messageId);
+
+//     res.status(200).json({ message: "Message deleted successfully" });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
+// ✅ Delete a message (Updated)
 export const deleteMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -82,10 +106,16 @@ export const deleteMessage = async (req, res) => {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Only sender can delete
-    if (message.sender.toString() !== userId) {
-      return res.status(403).json({ error: "You can delete only your messages" });
+    // NEW AUTH LOGIC: Allow if user is in the conversation (not just sender)
+    const conversation = await Conversation.findById(message.conversationId);
+    if (!conversation || !conversation.participants.includes(userId)) {
+      return res.status(403).json({ error: "You can only delete messages in your conversations" });
     }
+
+    // OLD LOGIC (optional: uncomment if you want to keep sender-only restriction as fallback)
+    // if (message.sender.toString() !== userId) {
+    //   return res.status(403).json({ error: "You can delete only your messages" });
+    // }
 
     await Message.findByIdAndDelete(messageId);
 

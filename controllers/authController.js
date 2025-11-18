@@ -9,7 +9,7 @@ import crypto from "crypto";
 
 // Helper: Generate JWT
 const generateToken = (id, expiresIn) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn });
+  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn});
 };
 
 // Helper: Generate 6-digit OTP
@@ -447,7 +447,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   // 🔐 Generate secure short-lived token
   const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "10m",
+    expiresIn: "30d",
   });
 
   res.json({
