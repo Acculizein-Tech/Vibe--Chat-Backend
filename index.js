@@ -19,7 +19,31 @@ connectDB();
 const app = express();
 app.use(express.json());
 app.use(requestIp.mw());
-app.use(cors({ origin: "*",   methods: ["GET", "POST", "PUT", "DELETE"], credentials: true }));
+const allowedOrigins = [
+  "http://localhost:8081",
+  "http://192.168.",
+  "exp://",
+  "https://*.exp.direct",
+  "https://*.expo.dev",
+  "https://1xqi04y-sharma9299-8081.exp.direct",
+  "https://vibechat.bizvility.com",
+  "https://www.vibechat.bizvility.com",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some((o) => origin.includes(o))) {
+        callback(null, true);
+      } else {
+        console.log("❌ Blocked CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
