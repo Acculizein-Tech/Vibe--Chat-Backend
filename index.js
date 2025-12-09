@@ -12,6 +12,9 @@ import conversationRoutes from "./routes/conversationRoute.js";
 import messageRoutes from "./routes/messageRoute.js";
 import { errorHandler } from "./utils/errorHandler.js";
 import contactRoutes from "./routes/contactRoute.js";
+import Message from "./models/Message.js";
+import Conversation from "./models/Conversation.js";
+
 
 dotenv.config();
 connectDB();
@@ -46,44 +49,103 @@ app.use(
 );
 
 const httpServer = http.createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*" } });
+export const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
+// ----------------------------------------------------------
+// REAL-TIME SOCKET SYSTEM WITH FULL DEBUGGING
+// ----------------------------------------------------------
 const onlineUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("🟢 New socket connected:", socket.id);
+  console.log("🟢 Socket connected:", socket.id);
 
-  socket.on("register", (userId) => {
-    onlineUsers.set(userId, socket.id);
-    console.log(`✅ User ${userId} registered with socket ${socket.id}`);
+  // Debug: log all events received by this socket
+  socket.onAny((event, ...args) => {
+    console.log(`📌 Event received: ${event}`, args);
   });
 
-  socket.on("sendMessage", (data) => {
-    console.log("📩 Message received from client:", data);
+  // 1️⃣ Register user
+  socket.on("register", (userId) => {
+    if (!userId) return;
 
-    const { sender, receiver, text, conversationId } = data;
-    const receiverSocket = onlineUsers.get(receiver);
+    onlineUsers.set(userId.toString(), socket.id);
+    socket.userId = userId.toString();
 
-    // 🔍 Debug: who is online
-    console.log("👥 Online users:", Array.from(onlineUsers.entries()));
+    console.log("🟢 Registered → onlineUsers map:", onlineUsers);
+  });
 
-    if (receiverSocket) {
-      console.log(`📤 Sending message to receiver ${receiver} via socket ${receiverSocket}`);
-      io.to(receiverSocket).emit("receiveMessage", { sender, text, conversationId });
-    } else {
-      console.log(`⚠️ Receiver ${receiver} is offline, not delivered in real-time`);
+  // 2️⃣ Join a conversation room
+  socket.on("joinRoom", (conversationId) => {
+    if (!conversationId) {
+      console.log("❌ joinRoom failed: conversationId missing");
+      return;
+    }
+
+    socket.join(conversationId.toString());
+    console.log(`📌 User ${socket.userId} joined room ${conversationId}`);
+  });
+
+  // 3️⃣ Send real-time message
+  socket.on("sendMessage", async (data) => {
+    try {
+      const { sender, receiver, text, conversationId } = data;
+
+      if (!conversationId || !sender || !receiver || !text) {
+        console.log("❌ sendMessage failed: Missing fields", data);
+        return;
+      }
+
+      // Save message to DB
+      const msg = await Message.create({
+        sender,
+        receiver,
+        text,
+        conversationId,
+      });
+
+      // Update conversation's lastMessage
+      await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessage: msg._id,
+      });
+
+      // Emit to room
+      io.to(conversationId.toString()).emit("messageReceived", msg);
+      console.log(`📤 Message emitted to room ${conversationId}`);
+
+      // Optional: alert receiver if online
+      const receiverSocket = onlineUsers.get(receiver.toString());
+      if (receiverSocket) {
+        io.to(receiverSocket).emit("dmAlert", {
+          conversationId,
+          sender,
+        });
+        console.log(`🔔 Alert sent to receiver ${receiver}`);
+      }
+    } catch (err) {
+      console.log("❌ Error in sendMessage:", err);
     }
   });
 
+  // 4️⃣ Disconnect
   socket.on("disconnect", () => {
-    for (const [userId, sockId] of onlineUsers.entries()) {
-      if (sockId === socket.id) {
-        onlineUsers.delete(userId);
-        console.log(`🔴 User ${userId} disconnected`);
+    console.log("🔴 Socket disconnected:", socket.id);
+
+    for (const [uid, sid] of onlineUsers.entries()) {
+      if (sid === socket.id) {
+        onlineUsers.delete(uid);
+        console.log("📝 Removed from onlineUsers:", uid);
       }
     }
   });
 });
+
+// export { io };
+
 
 
 app.use("/api/auth", authRoutes);
@@ -93,7 +155,8 @@ app.use("/api/message", messageRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
+ 

@@ -360,42 +360,51 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
+  // 🔍 Find user
   const user = await User.findOne({ email });
-  // console.log(user);
 
-  if (!user || !(await user.email)) {
+  if (!user) {
     res.status(401);
     throw new Error("Create your account first");
   }
 
-  if (!user || !(await user.matchPassword(password))) {
+  // 🔐 Check password
+  const isMatch = await user.matchPassword(password);
+  if (!isMatch) {
     res.status(401);
     throw new Error("Invalid email or password");
   }
 
+  // 🚫 Check verification
   if (!user.isVerified) {
     res.status(403);
     throw new Error("Please verify your email first");
   }
 
+  // 🎟 Generate tokens
   const accessToken = generateToken(user._id, "30d");
   const refreshToken = generateToken(user._id, "7d");
 
+  // ➕ Save refresh token
   user.refreshTokens.push(refreshToken);
   await user.save();
 
+  // 🟢 SEND CLEAN RESPONSE (frontend compatible)
   res.json({
-    _id: user._id,
-    fullName: user.fullName,
-    email: user.email,
-    role: user.role,
-    avatar:
-      user.profile?.avatar ||
-      "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp", // ✅ safely include avatar
+    user: {
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      avatar:
+        user.avatar ||
+        "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
+    },
     accessToken,
     refreshToken,
   });
 });
+
 
 
 // @route   POST /api/auth/refresh

@@ -1,17 +1,46 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
+import { io } from "../index.js";
 
 // ✅ Send a message
 // ✅ Secure version — sender from token
+// export const sendMessage = async (req, res) => {
+//   try {
+//     const sender = req.user.id || req.user._id; // from token
+//     const { conversationId, receiver, text } = req.body;
+
+//     if (!conversationId || !receiver || !text) {
+//       return res.status(400).json({ error: "Missing required fields" });
+//     }
+
+//     const message = await Message.create({
+//       conversationId,
+//       sender,
+//       receiver,
+//       text,
+//     });
+
+//     await Conversation.findByIdAndUpdate(conversationId, {
+//       lastMessage: message._id,
+//     });
+
+//     res.status(201).json(message);
+//   } catch (error) {
+//     console.error("❌ sendMessage error:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
 export const sendMessage = async (req, res) => {
   try {
-    const sender = req.user.id || req.user._id; // from token
+    const sender = req.user.id || req.user._id;
     const { conversationId, receiver, text } = req.body;
 
     if (!conversationId || !receiver || !text) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // 1️⃣ Save message
     const message = await Message.create({
       conversationId,
       sender,
@@ -19,11 +48,16 @@ export const sendMessage = async (req, res) => {
       text,
     });
 
+    // 2️⃣ Update latest message in conversation
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: message._id,
     });
 
     res.status(201).json(message);
+
+    // 3️⃣ Emit real-time event to room
+    io.to(conversationId).emit("messageReceived", message);
+
   } catch (error) {
     console.error("❌ sendMessage error:", error);
     res.status(500).json({ error: error.message });
