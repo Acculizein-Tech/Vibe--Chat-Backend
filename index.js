@@ -14,6 +14,8 @@ import { errorHandler } from "./utils/errorHandler.js";
 import contactRoutes from "./routes/contactRoute.js";
 import Message from "./models/Message.js";
 import Conversation from "./models/Conversation.js";
+import notificationRoutes from "./routes/notificationRoute.js";
+import Notification from "./models/Notification.js";
 
 
 dotenv.config();
@@ -61,6 +63,9 @@ export const io = new Server(httpServer, {
 // ----------------------------------------------------------
 const onlineUsers = new Map();
 
+// ✅ ADD THIS
+const activeConversationUsers = new Map();
+
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
@@ -80,68 +85,106 @@ io.on("connection", (socket) => {
   });
 
   // 2️⃣ Join a conversation room
-  socket.on("joinRoom", (conversationId) => {
-    if (!conversationId) {
-      console.log("❌ joinRoom failed: conversationId missing");
-      return;
-    }
+ socket.on("joinRoom", ({ conversationId, userId }) => {
+  if (!conversationId || !userId) return;
 
-    socket.join(conversationId.toString());
-    console.log(`📌 User ${socket.userId} joined room ${conversationId}`);
-  });
+  socket.join(conversationId.toString());
+
+  if (!activeConversationUsers.has(conversationId.toString())) {
+    activeConversationUsers.set(conversationId.toString(), new Set());
+  }
+
+  activeConversationUsers
+    .get(conversationId.toString())
+    .add(userId.toString());
+
+  console.log(
+    `🟢 User ${userId} active in conversation ${conversationId}`,
+    activeConversationUsers.get(conversationId.toString())
+  );
+});
+
 
   // 3️⃣ Send real-time message
   socket.on("sendMessage", async (data) => {
-    try {
-      const { sender, receiver, text, conversationId } = data;
+  try {
+    const { sender, receiver, text, conversationId } = data;
 
-      if (!conversationId || !sender || !receiver || !text) {
-        console.log("❌ sendMessage failed: Missing fields", data);
-        return;
-      }
+    if (!conversationId || !sender || !receiver || !text) return;
 
-      // Save message to DB
-      const msg = await Message.create({
-        sender,
-        receiver,
-        text,
-        conversationId,
-      });
+    // 1️⃣ Save message
+    const msg = await Message.create({
+      sender,
+      receiver,
+      text,
+      conversationId,
+    });
 
-      // Update conversation's lastMessage
-      await Conversation.findByIdAndUpdate(conversationId, {
-        lastMessage: msg._id,
-      });
+    // 2️⃣ Update conversation
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: msg._id,
+    });
 
-      // Emit to room
-      io.to(conversationId.toString()).emit("messageReceived", msg);
-      console.log(`📤 Message emitted to room ${conversationId}`);
+    // 3️⃣ Emit message
+    io.to(conversationId.toString()).emit("messageReceived", msg);
 
-      // Optional: alert receiver if online
-      const receiverSocket = onlineUsers.get(receiver.toString());
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("dmAlert", {
+    // 4️⃣ CHECK receiver activity
+    const activeUsers =
+      activeConversationUsers.get(conversationId.toString()) || new Set();
+
+    const receiverIsActive = activeUsers.has(receiver.toString());
+
+    // 5️⃣ Create notification ONLY if inactive
+    if (!receiverIsActive) {
+      await Notification.create({
+        recipient: receiver,
+        scope: "USER",
+        type: "NEW_MESSAGE",
+        title: "New message",
+        message: text.length > 30 ? text.slice(0, 30) + "..." : text,
+        data: {
           conversationId,
-          sender,
-        });
-        console.log(`🔔 Alert sent to receiver ${receiver}`);
-      }
-    } catch (err) {
-      console.log("❌ Error in sendMessage:", err);
+          senderId: sender,
+        },
+      });
+
+      console.log("🔔 Notification created for", receiver);
     }
-  });
+
+  } catch (err) {
+    console.log("❌ Error in sendMessage:", err);
+  }
+});
+
+socket.on("leaveRoom", ({ conversationId, userId }) => {
+  if (!conversationId || !userId) return;
+
+  socket.leave(conversationId.toString());
+
+  activeConversationUsers
+    .get(conversationId.toString())
+    ?.delete(userId.toString());
+
+  console.log(
+    `🔴 User ${userId} left conversation ${conversationId}`,
+    activeConversationUsers.get(conversationId.toString())
+  );
+});
+
 
   // 4️⃣ Disconnect
-  socket.on("disconnect", () => {
-    console.log("🔴 Socket disconnected:", socket.id);
+ socket.on("disconnect", () => {
+  console.log("🔴 Socket disconnected:", socket.id);
 
-    for (const [uid, sid] of onlineUsers.entries()) {
-      if (sid === socket.id) {
-        onlineUsers.delete(uid);
-        console.log("📝 Removed from onlineUsers:", uid);
-      }
+  for (const [convId, users] of activeConversationUsers.entries()) {
+    users.delete(socket.userId);
+    if (users.size === 0) {
+      activeConversationUsers.delete(convId);
     }
-  });
+  }
+
+  onlineUsers.delete(socket.userId);
+});
 });
 
 // export { io };
@@ -153,6 +196,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/conversation", conversationRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/contacts", contactRoutes);
+app.use("/api/notification", notificationRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;

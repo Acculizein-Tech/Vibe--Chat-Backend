@@ -1,42 +1,66 @@
 // models/Notification.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema(
   {
-    user: {
+    recipient: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null
+      ref: "User",
+      default: null // user-specific
     },
+
     role: {
       type: String,
-      enum: ['superadmin', 'admin', 'sales', 'customer', null],
-      default: null
+      enum: ["superadmin", "admin", "sales" , "customer"],
+      default: null // role-based
     },
+
+    scope: {
+      type: String,
+      enum: ["USER", "ROLE", "GLOBAL"],
+      default: "USER"
+    },
+
     type: {
       type: String,
       enum: [
-        'REVIEW_RECEIVED',
-        'LEAD_GENERATED',
-        'BUSINESS_CREATED',
-        'CUSTOMER_ENQUIRY',
-        'EVENT_REQUEST',
-        'ADMIN_ALERT',
-        'NEW_BUSINESS_BY_REFERRAL',
-        'NEW_BUSINESS_LISTED',
-        'NEW_ENQUIRY_CREATED'
+        "NEW_MESSAGE",
+        "REVIEW_RECEIVED",
+        "LEAD_GENERATED",
+        "BUSINESS_CREATED",
+        "CUSTOMER_ENQUIRY",
+        "ADMIN_ALERT"
       ],
       required: true
     },
+
     title: { type: String, required: true },
     message: { type: String, required: true },
+
     data: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {}
+      conversationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Conversation"
+      },
+      senderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
     },
-    isRead: { type: Boolean, default: false }
+
+    isRead: {
+      type: Boolean,
+      default: false,
+      index: true
+    }
   },
   { timestamps: true }
 );
 
-export default mongoose.model('Notification', notificationSchema);
+notificationSchema.index({
+  recipient: 1,
+  "data.conversationId": 1,
+  type: 1
+});
+
+export default mongoose.model("Notification", notificationSchema);

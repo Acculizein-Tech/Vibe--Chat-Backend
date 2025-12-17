@@ -1,6 +1,7 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import { io } from "../index.js";
+import Notification from "../models/Notification.js";
 
 // ✅ Send a message
 // ✅ Secure version — sender from token
@@ -31,9 +32,41 @@ import { io } from "../index.js";
 //   }
 // };
 
+// export const sendMessage = async (req, res) => {
+//   try {
+//     const sender = req.user.id || req.user._id;
+//     const { conversationId, receiver, text } = req.body;
+
+//     if (!conversationId || !receiver || !text) {
+//       return res.status(400).json({ error: "Missing required fields" });
+//     }
+
+//     // 1️⃣ Save message
+//     const message = await Message.create({
+//       conversationId,
+//       sender,
+//       receiver,
+//       text,
+//     });
+
+//     // 2️⃣ Update latest message in conversation
+//     await Conversation.findByIdAndUpdate(conversationId, {
+//       lastMessage: message._id,
+//     });
+
+//     res.status(201).json(message);
+
+//     // 3️⃣ Emit real-time event to room
+//     io.to(conversationId).emit("messageReceived", message);
+
+//   } catch (error) {
+//     console.error("❌ sendMessage error:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// };
 export const sendMessage = async (req, res) => {
   try {
-    const sender = req.user.id || req.user._id;
+    const sender = req.user._id;
     const { conversationId, receiver, text } = req.body;
 
     if (!conversationId || !receiver || !text) {
@@ -48,15 +81,34 @@ export const sendMessage = async (req, res) => {
       text,
     });
 
-    // 2️⃣ Update latest message in conversation
+    // 2️⃣ Update conversation
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: message._id,
     });
 
-    res.status(201).json(message);
-
-    // 3️⃣ Emit real-time event to room
+    // 3️⃣ Emit real-time message
     io.to(conversationId).emit("messageReceived", message);
+
+    // 4️⃣ CHECK: is receiver active in this chat?
+    const activeUsers = activeConversationUsers.get(conversationId);
+    const receiverIsActive = activeUsers?.has(receiver.toString());
+
+    // 5️⃣ Create notification ONLY if inactive
+    if (!receiverIsActive) {
+      await Notification.create({
+        recipient: receiver,
+        scope: "USER",
+        type: "NEW_MESSAGE",
+        title: "New Message",
+        message: text.length > 30 ? text.slice(0, 30) + "..." : text,
+        data: {
+          conversationId,
+          senderId: sender
+        }
+      });
+    }
+
+    res.status(201).json(message);
 
   } catch (error) {
     console.error("❌ sendMessage error:", error);

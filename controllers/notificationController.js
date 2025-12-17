@@ -2,68 +2,38 @@ import Notification from '../models/Notification.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 export const getNotifications = asyncHandler(async (req, res) => {
-  const { _id: userId, role: userRole } = req.user;
-
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 200;
+  const { _id: userId, role } = req.user;
+console.log("Fetching notifications for user:", userId, "with role:", role);
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 50;
   const skip = (page - 1) * limit;
-  const unreadOnly = req.query.unreadOnly === 'true';
+  const unreadOnly = req.query.unreadOnly === "true";
 
-  try {
-    // 📌 Build filter correctly
-    let filter = { user: userId }; // Normal user → sirf apne notifications
+  const filter = {
+    $or: [
+      { recipient: userId },
+      { scope: "ROLE", role },
+      { scope: "GLOBAL" }
+    ]
+  };
 
-    if (userRole === "admin" || userRole === "superadmin") {
-      filter = {
-        $or: [
-          { user: userId },
-          { role: userRole }
-        ]
-      };
-    }
+  if (unreadOnly) filter.isRead = false;
 
-    if (unreadOnly) {
-      filter.isRead = false;
-    }
+  const notifications = await Notification.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
 
-    // ⚡ Fetch notifications
-    const allNotifications = await Notification.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+  const total = await Notification.countDocuments(filter);
 
-    // 🧠 Deduplicate by title + message + type
-    const uniqueNotifications = [];   
-    const seen = new Set();
-
-    for (const notif of allNotifications) {
-      const key = `${notif.title}-${notif.message}-${notif.type}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueNotifications.push(notif);
-      }
-    }
-
-    // 📊 Total count (for pagination info)
-    const total = await Notification.countDocuments(filter);
-
-    res.status(200).json({
-      message: 'Notifications fetched successfully',
-      count: uniqueNotifications.length,
-      total,
-      page,
-      limit,
-      notifications: uniqueNotifications
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to fetch notifications:', error.message);
-    res.status(500).json({
-      message: 'Error fetching notifications',
-      error: error.message
-    });
-  }
+  res.status(200).json({
+    notifications,
+    total,
+    page,
+    limit
+  });
 });
+
 
 
 
@@ -84,48 +54,65 @@ export const markAsRead = asyncHandler(async (req, res) => {
 
 // controllers/notificationController.js
 // controllers/notificationController.js
-export const markNotificationAsRead = async (req, res) => {
-  try {
-    const { id } = req.params;
+export const markNotificationAsRead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user._id;
 
-    const notification = await Notification.findByIdAndUpdate(
-      id,
-      { isRead: true },
-      { new: true }
-    );
+  const notification = await Notification.findOneAndUpdate(
+    { _id: id, recipient: userId },
+    { isRead: true },
+    { new: true }
+  );
 
-    if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
-    }
-
-    res.status(200).json({
-      message: 'Notification marked as read',
-      notification
-    });
-  } catch (err) {
-    console.error('❌ Error marking notification as read:', err.message);
-    res.status(500).json({ message: 'Failed to mark notification as read' });
+  if (!notification) {
+    return res.status(404).json({ message: "Notification not found" });
   }
-};
+
+  res.status(200).json({ message: "Marked as read" });
+});
+
 
 
 // PATCH /api/notifications/mark-all-read
 
 export const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
-  const { _id: userId, role: userRole } = req.user;
+  const { _id: userId, role } = req.user;
 
-  const filter = {
-    $or: [
-      { user: userId },
-      { role: userRole }
-    ],
-    isRead: false
-  };
-
-  const result = await Notification.updateMany(filter, { isRead: true });
+  const result = await Notification.updateMany(
+    {
+      $or: [
+        { recipient: userId },
+        { scope: "ROLE", role }
+      ],
+      isRead: false
+    },
+    { isRead: true }
+  );
 
   res.status(200).json({
-    message: 'All notifications marked as read',
+    message: "All notifications marked as read",
     modifiedCount: result.modifiedCount
   });
+});
+
+export const getChatUnreadCounts = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const counts = await Notification.aggregate([
+    {
+      $match: {
+        recipient: userId,
+        isRead: false,
+        type: "NEW_MESSAGE"
+      }
+    },
+    {
+      $group: {
+        _id: "$data.conversationId",
+        unreadCount: { $sum: 1 }
+      }
+    }
+  ]);
+
+  res.status(200).json(counts);
 });
