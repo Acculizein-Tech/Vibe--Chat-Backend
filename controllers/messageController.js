@@ -73,7 +73,7 @@ export const sendMessage = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // 1️⃣ Save message
+    // 1️⃣ Save the message
     const message = await Message.create({
       conversationId,
       sender,
@@ -81,33 +81,39 @@ export const sendMessage = async (req, res) => {
       text,
     });
 
-    // 2️⃣ Update conversation
+    // 2️⃣ Update conversation's lastMessage
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: message._id,
     });
 
-    // 3️⃣ Emit real-time message
+    // 3️⃣ Emit the message to the conversation room
     io.to(conversationId).emit("messageReceived", message);
 
-    // 4️⃣ CHECK: is receiver active in this chat?
-    const activeUsers = activeConversationUsers.get(conversationId);
-    const receiverIsActive = activeUsers?.has(receiver.toString());
+    // 4️⃣ Create notification for receiver
+    const notification = await Notification.create({
+      recipient: receiver,
+      role: 'customer',
+      scope: "USER",
+      type: "NEW_MESSAGE",
+      title: "New Message",
+      message: text.length > 30 ? text.slice(0, 30) + "..." : text,
+      data: {
+        conversationId,
+        senderId: sender
+      },
+      isRead: false
+    });
 
-    // 5️⃣ Create notification ONLY if inactive
-    if (!receiverIsActive) {
-      await Notification.create({
-        recipient: receiver,
-        scope: "USER",
-        type: "NEW_MESSAGE",
-        title: "New Message",
-        message: text.length > 30 ? text.slice(0, 30) + "..." : text,
-        data: {
-          conversationId,
-          senderId: sender
-        }
-      });
-    }
+    console.log("🔔 Notification created for", receiver);
 
+    // 5️⃣ Emit notification in real-time if receiver is online
+    const receiverSocketId = onlineUsers.get(receiver.toString());
+    if (receiverSocketId) {
+  io.to(receiverSocketId).emit("newNotification", notification.toObject());
+  console.log("📡 Notification sent in real-time to", receiver);
+}
+
+    // 6️⃣ Respond with the message
     res.status(201).json(message);
 
   } catch (error) {
@@ -115,6 +121,7 @@ export const sendMessage = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 
 // ✅ Fetch all messages in a conversation
