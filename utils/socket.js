@@ -1,34 +1,132 @@
-import { io } from "socket.io-client";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import Message from "../models/Message.js";
+import Conversation from "../models/Conversation.js";
+import Notification from "../models/Notification.js";
+import {
+  onlineUsers,
+  activeConversationViewers,
+} from "./socketState.js";
 
-// Replace with your backend IP address (not localhost)
-const SOCKET_URL = "EXPO_PUBLIC_API_URL=https://conjunctival-bendy-ellsworth.ngrok-free.dev/api"; // ← Your machine’s local IP
+export const setupSocket = (io) => {
+  io.on("connection", (socket) => {
+    console.log("🟢 Socket connected:", socket.id);
 
-let socket;
-
-export const connectSocket = async () => {
-  if (!socket) {
-    socket = io(SOCKET_URL, {
-      transports: ["websocket"],
-      reconnection: true,
+    socket.on("register", (userId) => {
+      onlineUsers.set(userId.toString(), socket.id);
+      socket.userId = userId.toString();
     });
 
-    // Get userId from storage (if stored after login)
-    const userId = await AsyncStorage.getItem("userId");
-    if (userId) {
-      socket.emit("register", userId);
-      console.log("🟢 Registered user:", userId);
-    }
+    socket.on("joinRoom", ({ conversationId }) => {
+      socket.join(conversationId.toString());
+    });
 
-    socket.on("connect", () => {
-      console.log("✅ Connected to Socket.IO:", socket.id);
+    socket.on("conversationOpen", ({ conversationId, userId }) => {
+      if (!activeConversationViewers.has(conversationId)) {
+        activeConversationViewers.set(conversationId, new Set());
+      }
+      activeConversationViewers.get(conversationId).add(userId);
+    });
+
+    socket.on("conversationClose", ({ conversationId, userId }) => {
+      activeConversationViewers.get(conversationId)?.delete(userId);
+    });
+
+    // 🔥🔥🔥 REAL-TIME MESSAGE HANDLER 🔥🔥🔥
+    // socket.on("sendMessage", async (data) => {
+    //   try {
+    //     const { sender, receiver, text, conversationId } = data;
+
+    //     if (!sender || !receiver || !text || !conversationId) return;
+
+    //     // 1️⃣ Save message
+    //     const message = await Message.create({
+    //       sender,
+    //       receiver,
+    //       text,
+    //       conversationId,
+    //     });
+
+    //     await Conversation.findByIdAndUpdate(conversationId, {
+    //       lastMessage: message._id,
+    //     });
+
+    //     // 2️⃣ Real-time message
+    //     io.to(conversationId.toString()).emit("messageReceived", message);
+
+    //     // 3️⃣ Notification logic
+    //     const viewers =
+    //       activeConversationViewers.get(conversationId.toString()) || new Set();
+
+    //     const receiverViewing = viewers.has(receiver.toString());
+
+    //     if (!receiverViewing) {
+    //       const notification = await Notification.create({
+    //         recipient: receiver,
+    //         scope: "USER",
+    //         type: "NEW_MESSAGE",
+    //         title: "New Message",
+    //         message: text.length > 30 ? text.slice(0, 30) + "..." : text,
+    //         data: { conversationId, senderId: sender },
+    //         isRead: false,
+    //       });
+
+    //       const receiverSocketId = onlineUsers.get(receiver.toString());
+    //       if (receiverSocketId) {
+    //         io.to(receiverSocketId).emit(
+    //           "newNotification",
+    //           notification
+    //         );
+    //       }
+    //     }
+    //   } catch (err) {
+    //     console.log("❌ sendMessage socket error:", err);
+    //   }
+    // });
+     // 🔥 REAL SEND MESSAGE
+    socket.on("sendMessage", async (data) => {
+      const { sender, receiver, text, conversationId } = data;
+
+      console.log("📨 sendMessage received:", data);
+
+      const msg = await Message.create({
+        sender,
+        receiver,
+        text,
+        conversationId,
+      });
+
+      io.to(conversationId).emit("messageReceived", msg);
+      console.log("📤 messageReceived emitted");
+
+      const viewers =
+        activeViewers.get(conversationId) || new Set();
+
+      const receiverActive = viewers.has(receiver);
+
+      if (!receiverActive) {
+        const notification = await Notification.create({
+          recipient: receiver,
+          scope: "USER",
+          type: "NEW_MESSAGE",
+          title: "New Message",
+          message: text.slice(0, 30),
+          data: { conversationId, senderId: sender },
+          isRead: false,
+        });
+
+        console.log("🔔 Notification CREATED:", notification._id);
+
+        const socketId = onlineUsers.get(receiver);
+        if (socketId) {
+          io.to(socketId).emit("newNotification", notification);
+          console.log("📡 Notification SENT realtime");
+        }
+      } else {
+        console.log("🚫 Receiver active → no notification");
+      }
     });
 
     socket.on("disconnect", () => {
-      console.log("🔴 Disconnected from Socket.IO");
+      onlineUsers.delete(socket.userId);
     });
-  }
-  return socket;
+  });
 };
-
-export const getSocket = () => socket;

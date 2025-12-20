@@ -16,6 +16,7 @@ import Message from "./models/Message.js";
 import Conversation from "./models/Conversation.js";
 import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
+import { setupSocket } from "./utils/socket.js";
 
 
 dotenv.config();
@@ -58,134 +59,10 @@ export const io = new Server(httpServer, {
   },
 });
 
-// ----------------------------------------------------------
-// REAL-TIME SOCKET SYSTEM WITH FULL DEBUGGING
-// ----------------------------------------------------------
-const onlineUsers = new Map();
-
-// ✅ ADD THIS
-const activeConversationUsers = new Map();
-
-io.on("connection", (socket) => {
-  console.log("🟢 Socket connected:", socket.id);
-
-  // Debug: log all events received by this socket
-  socket.onAny((event, ...args) => {
-    console.log(`📌 Event received: ${event}`, args);
-  });
-
-  // 1️⃣ Register user
-  socket.on("register", (userId) => {
-    if (!userId) return;
-
-    onlineUsers.set(userId.toString(), socket.id);
-    socket.userId = userId.toString();
-
-    console.log("🟢 Registered → onlineUsers map:", onlineUsers);
-  });
-
-  // 2️⃣ Join a conversation room
- socket.on("joinRoom", ({ conversationId, userId }) => {
-  if (!conversationId || !userId) return;
-
-  socket.join(conversationId.toString());
-
-  if (!activeConversationUsers.has(conversationId.toString())) {
-    activeConversationUsers.set(conversationId.toString(), new Set());
-  }
-
-  activeConversationUsers
-    .get(conversationId.toString())
-    .add(userId.toString());
-
-  console.log(
-    `🟢 User ${userId} active in conversation ${conversationId}`,
-    activeConversationUsers.get(conversationId.toString())
-  );
-});
+// index.js (after io init)
+setupSocket(io);
 
 
-  // 3️⃣ Send real-time message
-  socket.on("sendMessage", async (data) => {
-  try {
-    const { sender, receiver, text, conversationId } = data;
-
-    if (!conversationId || !sender || !receiver || !text) return;
-
-    // 1️⃣ Save message
-    const msg = await Message.create({
-      sender,
-      receiver,
-      text,
-      conversationId,
-    });
-
-    // 2️⃣ Update conversation
-    await Conversation.findByIdAndUpdate(conversationId, {
-      lastMessage: msg._id,
-    });
-
-    // 3️⃣ Emit message
-    io.to(conversationId.toString()).emit("messageReceived", msg);
-
-    // 4️⃣ CHECK receiver activity
-    const activeUsers =
-      activeConversationUsers.get(conversationId.toString()) || new Set();
-
-    const receiverIsActive = activeUsers.has(receiver.toString());
-
-    // 5️⃣ Create notification ONLY if inactive
-    if (!receiverIsActive) {
-      await Notification.create({
-        recipient: receiver,
-        scope: "USER",
-        type: "NEW_MESSAGE",
-        title: "New message",
-        message: text.length > 30 ? text.slice(0, 30) + "..." : text,
-        data: {
-          conversationId,
-          senderId: sender,
-        },
-      });
-
-      console.log("🔔 Notification created for", receiver);
-    }
-
-  } catch (err) {
-    console.log("❌ Error in sendMessage:", err);
-  }
-});
-
-socket.on("leaveRoom", ({ conversationId, userId }) => {
-  if (!conversationId || !userId) return;
-
-  socket.leave(conversationId.toString());
-
-  activeConversationUsers
-    .get(conversationId.toString())
-    ?.delete(userId.toString());
-
-  console.log(
-    `🔴 User ${userId} left conversation ${conversationId}`,
-    activeConversationUsers.get(conversationId.toString())
-  );
-});
-
-
-  // 4️⃣ Disconnect
- socket.on("disconnect", () => {
-  console.log("🔴 Socket disconnected:", socket.id);
-
-  for (const [convId, users] of activeConversationUsers.entries()) {
-    users.delete(socket.userId);
-    if (users.size === 0) {
-      activeConversationUsers.delete(convId);
-    }
-  }
-
-  onlineUsers.delete(socket.userId);
-});
-});
 
 // export { io };
 

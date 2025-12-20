@@ -2,6 +2,11 @@ import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import { io } from "../index.js";
 import Notification from "../models/Notification.js";
+import {
+  onlineUsers,
+  activeConversationViewers,
+} from "../utils/socketState.js";
+
 
 // ✅ Send a message
 // ✅ Secure version — sender from token
@@ -64,16 +69,75 @@ import Notification from "../models/Notification.js";
 //     res.status(500).json({ error: error.message });
 //   }
 // };
+// export const sendMessage = async (req, res) => {
+//   try {
+//     const sender = req.user._id;
+//     const { conversationId, receiver, text } = req.body;
+
+//     if (!conversationId || !receiver || !text) {
+//       return res.status(400).json({ error: "Missing fields" });
+//     }
+
+//     const message = await Message.create({
+//       conversationId,
+//       sender,
+//       receiver,
+//       text,
+//     });
+
+//     await Conversation.findByIdAndUpdate(conversationId, {
+//       lastMessage: message._id,
+//     });
+
+//     // 📡 Send message
+//     io.to(conversationId.toString()).emit("messageReceived", message);
+
+//     // 🧠 CHECK VIEWERS
+//     const viewers =
+//       activeConversationViewers.get(conversationId.toString()) || new Set();
+
+//     const receiverIsViewing = viewers.has(receiver.toString());
+
+//     console.log("🧠 Viewers:", viewers, "Receiver:", receiver);
+
+//     if (!receiverIsViewing) {
+//       const notification = await Notification.create({
+//         recipient: receiver,
+//         scope: "USER",
+//         type: "NEW_MESSAGE",
+//         title: "New Message",
+//         message: text.length > 30 ? text.slice(0, 30) + "..." : text,
+//         data: { conversationId, senderId: sender },
+//         isRead: false,
+//       });
+
+//       const receiverSocketId = onlineUsers.get(receiver.toString());
+//       if (receiverSocketId) {
+//         io.to(receiverSocketId).emit(
+//           "newNotification",
+//           notification.toObject()
+//         );
+//       }
+
+//       console.log("🔔 Notification sent to", receiver);
+//     }
+
+//     res.status(201).json(message);
+//   } catch (err) {
+//     console.error("❌ sendMessage:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+// controllers/messageController.js
 export const sendMessage = async (req, res) => {
   try {
     const sender = req.user._id;
     const { conversationId, receiver, text } = req.body;
 
     if (!conversationId || !receiver || !text) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing fields" });
     }
 
-    // 1️⃣ Save the message
     const message = await Message.create({
       conversationId,
       sender,
@@ -81,44 +145,13 @@ export const sendMessage = async (req, res) => {
       text,
     });
 
-    // 2️⃣ Update conversation's lastMessage
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: message._id,
     });
 
-    // 3️⃣ Emit the message to the conversation room
-    io.to(conversationId).emit("messageReceived", message);
-
-    // 4️⃣ Create notification for receiver
-    const notification = await Notification.create({
-      recipient: receiver,
-      role: 'customer',
-      scope: "USER",
-      type: "NEW_MESSAGE",
-      title: "New Message",
-      message: text.length > 30 ? text.slice(0, 30) + "..." : text,
-      data: {
-        conversationId,
-        senderId: sender
-      },
-      isRead: false
-    });
-
-    console.log("🔔 Notification created for", receiver);
-
-    // 5️⃣ Emit notification in real-time if receiver is online
-    const receiverSocketId = onlineUsers.get(receiver.toString());
-    if (receiverSocketId) {
-  io.to(receiverSocketId).emit("newNotification", notification.toObject());
-  console.log("📡 Notification sent in real-time to", receiver);
-}
-
-    // 6️⃣ Respond with the message
     res.status(201).json(message);
-
-  } catch (error) {
-    console.error("❌ sendMessage error:", error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 
