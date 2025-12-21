@@ -85,13 +85,18 @@ export const setupSocket = (io) => {
     //   }
     // });
      // 🔥 REAL SEND MESSAGE
- socket.on("sendMessage", async (data) => {
+socket.on("sendMessage", async (data) => {
   try {
     const { sender, receiver, text, conversationId } = data;
-
     if (!sender || !receiver || !text || !conversationId) return;
 
     console.log("📨 sendMessage received:", data);
+
+    // 0️⃣ Safety: sender == receiver
+    if (sender.toString() === receiver.toString()) {
+      console.log("🚫 Sender === Receiver → skip");
+      return;
+    }
 
     // 1️⃣ Save message
     const msg = await Message.create({
@@ -103,14 +108,12 @@ export const setupSocket = (io) => {
 
     // 2️⃣ Emit realtime message
     io.to(conversationId.toString()).emit("messageReceived", msg);
-    console.log("📤 messageReceived emitted");
 
     // 3️⃣ Check active viewers
     const viewers =
       activeConversationViewers.get(conversationId.toString()) || new Set();
 
     const receiverActive = viewers.has(receiver.toString());
-
     if (receiverActive) {
       console.log("🚫 Receiver active → no notification");
       return;
@@ -123,47 +126,47 @@ export const setupSocket = (io) => {
       type: "NEW_MESSAGE",
       title: "New Message",
       message: text.length > 40 ? text.slice(0, 40) + "…" : text,
-      data: {
-        conversationId,
-        senderId: sender,
-      },
+      data: { conversationId, senderId: sender },
       isRead: false,
     });
 
     console.log("🔔 Notification CREATED:", notification._id);
 
-    // 5️⃣ Realtime notification (socket)
+    // 5️⃣ Realtime socket notification
     const receiverSocketId = onlineUsers.get(receiver.toString());
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newNotification", notification);
       console.log("📡 Realtime notification sent");
     }
 
-    // 6️⃣ PUSH notification (mobile bg / killed)
-    const receiverUser = await User.findById(receiver).select("pushToken");
-    const senderUser = await User.findById(sender).select("fullName");
+    // 6️⃣ Push notification (ONLY if receiver offline)
+    if (!receiverSocketId) {
+      const receiverUser = await User.findById(receiver).select("pushToken");
+      const senderUser = await User.findById(sender).select("fullName");
 
-    if (receiverUser?.pushToken) {
-      await sendPushNotification({
-        pushToken: receiverUser.pushToken,
-        title: `${senderUser.fullName} • Vibechat`,
-        body: text.length > 40 ? text.slice(0, 40) + "…" : text,
-        data: {
-          type: "CHAT_MESSAGE",
-          conversationId,
-          senderId: sender,
-        },
-      });
+      if (receiverUser?.pushToken) {
+        await sendPushNotification({
+          pushToken: receiverUser.pushToken,
+          title: `${senderUser.fullName} • Vibechat`,
+          body: text.length > 40 ? text.slice(0, 40) + "…" : text,
+          data: {
+            type: "CHAT_MESSAGE",
+            conversationId,
+            senderId: sender,
+          },
+        });
 
-      console.log("📲 Push notification sent");
-    } else {
-      console.log("⚠️ No push token for receiver");
+        console.log("📲 Push notification sent");
+      } else {
+        console.log("⚠️ No push token for receiver");
+      }
     }
 
   } catch (err) {
     console.error("❌ sendMessage socket error:", err);
   }
 });
+
 
 
     socket.on("disconnect", () => {
