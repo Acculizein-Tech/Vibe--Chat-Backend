@@ -51,6 +51,11 @@ emailResendBlock: Date, // 🟢 Add this line
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
 
+pushToken: {
+  type: String,
+  default: null,
+}
+,
 
 customCodes: [
   {

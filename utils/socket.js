@@ -1,6 +1,9 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import Notification from "../models/Notification.js";
+import { sendPushNotification } from "./pushService.js";
+import User from "../models/user.js";
+
 import {
   onlineUsers,
   activeConversationViewers,
@@ -82,48 +85,86 @@ export const setupSocket = (io) => {
     //   }
     // });
      // 🔥 REAL SEND MESSAGE
-    socket.on("sendMessage", async (data) => {
-      const { sender, receiver, text, conversationId } = data;
+ socket.on("sendMessage", async (data) => {
+  try {
+    const { sender, receiver, text, conversationId } = data;
 
-      console.log("📨 sendMessage received:", data);
+    if (!sender || !receiver || !text || !conversationId) return;
 
-      const msg = await Message.create({
-        sender,
-        receiver,
-        text,
+    console.log("📨 sendMessage received:", data);
+
+    // 1️⃣ Save message
+    const msg = await Message.create({
+      sender,
+      receiver,
+      text,
+      conversationId,
+    });
+
+    // 2️⃣ Emit realtime message
+    io.to(conversationId.toString()).emit("messageReceived", msg);
+    console.log("📤 messageReceived emitted");
+
+    // 3️⃣ Check active viewers
+    const viewers =
+      activeConversationViewers.get(conversationId.toString()) || new Set();
+
+    const receiverActive = viewers.has(receiver.toString());
+
+    if (receiverActive) {
+      console.log("🚫 Receiver active → no notification");
+      return;
+    }
+
+    // 4️⃣ Create DB notification
+    const notification = await Notification.create({
+      recipient: receiver,
+      scope: "USER",
+      type: "NEW_MESSAGE",
+      title: "New Message",
+      message: text.length > 40 ? text.slice(0, 40) + "…" : text,
+      data: {
         conversationId,
+        senderId: sender,
+      },
+      isRead: false,
+    });
+
+    console.log("🔔 Notification CREATED:", notification._id);
+
+    // 5️⃣ Realtime notification (socket)
+    const receiverSocketId = onlineUsers.get(receiver.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newNotification", notification);
+      console.log("📡 Realtime notification sent");
+    }
+
+    // 6️⃣ PUSH notification (mobile bg / killed)
+    const receiverUser = await User.findById(receiver).select("pushToken");
+    const senderUser = await User.findById(sender).select("fullName");
+
+    if (receiverUser?.pushToken) {
+      await sendPushNotification({
+        pushToken: receiverUser.pushToken,
+        title: `${senderUser.fullName} • Vibechat`,
+        body: text.length > 40 ? text.slice(0, 40) + "…" : text,
+        data: {
+          type: "CHAT_MESSAGE",
+          conversationId,
+          senderId: sender,
+        },
       });
 
-      io.to(conversationId).emit("messageReceived", msg);
-      console.log("📤 messageReceived emitted");
+      console.log("📲 Push notification sent");
+    } else {
+      console.log("⚠️ No push token for receiver");
+    }
 
-      const viewers =
-        activeViewers.get(conversationId) || new Set();
+  } catch (err) {
+    console.error("❌ sendMessage socket error:", err);
+  }
+});
 
-      const receiverActive = viewers.has(receiver);
-
-      if (!receiverActive) {
-        const notification = await Notification.create({
-          recipient: receiver,
-          scope: "USER",
-          type: "NEW_MESSAGE",
-          title: "New Message",
-          message: text.slice(0, 30),
-          data: { conversationId, senderId: sender },
-          isRead: false,
-        });
-
-        console.log("🔔 Notification CREATED:", notification._id);
-
-        const socketId = onlineUsers.get(receiver);
-        if (socketId) {
-          io.to(socketId).emit("newNotification", notification);
-          console.log("📡 Notification SENT realtime");
-        }
-      } else {
-        console.log("🚫 Receiver active → no notification");
-      }
-    });
 
     socket.on("disconnect", () => {
       onlineUsers.delete(socket.userId);
