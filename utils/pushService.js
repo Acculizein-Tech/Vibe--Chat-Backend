@@ -6,23 +6,39 @@ export const sendPushNotification = async ({
   body,
   data,
 }) => {
-  if (!pushToken) return;
+  if (!pushToken) {
+    console.log("⚠️ No push token provided");
+    return;
+  }
 
   const payload = {
     to: pushToken,
     sound: "default",
+    priority: "high", // ✅ IMPORTANT for Android
     title,
     body,
     data,
   };
 
-  await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+    console.log("🚀 Sending push payload:", payload);
 
-  console.log("📲 Push sent →", pushToken);
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await res.json();
+
+    console.log("📬 Expo push response:", result);
+
+    if (result?.data?.status !== "ok") {
+      console.log("❌ Push rejected by Expo:", result);
+    }
+  } catch (err) {
+    console.error("❌ Push send failed:", err);
+  }
 };

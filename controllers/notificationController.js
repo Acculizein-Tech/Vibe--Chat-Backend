@@ -116,3 +116,26 @@ export const getChatUnreadCounts = asyncHandler(async (req, res) => {
 
   res.status(200).json(counts);
 });
+
+//get user notifications which is unread
+export const getUserNotifications = asyncHandler(async (req, res) => {
+  const { _id: userId } = req.user;
+
+  // 1️⃣ Unread notifications list
+  const unreadNotifications = await Notification.find({
+    recipient: userId,
+    isRead: false,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // 2️⃣ Unread count
+  const unreadCount = unreadNotifications.length;
+
+  res.status(200).json({
+    success: true,
+    unreadCount,
+    notifications: unreadNotifications,
+  });
+});
+

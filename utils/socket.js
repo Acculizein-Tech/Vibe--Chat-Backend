@@ -107,7 +107,7 @@ socket.on("sendMessage", async (data) => {
     });
 
     // 2️⃣ Emit realtime message
-    io.to(conversationId.toString()).emit("messageReceived", msg);
+    socket.to(conversationId.toString()).emit("messageReceived", msg);
 
     // 3️⃣ Check active viewers
     const viewers =
@@ -137,14 +137,35 @@ socket.on("sendMessage", async (data) => {
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newNotification", notification);
       console.log("📡 Realtime notification sent");
+       // ✅ NEW: unread count emit
+  const unreadCount = await Notification.countDocuments({
+    recipient: receiver,
+    isRead: false,
+  });
+   io.to(receiverSocketId).emit("unreadCount", unreadCount);
     }
 
     // 6️⃣ Push notification (ONLY if receiver offline)
     if (!receiverSocketId) {
       const receiverUser = await User.findById(receiver).select("pushToken");
       const senderUser = await User.findById(sender).select("fullName");
+      console.log("📦 Push token from DB:", receiverUser.pushToken);
+
+
+
+      console.log("🚀 Push payload:", {
+  to: receiverUser.pushToken,
+  title: `${senderUser.fullName} • Vibechat`,
+  body: text,
+  data: {
+    type: "CHAT_MESSAGE",
+    conversationId,
+    senderId: sender,
+  },
+});
 
       if (receiverUser?.pushToken) {
+        
         await sendPushNotification({
           pushToken: receiverUser.pushToken,
           title: `${senderUser.fullName} • Vibechat`,
