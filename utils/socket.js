@@ -60,17 +60,16 @@ export const setupSocket = (io) => {
     });
 
     /* =========================
-       APP STATE
+       APP STATE (INFO ONLY)
     ========================== */
     socket.on("appState", (state) => {
       if (!socket.userId) return;
-
       userAppState.set(socket.userId, state);
       console.log("📱 AppState:", socket.userId, state);
     });
 
     /* =========================
-       SEND MESSAGE
+       SEND MESSAGE (FIXED)
     ========================== */
     socket.on("sendMessage", async (data) => {
       try {
@@ -95,49 +94,41 @@ export const setupSocket = (io) => {
           .to(conversationId.toString())
           .emit("messageReceived", msg);
 
-        /* 3️⃣ CHECK CHAT OPEN */
+        /* 3️⃣ CHECK IF RECEIVER IS IN SAME CHAT */
         const viewers =
           activeConversationViewers.get(conversationId.toString()) ||
           new Set();
 
         const receiverInChat = viewers.has(receiver.toString());
-        if (receiverInChat) {
-          console.log("🚫 Chat open → no notification");
-          return;
-        }
 
-        /* 4️⃣ CREATE DB NOTIFICATION */
-        const notification = await Notification.create({
-          recipient: receiver,
-          scope: "USER",
-          type: "NEW_MESSAGE",
-          title: "New Message",
-          message: text.length > 40 ? text.slice(0, 40) + "…" : text,
-          data: { conversationId, senderId: sender },
-          isRead: false,
-        });
-
-        /* 5️⃣ REALTIME BADGE / NOTIFICATION (UNCHANGED) */
-        const receiverSocketId = onlineUsers.get(receiver.toString());
-
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("newNotification", notification);
-
-          const unreadCount = await Notification.countDocuments({
+        /* 4️⃣ CREATE DB NOTIFICATION (ALWAYS IF NOT IN CHAT) */
+        if (!receiverInChat) {
+          const notification = await Notification.create({
             recipient: receiver,
+            scope: "USER",
+            type: "NEW_MESSAGE",
+            title: "New Message",
+            message: text.length > 40 ? text.slice(0, 40) + "…" : text,
+            data: { conversationId, senderId: sender },
             isRead: false,
           });
 
-          io.to(receiverSocketId).emit("unreadCount", unreadCount);
-          console.log("🔢 Unread count:", unreadCount);
-        }
+          /* 5️⃣ REALTIME COUNTER (DO NOT TOUCH) */
+          const receiverSocketId = onlineUsers.get(receiver.toString());
 
-        /* 6️⃣ PUSH NOTIFICATION (🔥 FIXED LOGIC 🔥) */
-        const appState =
-          userAppState.get(receiver.toString()) || "background";
+          if (receiverSocketId) {
+            io.to(receiverSocketId).emit("newNotification", notification);
 
-        // 👉 PUSH depends ONLY on appState
-        if (appState !== "active") {
+            const unreadCount = await Notification.countDocuments({
+              recipient: receiver,
+              isRead: false,
+            });
+
+            io.to(receiverSocketId).emit("unreadCount", unreadCount);
+            console.log("🔢 Unread count:", unreadCount);
+          }
+
+          /* 6️⃣ PUSH NOTIFICATION (🔥 GUARANTEED 🔥) */
           const receiverUser = await User.findById(receiver).select("pushToken");
           const senderUser = await User.findById(sender).select("fullName");
 
@@ -153,8 +144,15 @@ export const setupSocket = (io) => {
               },
             });
 
-            console.log("📲 Push sent (app not active)");
+            console.log(
+              "📲 Push sent | socket:",
+              !!onlineUsers.get(receiver.toString()),
+              "| appState:",
+              userAppState.get(receiver.toString())
+            );
           }
+        } else {
+          console.log("🚫 Same chat open → no notification / no push");
         }
       } catch (err) {
         console.error("❌ sendMessage error:", err);
