@@ -8,3 +8,4 @@ export const activeConversationUsers = new Map();
 
 export const activeConversationViewers = new Map(); 
 // conversationId -> Set(userIds) [chat open]
+export const userAppState = new Map();

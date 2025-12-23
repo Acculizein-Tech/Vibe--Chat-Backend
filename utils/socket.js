@@ -7,191 +7,166 @@ import User from "../models/user.js";
 import {
   onlineUsers,
   activeConversationViewers,
+  userAppState,
 } from "./socketState.js";
 
 export const setupSocket = (io) => {
   io.on("connection", (socket) => {
     console.log("🟢 Socket connected:", socket.id);
 
+    /* =========================
+       REGISTER USER
+    ========================== */
     socket.on("register", (userId) => {
-      onlineUsers.set(userId.toString(), socket.id);
+      if (!userId) return;
       socket.userId = userId.toString();
+      onlineUsers.set(socket.userId, socket.id);
+      console.log("✅ User registered:", socket.userId);
     });
 
+    /* =========================
+       JOIN ROOM
+    ========================== */
     socket.on("joinRoom", ({ conversationId }) => {
+      if (!conversationId) return;
       socket.join(conversationId.toString());
     });
 
+    /* =========================
+       CHAT OPEN / CLOSE
+    ========================== */
     socket.on("conversationOpen", ({ conversationId, userId }) => {
+      if (!conversationId || !userId) return;
+
       if (!activeConversationViewers.has(conversationId)) {
         activeConversationViewers.set(conversationId, new Set());
       }
-      activeConversationViewers.get(conversationId).add(userId);
+
+      activeConversationViewers
+        .get(conversationId)
+        .add(userId.toString());
+
+      console.log("👀 Chat open:", conversationId, userId);
     });
 
     socket.on("conversationClose", ({ conversationId, userId }) => {
-      activeConversationViewers.get(conversationId)?.delete(userId);
+      if (!conversationId || !userId) return;
+
+      activeConversationViewers
+        .get(conversationId)
+        ?.delete(userId.toString());
+
+      console.log("❌ Chat closed:", conversationId, userId);
     });
 
-    // 🔥🔥🔥 REAL-TIME MESSAGE HANDLER 🔥🔥🔥
-    // socket.on("sendMessage", async (data) => {
-    //   try {
-    //     const { sender, receiver, text, conversationId } = data;
+    /* =========================
+       APP STATE
+    ========================== */
+    socket.on("appState", (state) => {
+      if (!socket.userId) return;
 
-    //     if (!sender || !receiver || !text || !conversationId) return;
-
-    //     // 1️⃣ Save message
-    //     const message = await Message.create({
-    //       sender,
-    //       receiver,
-    //       text,
-    //       conversationId,
-    //     });
-
-    //     await Conversation.findByIdAndUpdate(conversationId, {
-    //       lastMessage: message._id,
-    //     });
-
-    //     // 2️⃣ Real-time message
-    //     io.to(conversationId.toString()).emit("messageReceived", message);
-
-    //     // 3️⃣ Notification logic
-    //     const viewers =
-    //       activeConversationViewers.get(conversationId.toString()) || new Set();
-
-    //     const receiverViewing = viewers.has(receiver.toString());
-
-    //     if (!receiverViewing) {
-    //       const notification = await Notification.create({
-    //         recipient: receiver,
-    //         scope: "USER",
-    //         type: "NEW_MESSAGE",
-    //         title: "New Message",
-    //         message: text.length > 30 ? text.slice(0, 30) + "..." : text,
-    //         data: { conversationId, senderId: sender },
-    //         isRead: false,
-    //       });
-
-    //       const receiverSocketId = onlineUsers.get(receiver.toString());
-    //       if (receiverSocketId) {
-    //         io.to(receiverSocketId).emit(
-    //           "newNotification",
-    //           notification
-    //         );
-    //       }
-    //     }
-    //   } catch (err) {
-    //     console.log("❌ sendMessage socket error:", err);
-    //   }
-    // });
-     // 🔥 REAL SEND MESSAGE
-socket.on("sendMessage", async (data) => {
-  try {
-    const { sender, receiver, text, conversationId } = data;
-    if (!sender || !receiver || !text || !conversationId) return;
-
-    console.log("📨 sendMessage received:", data);
-
-    // 0️⃣ Safety: sender == receiver
-    if (sender.toString() === receiver.toString()) {
-      console.log("🚫 Sender === Receiver → skip");
-      return;
-    }
-
-    // 1️⃣ Save message
-    const msg = await Message.create({
-      sender,
-      receiver,
-      text,
-      conversationId,
+      userAppState.set(socket.userId, state);
+      console.log("📱 AppState:", socket.userId, state);
     });
 
-    // 2️⃣ Emit realtime message
-    socket.to(conversationId.toString()).emit("messageReceived", msg);
+    /* =========================
+       SEND MESSAGE
+    ========================== */
+    socket.on("sendMessage", async (data) => {
+      try {
+        const { sender, receiver, text, conversationId } = data;
+        if (!sender || !receiver || !text || !conversationId) return;
+        if (sender.toString() === receiver.toString()) return;
 
-    // 3️⃣ Check active viewers
-    const viewers =
-      activeConversationViewers.get(conversationId.toString()) || new Set();
-
-    const receiverActive = viewers.has(receiver.toString());
-    if (receiverActive) {
-      console.log("🚫 Receiver active → no notification");
-      return;
-    }
-
-    // 4️⃣ Create DB notification
-    const notification = await Notification.create({
-      recipient: receiver,
-      scope: "USER",
-      type: "NEW_MESSAGE",
-      title: "New Message",
-      message: text.length > 40 ? text.slice(0, 40) + "…" : text,
-      data: { conversationId, senderId: sender },
-      isRead: false,
-    });
-
-    console.log("🔔 Notification CREATED:", notification._id);
-
-    // 5️⃣ Realtime socket notification
-    const receiverSocketId = onlineUsers.get(receiver.toString());
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newNotification", notification);
-      console.log("📡 Realtime notification sent");
-       // ✅ NEW: unread count emit
-  const unreadCount = await Notification.countDocuments({
-    recipient: receiver,
-    isRead: false,
-  });
-   io.to(receiverSocketId).emit("unreadCount", unreadCount);
-    }
-
-    // 6️⃣ Push notification (ONLY if receiver offline)
-    if (!receiverSocketId) {
-      const receiverUser = await User.findById(receiver).select("pushToken");
-      const senderUser = await User.findById(sender).select("fullName");
-      console.log("📦 Push token from DB:", receiverUser.pushToken);
-
-
-
-      console.log("🚀 Push payload:", {
-  to: receiverUser.pushToken,
-  title: `${senderUser.fullName} • Vibechat`,
-  body: text,
-  data: {
-    type: "CHAT_MESSAGE",
-    conversationId,
-    senderId: sender,
-  },
-});
-
-      if (receiverUser?.pushToken) {
-        
-        await sendPushNotification({
-          pushToken: receiverUser.pushToken,
-          title: `${senderUser.fullName} • Vibechat`,
-          body: text.length > 40 ? text.slice(0, 40) + "…" : text,
-          data: {
-            type: "CHAT_MESSAGE",
-            conversationId,
-            senderId: sender,
-          },
+        /* 1️⃣ SAVE MESSAGE */
+        const msg = await Message.create({
+          sender,
+          receiver,
+          text,
+          conversationId,
         });
 
-        console.log("📲 Push notification sent");
-      } else {
-        console.log("⚠️ No push token for receiver");
+        await Conversation.findByIdAndUpdate(conversationId, {
+          lastMessage: msg._id,
+        });
+
+        /* 2️⃣ REALTIME MESSAGE */
+        socket
+          .to(conversationId.toString())
+          .emit("messageReceived", msg);
+
+        /* 3️⃣ CHECK CHAT OPEN */
+        const viewers =
+          activeConversationViewers.get(conversationId.toString()) ||
+          new Set();
+
+        const receiverInChat = viewers.has(receiver.toString());
+        if (receiverInChat) {
+          console.log("🚫 Chat open → no notification");
+          return;
+        }
+
+        /* 4️⃣ CREATE DB NOTIFICATION */
+        const notification = await Notification.create({
+          recipient: receiver,
+          scope: "USER",
+          type: "NEW_MESSAGE",
+          title: "New Message",
+          message: text.length > 40 ? text.slice(0, 40) + "…" : text,
+          data: { conversationId, senderId: sender },
+          isRead: false,
+        });
+
+        /* 5️⃣ REALTIME BADGE / NOTIFICATION */
+        const receiverSocketId = onlineUsers.get(receiver.toString());
+        const appState = userAppState.get(receiver.toString());
+
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("newNotification", notification);
+
+          const unreadCount = await Notification.countDocuments({
+            recipient: receiver,
+            isRead: false,
+          });
+
+          io.to(receiverSocketId).emit("unreadCount", unreadCount);
+          console.log("🔢 Unread count:", unreadCount);
+        }
+
+        /* 6️⃣ PUSH NOTIFICATION */
+        if (!receiverSocketId || appState !== "active") {
+          const receiverUser = await User.findById(receiver).select("pushToken");
+          const senderUser = await User.findById(sender).select("fullName");
+
+          if (receiverUser?.pushToken) {
+            await sendPushNotification({
+              pushToken: receiverUser.pushToken,
+              title: `${senderUser.fullName} • Vibechat`,
+              body: text.length > 40 ? text.slice(0, 40) + "…" : text,
+              data: {
+                type: "CHAT_MESSAGE",
+                conversationId,
+                senderId: sender,
+              },
+            });
+
+            console.log("📲 Push sent");
+          }
+        }
+      } catch (err) {
+        console.error("❌ sendMessage error:", err);
       }
-    }
+    });
 
-  } catch (err) {
-    console.error("❌ sendMessage socket error:", err);
-  }
-});
-
-
-
+    /* =========================
+       DISCONNECT
+    ========================== */
     socket.on("disconnect", () => {
-      onlineUsers.delete(socket.userId);
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+        userAppState.delete(socket.userId);
+        console.log("🔴 User disconnected:", socket.userId);
+      }
     });
   });
 };
