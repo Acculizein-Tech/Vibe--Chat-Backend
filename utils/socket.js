@@ -117,9 +117,8 @@ export const setupSocket = (io) => {
           isRead: false,
         });
 
-        /* 5️⃣ REALTIME BADGE / NOTIFICATION */
+        /* 5️⃣ REALTIME BADGE / NOTIFICATION (UNCHANGED) */
         const receiverSocketId = onlineUsers.get(receiver.toString());
-        const appState = userAppState.get(receiver.toString());
 
         if (receiverSocketId) {
           io.to(receiverSocketId).emit("newNotification", notification);
@@ -133,8 +132,12 @@ export const setupSocket = (io) => {
           console.log("🔢 Unread count:", unreadCount);
         }
 
-        /* 6️⃣ PUSH NOTIFICATION */
-        if (!receiverSocketId || appState !== "active") {
+        /* 6️⃣ PUSH NOTIFICATION (🔥 FIXED LOGIC 🔥) */
+        const appState =
+          userAppState.get(receiver.toString()) || "background";
+
+        // 👉 PUSH depends ONLY on appState
+        if (appState !== "active") {
           const receiverUser = await User.findById(receiver).select("pushToken");
           const senderUser = await User.findById(sender).select("fullName");
 
@@ -150,7 +153,7 @@ export const setupSocket = (io) => {
               },
             });
 
-            console.log("📲 Push sent");
+            console.log("📲 Push sent (app not active)");
           }
         }
       } catch (err) {
