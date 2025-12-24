@@ -57,7 +57,7 @@ pushToken: {
 }
 ,
 isDeleted: { type: Boolean, default: false },
-
+deletedAt: { type: Date, default: null },
 customCodes: [
   {
     codeName: { type: String, required: true },      // Superadmin ka display name

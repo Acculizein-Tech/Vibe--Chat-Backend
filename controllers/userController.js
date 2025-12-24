@@ -867,19 +867,33 @@ export const filterContacts = async (req, res) => {
 
 //delete user account not delete just hide the user account
 export const deleteUserAccount = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-    await User.findByIdAndUpdate(userId, { isDeleted: true });
+  const userId = req.params._id;
 
-    return res.status(200).json({ 
-      success: true,
-      message: "User account deleted successfully."
-    });
-  } catch (error) {
-    console.error("Error deleting user account:", error);
-    return res.status(500).json({ error: error.message });
-  }
+  await User.findByIdAndUpdate(userId, {
+    isDeleted: true,
+    deletedAt: new Date(),
+
+    // 🔐 Privacy cleanup
+    email: null,
+    phone: null,
+    phoneHash: null,
+
+    refreshTokens: [],
+    pushToken: null,
+
+    fullName: "Deleted User",
+    profile: {
+      photo: null,
+      avatar: null
+    }
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "User account deleted successfully"
+  });
 });
+
 
 
 

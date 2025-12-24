@@ -47,3 +47,4 @@ router.post("/filterContacts", protect, filterContacts);
 router.delete("/delete-account", protect, deleteUserAccount);
 
 export default router;
+
