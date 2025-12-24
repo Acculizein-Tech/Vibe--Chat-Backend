@@ -866,8 +866,9 @@ export const filterContacts = async (req, res) => {
 
 
 //delete user account not delete just hide the user account
+//delete user account not delete just hide the user account
 export const deleteUserAccount = asyncHandler(async (req, res) => {
-  const userId = req.params._id;
+  const userId = req.user._id;
 
   await User.findByIdAndUpdate(userId, {
     isDeleted: true,

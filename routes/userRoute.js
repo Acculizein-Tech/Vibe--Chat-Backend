@@ -44,7 +44,7 @@ router.get("/blocked/:userId", getBlockedUsers);
 
 // ✅ New route to filter contacts
 router.post("/filterContacts", protect, filterContacts);
-router.delete("/delete-account", protect, deleteUserAccount);
+router.delete("/delete-account/:id", protect, deleteUserAccount);
 
 export default router;
 
