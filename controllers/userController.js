@@ -38,7 +38,7 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
-    const { fullName, email, phone, city, state, country, zipCode } = req.body;
+    const { fullName, email, phone } = req.body;
 
     // ✅ Phone number space check
     if (phone && phone.includes(" ")) {
@@ -62,11 +62,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     const updatedFields = {
       fullName: fullName?.trim(),
       email: email?.trim(),
-      phone,
-      city: city?.trim(),
-      state: state?.trim(),
-      country: country?.trim(),
-      zipCode: zipCode?.trim(),
+      phone
     };
 
     // ✅ Handle avatar upload in background (non-blocking)
@@ -869,7 +865,21 @@ export const filterContacts = async (req, res) => {
 };
 
 
+//delete user account not delete just hide the user account
+export const deleteUserAccount = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await User.findByIdAndUpdate(userId, { isDeleted: true });
 
+    return res.status(200).json({ 
+      success: true,
+      message: "User account deleted successfully."
+    });
+  } catch (error) {
+    console.error("Error deleting user account:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 
 
 

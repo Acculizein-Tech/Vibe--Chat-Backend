@@ -56,6 +56,7 @@ pushToken: {
   default: null,
 }
 ,
+isDeleted: { type: Boolean, default: false },
 
 customCodes: [
   {
