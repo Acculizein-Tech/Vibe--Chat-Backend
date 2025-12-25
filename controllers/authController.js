@@ -363,10 +363,17 @@ export const login = asyncHandler(async (req, res) => {
   // 🔍 Find user
   const user = await User.findOne({ email });
 
+  if (user.isDeleted) {
+    res.status(403);
+    throw new Error("This account has been permanently deleted");
+  }
+  // ❌ No user found
   if (!user) {
     res.status(401);
-    throw new Error("Create your account first");
+    throw new Error("Invalid email or password");
   }
+
+  // 🚫 Deleted account
 
   // 🔐 Check password
   const isMatch = await user.matchPassword(password);
@@ -389,7 +396,7 @@ export const login = asyncHandler(async (req, res) => {
   user.refreshTokens.push(refreshToken);
   await user.save();
 
-  // 🟢 SEND CLEAN RESPONSE (frontend compatible)
+  // 🟢 Clean response
   res.json({
     user: {
       _id: user._id,

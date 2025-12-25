@@ -867,15 +867,43 @@ export const filterContacts = async (req, res) => {
 
 //delete user account not delete just hide the user account
 //delete user account not delete just hide the user account
+// export const deleteUserAccount = asyncHandler(async (req, res) => {
+//   const userId = req.user._id;
+
+//   await User.findByIdAndUpdate(userId, {
+//     isDeleted: true,
+//     deletedAt: new Date(),
+
+//     // 🔐 Privacy cleanup
+//     email: null,
+//     phone: null,
+//     phoneHash: null,
+
+//     refreshTokens: [],
+//     pushToken: null,
+
+//     fullName: "Deleted User",
+//     profile: {
+//       photo: null,
+//       avatar: null
+//     }
+//   });
+
+//   return res.status(200).json({
+//     success: true,
+//     message: "User account deleted successfully"
+//   });
+// });
 export const deleteUserAccount = asyncHandler(async (req, res) => {
   const userId = req.user._id;
+
+  const tombstoneEmail = `deleted_${userId}_${Date.now()}@vibechat.deleted`;
 
   await User.findByIdAndUpdate(userId, {
     isDeleted: true,
     deletedAt: new Date(),
 
-    // 🔐 Privacy cleanup
-    email: null,
+    email: tombstoneEmail,   // 🔒 email locked forever
     phone: null,
     phoneHash: null,
 
@@ -889,11 +917,12 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
     }
   });
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
     message: "User account deleted successfully"
   });
 });
+
 
 
 
