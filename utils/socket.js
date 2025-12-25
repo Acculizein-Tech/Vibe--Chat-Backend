@@ -135,7 +135,7 @@ export const setupSocket = (io) => {
           if (receiverUser?.pushToken) {
             await sendPushNotification({
               pushToken: receiverUser.pushToken,
-              title: `${senderUser.fullName} • Vibechat`,
+              title: `${senderUser.fullName} • Ryngales`,
               body: text.length > 40 ? text.slice(0, 40) + "…" : text,
               data: {
                 type: "CHAT_MESSAGE",
