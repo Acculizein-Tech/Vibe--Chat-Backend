@@ -17,6 +17,7 @@ import Conversation from "./models/Conversation.js";
 import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
+import UserContact from "./models/UserContact.js";
 
 
 dotenv.config();
@@ -74,6 +75,7 @@ app.use("/api/conversation", conversationRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/notification", notificationRoutes);
+app.use("/api/usercontacts", UserContact);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;

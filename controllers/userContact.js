@@ -1,0 +1,83 @@
+import crypto from "crypto";
+import User from "../models/user.js";
+import UserContact from "../models/UserContact.js";
+
+const normalizePhone = (phone) =>
+  phone.replace(/\D/g, "").slice(-10);
+
+const hashPhone = (phone) =>
+  crypto.createHash("sha256").update(phone).digest("hex");
+
+export const syncContacts = async (req, res) => {
+  const userId = req.user._id;
+  const contacts = req.body.contacts;
+
+  const bulkOps = [];
+
+  for (const c of contacts) {
+    const normalized = normalizePhone(c.phone);
+    const phoneHash = hashPhone(normalized);
+
+    const matchedUser = await User.findOne({ phoneHash });
+
+    bulkOps.push({
+      updateOne: {
+        filter: { owner: userId, phoneHash },
+        update: {
+          $set: {
+            contactName: c.name,
+            phone: normalized,
+            phoneHash,
+            linkedUser: matchedUser?._id || null,
+            isOnPlatform: !!matchedUser,
+          },
+        },
+        upsert: true,
+      },
+    });
+  }
+
+  if (bulkOps.length) {
+    await UserContact.bulkWrite(bulkOps);
+  }
+
+  res.json({ success: true });
+};
+
+
+
+
+export const saveChatContact = async (req, res) => {
+  const ownerId = req.user._id;
+  const { senderUserId, firstName, lastName } = req.body;
+  console.log("Saving chat contact:", { ownerId, senderUserId, firstName, lastName });
+
+  const sender = await User.findById(senderUserId).select(
+    "phone phoneHash"
+  );
+
+  if (!sender || !sender.phone) {
+    return res.status(400).json({ message: "Invalid sender" });
+  }
+
+  const contactName = `${firstName} ${lastName}`.trim();
+
+  const contact = await UserContact.findOneAndUpdate(
+    {
+      owner: ownerId,
+      phoneHash: sender.phoneHash,
+    },
+    {
+      $set: {
+        contactName,
+        phone: sender.phone,
+        phoneHash: sender.phoneHash,
+        linkedUser: sender._id,
+        isOnPlatform: true,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  res.json({ success: true, contact });
+};
