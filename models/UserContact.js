@@ -9,11 +9,11 @@ const userContactSchema = new mongoose.Schema(
       index: true, // fast lookup
     },
 
-    FirsttName: {
+    firstName: {
       type: String,
       required: true,
     },
-      LastName: {
+      lastName: {
       type: String,
       required: true,
     },

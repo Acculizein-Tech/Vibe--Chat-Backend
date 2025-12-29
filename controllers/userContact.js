@@ -44,34 +44,27 @@ export const syncContacts = async (req, res) => {
   res.json({ success: true });
 };
 
-
-
-
 export const saveChatContact = async (req, res) => {
   const ownerId = req.user._id;
   const { senderUserId, firstName, lastName } = req.body;
-  console.log("Saving chat contact:", { ownerId, senderUserId, firstName, lastName });
 
-  const sender = await User.findById(senderUserId).select(
-    "phone phoneHash"
-  );
+  const sender = await User.findById(senderUserId).select("phone phoneHash");
 
   if (!sender || !sender.phone) {
     return res.status(400).json({ message: "Invalid sender" });
   }
 
-  const contactName = `${firstName} ${lastName}`.trim();
+  const normalizedPhone = normalizePhone(sender.phone);
+  const phoneHash = sender.phoneHash || hashPhone(normalizedPhone);
 
   const contact = await UserContact.findOneAndUpdate(
-    {
-      owner: ownerId,
-      phoneHash: sender.phoneHash,
-    },
+    { owner: ownerId, phoneHash },
     {
       $set: {
-        contactName,
-        phone: sender.phone,
-        phoneHash: sender.phoneHash,
+        firstName,
+        lastName,
+        phone: normalizedPhone,
+        phoneHash,
         linkedUser: sender._id,
         isOnPlatform: true,
       },

@@ -17,7 +17,7 @@ import Conversation from "./models/Conversation.js";
 import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
-import UserContact from "./models/UserContact.js";
+import UserContact from "./routes/userContactRoute.js";
 
 
 dotenv.config();
