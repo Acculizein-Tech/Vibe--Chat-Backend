@@ -103,19 +103,19 @@ export const getChatUsers = async (req, res) => {
 
       if (!otherUserId) continue;
 
-      // 🔹 USER (REAL SOURCE OF FULL NAME)
       const user = await User.findById(otherUserId)
         .select("fullName firstName lastName phone username")
         .lean();
 
-      // 🔹 CONTACT (OPTIONAL)
       const contact = await UserContact.findOne({
         owner: ownerId,
         linkedUser: otherUserId,
         isBlocked: false,
       }).lean();
 
-      // ✅ EXACT SAME NAME PRIORITY AS BEFORE
+      // 🔥 IMPORTANT FIX
+      if (!user && !contact) continue;
+
       const userFullName =
         user?.fullName ||
         [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
@@ -126,7 +126,7 @@ export const getChatUsers = async (req, res) => {
         conversationId: convo._id,
         participant: {
           receiver: otherUserId,
-          fullName: userFullName,               // ✅ FIXED
+          fullName: userFullName,
           phone: user?.phone || "",
           existingName: contact
             ? `${contact.firstName} ${contact.lastName}`.trim()
@@ -135,15 +135,13 @@ export const getChatUsers = async (req, res) => {
       });
     }
 
-    res.json({
-      status: "Success",
-      uniqueUsers,
-    });
+    res.json({ status: "Success", uniqueUsers });
   } catch (err) {
     console.error("❌ getChatUsers error", err);
     res.status(500).json({ status: "Error", message: err.message });
   }
 };
+
 
 
 
