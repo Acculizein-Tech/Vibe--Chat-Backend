@@ -1,6 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
-
+import UserContact from "../models/UserContact.js";
+import User from "../models/user.js";
 // ✅ Create or get existing conversation between two users
 
  
@@ -13,6 +14,7 @@ export const getUserConversations = async (req, res) => {
     })
       .populate("participants", "name email")
       .populate("lastMessage");
+      const getExistName = async
     res.status(200).json(conversations);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -86,46 +88,63 @@ export const getOrCreateConversation = async (req, res) => {
 // Get all users who have a conversation with the logged-in user
 export const getChatUsers = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const ownerId = req.user._id;
 
     const conversations = await Conversation.find({
-      participants: { $in: [userId] },
-    })
-      .populate("participants", "fullName phone")
-      .lean();
+      participants: ownerId,
+    }).lean();
 
-    const chatUsers = conversations
-      .map(conv => {
-        const otherUser = conv.participants.find(
-          p => p._id.toString() !== userId
-        );
-        if (otherUser) {
-          return {
-            conversationId: conv._id,
-            participant: {
-              receiver: otherUser._id,
-              fullName: otherUser.fullName,
-              email: otherUser.email,
-              phone: otherUser.phone,
-            },
-          };
-        }
-        return null;
-      })
-      .filter(Boolean);
+    const uniqueUsers = [];
 
-    // ✅ Fixed duplicate removal
-    const uniqueUsers = Array.from(
-      new Map(
-        chatUsers.map(item => [item.participant.receiver.toString(), item])
-      ).values()
-    );
+    for (const convo of conversations) {
+      const otherUserId = convo.participants.find(
+        (id) => id.toString() !== ownerId.toString()
+      );
 
-    res.status(200).json({ status: "Success", uniqueUsers });
-  } catch (error) {
-    console.error("Error fetching chat users:", error);
-    res.status(500).json({ error: error.message });
+      if (!otherUserId) continue;
+
+      // 🔹 USER (REAL SOURCE OF FULL NAME)
+      const user = await User.findById(otherUserId)
+        .select("fullName firstName lastName phone username")
+        .lean();
+
+      // 🔹 CONTACT (OPTIONAL)
+      const contact = await UserContact.findOne({
+        owner: ownerId,
+        linkedUser: otherUserId,
+        isBlocked: false,
+      }).lean();
+
+      // ✅ EXACT SAME NAME PRIORITY AS BEFORE
+      const userFullName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+        user?.username ||
+        "";
+
+      uniqueUsers.push({
+        conversationId: convo._id,
+        participant: {
+          receiver: otherUserId,
+          fullName: userFullName,               // ✅ FIXED
+          phone: user?.phone || "",
+          existingName: contact
+            ? `${contact.firstName} ${contact.lastName}`.trim()
+            : null,
+        },
+      });
+    }
+
+    res.json({
+      status: "Success",
+      uniqueUsers,
+    });
+  } catch (err) {
+    console.error("❌ getChatUsers error", err);
+    res.status(500).json({ status: "Error", message: err.message });
   }
 };
+
+
 
 
