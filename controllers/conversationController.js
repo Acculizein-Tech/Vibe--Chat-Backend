@@ -121,7 +121,9 @@ export const getChatUsers = async (req, res) => {
         [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
         user?.username ||
         "";
-
+      const lastMessage = await Message.findOne({
+        conversationId: convo._id,
+      }).sort({ createdAt: -1 }).select("text").lean();
       uniqueUsers.push({
         conversationId: convo._id,
         participant: {
@@ -131,8 +133,10 @@ export const getChatUsers = async (req, res) => {
           existingName: contact
             ? `${contact.firstName} ${contact.lastName}`.trim()
             : null,
+            lastMessage: lastMessage?.text || null,
         },
-      });
+      })
+      
     }
 
     res.json({ status: "Success", uniqueUsers });

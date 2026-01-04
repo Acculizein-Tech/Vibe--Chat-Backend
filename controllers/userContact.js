@@ -74,3 +74,32 @@ export const saveChatContact = async (req, res) => {
 
   res.json({ success: true, contact });
 };
+
+//edit contact
+export const editContact = async (req, res) => {
+  const { contactId } = req.params;
+  const { firstName, lastName } = req.body;
+
+  const contact = await UserContact.findById(contactId);
+  if (!contact) {
+    return res.status(404).json({ message: "Contact not found" });
+  }
+
+  contact.firstName = firstName;
+  contact.lastName = lastName;
+  await contact.save();
+
+  res.json({ success: true, contact });
+};
+
+//delete contact
+export const deleteContact = async (req, res) => {
+  const { contactId } = req.params;
+
+  const contact = await UserContact.findByIdAndDelete(contactId);
+  if (!contact) {
+    return res.status(404).json({ message: "Contact not found" });
+  }
+
+  res.json({ success: true, contact });
+};
