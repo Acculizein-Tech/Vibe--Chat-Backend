@@ -94,6 +94,35 @@ export const setupSocket = (io) => {
           .to(conversationId.toString())
           .emit("messageReceived", msg);
 
+        
+    /* ================================
+       🔥 NEW PART – CHAT LIST UPDATE
+    ================================= */
+
+    const chatListPayload = {
+      conversationId,
+      text: msg.text,
+      sender: sender,
+      receiver: receiver,
+      createdAt: msg.createdAt,
+    };
+     const senderSocketId = onlineUsers.get(sender.toString());
+    const receiverSocketId = onlineUsers.get(receiver.toString());
+
+    // sender chat list update
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("chat:list:update", chatListPayload);
+    }
+
+    // receiver chat list update
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("chat:list:update", chatListPayload);
+    }
+    console.log("💬 Chat list update sent", chatListPayload);
+    /* ================================
+       ⬆️ यही MISSING THA
+
+
         /* 3️⃣ CHECK IF RECEIVER IS IN SAME CHAT */
         const viewers =
           activeConversationViewers.get(conversationId.toString()) ||
