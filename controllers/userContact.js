@@ -103,14 +103,15 @@ export const editContact = async (req, res) => {
 };
 
 
-//delete contact_
+_//delete contact__
 export const deleteContact = async (req, res) => {
   const { contactId } = req.params;
 
-  const contact = await UserContact.findByIdAndDelete(contactId);
+ const contact = await UserContact.findByIdAndDelete(contactId);
+console.log("contact", contact)
   if (!contact) {
     return res.status(404).json({ message: "Contact not found" });
   }
 
-  res.json({ success: true, contact });
+  res.json({ success: true, message: "Contact Deleted Successfully" });
 };
