@@ -68,7 +68,7 @@ export const saveChatContact = async (req, res) => {
 
   res.json({ success: true, contact });
 };
-_//edit contact__
+//edit contact__
 
 
 export const editContact = async (req, res) => {
@@ -76,11 +76,11 @@ export const editContact = async (req, res) => {
     const { contactId } = req.params;
     const { firstName, lastName } = req.body;
   console.log(contactId)
-    _// ✅ ObjectId validation__
+    // ✅ ObjectId validation__
     if (!mongoose.Types.ObjectId.isValid(contactId)) {
       return res.status(400).json({ message: "Invalid contact id" });
     }
-    _// ✅ findById (NOT find)__
+    // ✅ findById (NOT find)__
     const contact = await UserContact.findById(contactId);
 
     if (!contact) {
