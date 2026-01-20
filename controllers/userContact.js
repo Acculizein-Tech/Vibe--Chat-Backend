@@ -4,21 +4,18 @@ import UserContact from "../models/UserContact.js";
 import mongoose from "mongoose";
 
 const normalizePhone = (phone) =>
-  phone.replace(/\D/g, "").slice(-10);
-
+     phone.replace(/\D/g, "").slice(-10);
 const hashPhone = (phone) =>
   crypto.createHash("sha256").update(phone).digest("hex");
 
 export const syncContacts = async (req, res) => {
   const userId = req.user._id;
   const contacts = req.body.contacts;
+const bulkOps = [];
 
-  const bulkOps = [];
-
-  for (const c of contacts) {
+ for (const c of contacts) {
     const normalized = normalizePhone(c.phone);
     const phoneHash = hashPhone(normalized);
-
     const matchedUser = await User.findOne({ phoneHash });
 
     bulkOps.push({
@@ -71,7 +68,7 @@ export const saveChatContact = async (req, res) => {
 
   res.json({ success: true, contact });
 };
-//edit contact_
+_//edit contact__
 
 
 export const editContact = async (req, res) => {
@@ -79,11 +76,11 @@ export const editContact = async (req, res) => {
     const { contactId } = req.params;
     const { firstName, lastName } = req.body;
   console.log(contactId)
-    _// ✅ ObjectId validation_
+    _// ✅ ObjectId validation__
     if (!mongoose.Types.ObjectId.isValid(contactId)) {
       return res.status(400).json({ message: "Invalid contact id" });
     }
-    _// ✅ findById (NOT find)_
+    _// ✅ findById (NOT find)__
     const contact = await UserContact.findById(contactId);
 
     if (!contact) {
@@ -102,16 +99,14 @@ export const editContact = async (req, res) => {
   }
 };
 
-
-_//delete contact__
+//delete contact___
 export const deleteContact = async (req, res) => {
   const { contactId } = req.params;
 
  const contact = await UserContact.findByIdAndDelete(contactId);
 console.log("contact", contact)
-  if (!contact) {
-    return res.status(404).json({ message: "Contact not found" });
-  }
+  if (!contact) {   return res.status(404).json({ message: "Contact not found" });
+ }
 
-  res.json({ success: true, message: "Contact Deleted Successfully" });
+ res.json({ success: true, message: "Contact Deleted Successfully" });
 };
