@@ -203,15 +203,38 @@ export const register = asyncHandler(async (req, res) => {
   if (existingUser) {
   if (existingUser.isVerified) {
     return res.status(400).json({ message: "Email is already registered" });
-  } else {
-    return res
-      .status(400)
-      .json({
-        message:
-          "You already registered. Please verify your email or request a new OTP",
-      });
   }
+
+  const now = Date.now();
+
+  if (
+    existingUser.emailResendBlock &&
+    existingUser.emailResendBlock > now
+  ) {
+    return res.status(429).json({
+      message: "OTP already sent. Please wait before requesting again",
+    });
+  }
+
+  const otp = generateOTP();
+  existingUser.emailVerifyOTP = otp;
+  existingUser.emailVerifyExpires = now + 10 * 60 * 1000;
+  existingUser.emailResendBlock = now + 30 * 1000;
+
+  await existingUser.save();
+
+  await sendEmail({
+    to: existingUser.email,
+    subject: "Email Verification OTP",
+    text: `Your OTP is: ${otp}`,
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "OTP resent to your email. Please verify",
+  });
 }
+
 
 
   // 🔐 Generate OTP
@@ -269,41 +292,6 @@ export const register = asyncHandler(async (req, res) => {
     referredBy,
   });
 
-  // 📌 Create a lead with follow-up reminder
-  // await Lead.create({
-  //   name: user.fullName,
-  //   contact: user.email,
-  //   businessType: "Unknown",
-  //   status: "Interested",
-  //   notes: "Signed up on website",
-  //   salesUser: null,
-  //   followUpDate: new Date(Date.now() + 2 * 60 * 1000), // ⏰ 2 minutes from now
-  // });
-
-  // // 🔔 Notifications
-  // const notificationData = {
-  //   userId: user._id,
-  //   userName: user.fullName,
-  //   userEmail: user.email,
-  //   redirectPath: `/admin/users/${user._id}`,
-  // };
-
-  // await Promise.all([
-  //   notifyRole({
-  //     role: "admin",
-  //     type: "LEAD_GENERATED",
-  //     title: "🆕 New User Registered",
-  //     message: `"${user.fullName}" registered as a customer.`,
-  //     data: notificationData,
-  //   }),
-  //   notifyRole({
-  //     role: "superadmin",
-  //     type: "LEAD_GENERATED",
-  //     title: "🆕 New User Registered",
-  //     message: `"${user.fullName}" registered as a customer.`,
-  //     data: notificationData,
-  //   }),
-  // ]);
 
   // 📧 Send OTP email
   await sendEmail({
@@ -357,59 +345,119 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
 
 // @desc    Login user
 // @route   POST /api/auth/login
+// export const login = asyncHandler(async (req, res) => {
+//   const { email, password } = req.body;
+
+//   // 🔍 Find user
+//   const user = await User.findOne({ email, isDeleted: { $ne: true } });
+
+ 
+//   // ❌ No user found
+//   if (!user) {
+//     res.status(401);
+//     throw new Error("Invalid email or password");
+//   }
+//    if (user.isDeleted === true) {
+//     res.status(403).json({ message: "Account has been permanently deleted" });
+//     return;
+//   }
+  
+
+//   // 🚫 Deleted account
+
+//   // 🔐 Check password
+//   const isMatch = await user.matchPassword(password);
+//   if (!isMatch) {
+//     res.status(401);
+//     throw new Error("Invalid email or password");
+//   }
+
+//   // 🚫 Check verification
+//   if (!user.isVerified) {
+//     res.status(403);
+//     throw new Error("Please verify your email first");
+//   }
+
+//   // 🎟 Generate tokens
+//   const accessToken = generateToken(user._id, "30d");
+//   const refreshToken = generateToken(user._id, "7d");
+
+//   // ➕ Save refresh token
+//   user.refreshTokens.push(refreshToken);
+//   await user.save();
+
+//   // 🟢 Clean response
+//   res.json({
+//     user: {
+//       _id: user._id,
+//       fullName: user.fullName,
+//       email: user.email,
+//       role: user.role,
+//       avatar:
+//         user.avatar ||
+//         "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
+//     },
+//     accessToken,
+//     refreshToken,
+//   });
+// });
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // 🔍 Find user
-  const user = await User.findOne({ email });
-
-  if (user.isDeleted) {
-    res.status(403);
-    throw new Error("This account has been permanently deleted");
-  }
-  // ❌ No user found
-  if (!user) {
-    res.status(401);
-    throw new Error("Invalid email or password");
-  }
-
-  // 🚫 Deleted account
-
-  // 🔐 Check password
-  const isMatch = await user.matchPassword(password);
-  if (!isMatch) {
-    res.status(401);
-    throw new Error("Invalid email or password");
-  }
-
-  // 🚫 Check verification
-  if (!user.isVerified) {
-    res.status(403);
-    throw new Error("Please verify your email first");
-  }
-
-  // 🎟 Generate tokens
-  const accessToken = generateToken(user._id, "30d");
-  const refreshToken = generateToken(user._id, "7d");
-
-  // ➕ Save refresh token
-  user.refreshTokens.push(refreshToken);
-  await user.save();
-
-  // 🟢 Clean response
-  res.json({
-    user: {
-      _id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-      avatar:
-        user.avatar ||
-        "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
-    },
-    accessToken,
-    refreshToken,
+  // 🔍 1. Try active user
+  const user = await User.findOne({
+    email,
+    isDeleted: { $ne: true },
   });
+
+  if (user) {
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      res.status(401);
+      throw new Error("Invalid email or password");
+    }
+
+    if (!user.isVerified) {
+      res.status(403);
+      throw new Error("Please verify your email first");
+    }
+
+    const accessToken = generateToken(user._id, "30d");
+    const refreshToken = generateToken(user._id, "7d");
+
+    user.refreshTokens.push(refreshToken);
+    await user.save();
+
+    return res.json({
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        avatar:
+          user.avatar ||
+          "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
+      },
+      accessToken,
+      refreshToken,
+    });
+  }
+
+  // 🔍 2. Check if deleted account with same original email exists
+  const deletedUser = await User.findOne({
+    originalEmail: email,
+    isDeleted: true,
+  });
+
+  if (deletedUser) {
+    return res
+      .status(403)
+      .json({ message: "Account has been permanently deleted" });
+  }
+
+  // ❌ 3. Truly invalid
+  res.status(401);
+  throw new Error("Invalid email or password");
 });
 
 

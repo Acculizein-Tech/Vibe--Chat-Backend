@@ -20,7 +20,7 @@ router.get('/profile/:id', protect, getUserProfile);
 router.put(   
   '/profile/:id',
   protect,
-  upload.single('others'), // ⬅️ This handles uploading the image
+  upload.single('ryngales-profile'), // ⬅️ This handles uploading the image
   updateUserProfile
 );
 // 🔐 Example: Only allow business owners to access their own reviews
@@ -47,4 +47,3 @@ router.post("/filterContacts", protect, filterContacts);
 router.delete("/delete-account/:id", protect, deleteUserAccount);
 
 export default router;
-

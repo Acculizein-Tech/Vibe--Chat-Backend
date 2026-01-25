@@ -74,6 +74,11 @@ blockedUsers: [
     ref: "User"
   }
 ],
+originalEmail: {
+  type: String,
+  index: true,
+}
+
 
 
   

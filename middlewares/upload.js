@@ -1,5 +1,7 @@
 //upload.js
 
+//upload.js
+
 import multer from 'multer';
 import { S3Client, PutObjectCommand, DeleteObjectCommand  } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
@@ -56,7 +58,7 @@ const fileFilter = (req, file, cb) => {
 
   const allowedImageFields = [
     'profileImage', 'coverImage', 'galleryImages',
-    'bannerImage', 'others'
+    'bannerImage', 'others', 'ryngales-profile',
   ];
   if (allowedImageFields.includes(file.fieldname)) {
     return imageTypes.includes(ext)
@@ -182,6 +184,9 @@ const getS3KeyPrefix = (req, file) => {
     folder = "driver/photo";
   } else if (file.fieldname === "licenseCopy") {
     folder = "driver/license";
+  }
+  else if (file.fieldname === "ryngales-profile") {
+    folder = "ryngales-profile";
   }
 
   return folder;

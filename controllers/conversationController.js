@@ -104,7 +104,7 @@ export const getChatUsers = async (req, res) => {
       if (!otherUserId) continue;  
   
       const user = await User.findById(otherUserId)  
-        .select("fullName firstName lastName phone username")  
+        .select("fullName firstName lastName phone username profile.avatar")  
         .lean();  
   
       const contact = await UserContact.findOne({  
