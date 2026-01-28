@@ -297,7 +297,60 @@ export const register = asyncHandler(async (req, res) => {
   await sendEmail({
     to: user.email,
     subject: "Email Verification OTP",
-    text: `Your OTP is: ${otp}`,
+    // text: `Your OTP is: ${otp}`,
+    html:`<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; background:#f5f6fa; padding:20px;">
+    <div style="max-width:600px; margin:auto; background:#ffffff; padding:25px; border-radius:10px;">
+      
+      <h2 style="color:#4A6CF7; margin-bottom:10px;">
+        Welcome to <span style="font-weight:bold;">Ryngales</span> 💬✨
+      </h2>
+
+      <p style="font-size:15px; line-height:1.6; color:#444;">
+        Ryngales ek fast, secure aur simple chatting application hai —  
+        jahan aap apne friends, family aur contacts ke saath
+        <strong>real-time messages</strong> easily share kar sakte hain.
+      </p>
+
+      <h3 style="color:#4A6CF7; margin-top:20px;">🚀 What You Can Do on Ryngales</h3>
+
+      <ul style="color:#444; line-height:1.7; font-size:15px;">
+        <li>Instant 1-to-1 secure chatting</li>
+        <li>Fast message delivery</li>
+        <li>Clean & user-friendly interface</li>
+        <li>Privacy-focused communication</li>
+        <li>Stay connected anytime, anywhere</li>
+      </ul>
+
+      <blockquote style="border-left:4px solid #4A6CF7; padding-left:10px; margin:20px 0; color:#333;">
+        <em>"Conversations that feel real, simple, and secure." ✨</em>
+      </blockquote>
+
+      <hr style="margin:25px 0; border:none; border-top:1px solid #ddd;">
+
+      <p style="font-size:15px; color:#444;">
+        🔐 <strong>Password Reset Verification Code</strong>
+        <br>
+        <span style="display:inline-block; font-size:22px; margin-top:8px; font-weight:bold; color:#4A6CF7;">
+          ${otp}
+        </span>
+        <br>
+        <span style="font-size:13px; color:#888;">
+          This code is valid for the next 5 minutes.
+        </span>
+      </p>
+
+      <hr style="margin:25px 0; border:none; border-top:1px solid #ddd;">
+
+      <p style="font-size:15px; color:#444;">
+        Stay connected. Stay secure.<br>
+        <strong>Only on <span style="color:#4A6CF7;">Ryngales</span></strong> 💙
+      </p>
+
+    </div>
+  </body>
+</html>`
   });
 
   // 🔐 Generate tokens
@@ -506,7 +559,57 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   await sendEmail({
     to: user.email,
     subject: "Forgot Password OTP",
-    text: `Your OTP to reset password is: ${otp}`,
+    html: `<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; background:#f5f6fa; padding:20px;">
+    <div style="max-width:600px; margin:auto; background:#ffffff; padding:25px; border-radius:10px;">
+      
+      <h2 style="color:#4A6CF7; margin-bottom:10px;">
+        Reset Your Password 🔐
+      </h2>
+
+      <p style="font-size:15px; line-height:1.6; color:#444;">
+        We received a request to reset your <strong>Ryngales</strong> account password.
+        Use the verification code below to continue.
+      </p>
+
+      <hr style="margin:25px 0; border:none; border-top:1px solid #ddd;">
+
+      <p style="font-size:15px; color:#444; text-align:center;">
+        <strong>Your verification code</strong>
+        <br>
+        <span style="
+          display:inline-block;
+          font-size:26px;
+          margin-top:10px;
+          font-weight:bold;
+          color:#4A6CF7;
+          letter-spacing:3px;
+        ">
+          ${otp}
+        </span>
+        <br>
+        <span style="font-size:13px; color:#888;">
+          This code is valid for the next 5 minutes.
+        </span>
+      </p>
+
+      <hr style="margin:25px 0; border:none; border-top:1px solid #ddd;">
+
+      <p style="font-size:14px; color:#666;">
+        If you didn’t request a password reset, please ignore this email.
+        Your account is safe.
+      </p>
+
+      <p style="font-size:15px; color:#444; margin-top:20px;">
+        Stay secure & connected,<br>
+        <strong>Team <span style="color:#4A6CF7;">Ryngales</span></strong> 💙
+      </p>
+
+    </div>
+  </body>
+</html>
+`
   });
 
   // 🔐 Generate secure short-lived token
