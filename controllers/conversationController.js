@@ -130,7 +130,8 @@ export const getChatUsers = async (req, res) => {
         participant: {  
           receiver: otherUserId,  
           fullName: userFullName,  
-          phone: user?.phone || "",  
+          phone: user?.phone || "",
+          profileAvatar: user?.profile?.avatar || null,  
           existingName: contact  
             ? `${contact.firstName} ${contact.lastName}`.trim()  
             : null,  
