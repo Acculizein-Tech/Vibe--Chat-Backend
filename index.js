@@ -1,3 +1,5 @@
+//index.js
+
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -18,6 +20,7 @@ import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
 import UserContact from "./routes/userContactRoute.js";
+import superAdminRoutes from "./routes/superAdminRoute.js";
 
 
 dotenv.config();
@@ -35,6 +38,7 @@ const allowedOrigins = [
   "https://1xqi04y-sharma9299-8081.exp.direct",
   "https://vibechat.bizvility.com",
   "https://www.vibechat.bizvility.com",
+  "http://localhost:5173",
 ];
 
 app.use(
@@ -76,10 +80,10 @@ app.use("/api/message", messageRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/notification", notificationRoutes);
 app.use("/api/usercontacts", UserContact);
+app.use("/api/superadmin", superAdminRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
- 
