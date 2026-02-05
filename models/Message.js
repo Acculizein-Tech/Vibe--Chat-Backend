@@ -42,6 +42,8 @@ const messageSchema = new mongoose.Schema(
       ref: "Message",
       default: null,
     },
+    forwarded: { type: Boolean, default: false },
+forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
