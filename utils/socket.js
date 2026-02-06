@@ -96,241 +96,10 @@ export const setupSocket = (io) => {
 
 
 
-        /* =========================
-     🔁 FORWARD MESSAGE (PRODUCTION)
-  ========================= */
-
-        socket.on("forwardMessage", async (data) => {
-          try {
-            const {
-              sender,
-
-              // OLD (backward compatible)
-              messageId,
-              text,
-
-              // NEW
-              messageIds = [],
-
-              targetConversationIds = [],
-            } = data;
-
-            if (!sender || !targetConversationIds.length) {
-              return socket.emit("forward:error", {
-                message: "Invalid forward payload",
-              });
-            }
-
-            /* =========================
-               🔒 FORWARD LIMIT (PROD)
-            ========================== */
-            const MAX_FORWARD_LIMIT = 5;
-
-            if (targetConversationIds.length > MAX_FORWARD_LIMIT) {
-              return socket.emit("forward:error", {
-                message: `You can forward messages to only ${MAX_FORWARD_LIMIT} chats`,
-              });
-            }
-
-            /* =========================
-               📥 COLLECT ORIGINAL MESSAGES
-            ========================== */
-            let originals = [];
-
-            // NEW multi-message
-            if (messageIds.length) {
-              originals = await Message.find({
-                _id: { $in: messageIds },
-              }).sort({ createdAt: 1 });
-            }
-
-            // OLD single message
-            if (!originals.length && messageId) {
-              const msg = await Message.findById(messageId);
-              if (msg) originals = [msg];
-            }
-
-            // Direct text forward
-            if (!originals.length && text) {
-              originals = [
-                {
-                  text,
-                  sender: null,
-                },
-              ];
-            }
-
-            if (!originals.length) {
-              return socket.emit("forward:error", {
-                message: "Nothing to forward",
-              });
-            }
-
-            /* =========================
-               🔁 FAN-OUT BUILD (CORE)
-            ========================== */
-            const messagesToInsert = [];
-
-            for (const conversationId of targetConversationIds) {
-              for (const original of originals) {
-                messagesToInsert.push({
-                  sender,
-                  receiver: null,
-                  conversationId,
-                  text: original.text,
-                  forwarded: true,
-                  forwardedFrom: original.sender || null,
-                });
-              }
-            }
-
-            /* =========================
-               💾 BULK INSERT
-            ========================== */
-            const savedMessages = await Message.insertMany(messagesToInsert);
-
-            /* =========================
-               🔄 UPDATE CONVERSATIONS
-            ========================== */
-            const lastMessageMap = {};
-
-            savedMessages.forEach((msg) => {
-              lastMessageMap[msg.conversationId] = msg._id;
-            });
-
-            await Promise.all(
-              Object.entries(lastMessageMap).map(([cid, msgId]) =>
-                Conversation.findByIdAndUpdate(cid, {
-                  lastMessage: msgId,
-                })
-              )
-            );
-
-            /* =========================
-               📡 REALTIME EMIT
-            ========================== */
-            savedMessages.forEach((msg) => {
-              io.to(msg.conversationId.toString()).emit("messageReceived", msg);
-
-              io.emit("chat:list:update", {
-                conversationId: msg.conversationId,
-                text: msg.text,
-                sender: msg.sender,
-                createdAt: msg.createdAt,
-              });
-            });
-
-            /* =========================
-               ✅ SUCCESS RESPONSE
-            ========================== */
-            socket.emit("forward:success", {
-              forwardedChats: targetConversationIds.length,
-              forwardedMessages: savedMessages.length,
-            });
-
-            console.log(
-              `🔁 Forwarded ${savedMessages.length} messages to ${targetConversationIds.length} chats`
-            );
-          } catch (err) {
-            console.error("❌ forwardMessage error:", err);
-
-            socket.emit("forward:error", {
-              message: "Failed to forward messages",
-            });
-          }
-        });
 
 
-          /* =========================
-               🗑️ DELETE MESSAGE(S)
-            ========================== */
-        socket.on("deleteMessage", async (data) => {
-          try {
-            const {
-              sender,
-              messageId,        // OLD (single)
-              messageIds = [],  // NEW (multiple)
-              conversationId,
-              deleteFor = "everyone", // future-proof
-            } = data;
 
-            if (!sender || !conversationId) {
-              return socket.emit("delete:error", {
-                message: "Invalid delete payload",
-              });
-            }
 
-            /* =========================
-               📥 COLLECT MESSAGE IDS
-            ========================== */
-            const idsToDelete = [];
-
-            if (messageIds.length) {
-              idsToDelete.push(...messageIds);
-            } else if (messageId) {
-              idsToDelete.push(messageId);
-            }
-
-            if (!idsToDelete.length) {
-              return socket.emit("delete:error", {
-                message: "No messages selected",
-              });
-            }
-
-            /* =========================
-               🔐 DELETE FOR EVERYONE
-            ========================== */
-            if (deleteFor === "everyone") {
-              const updatedMessages = await Message.updateMany(
-                {
-                  _id: { $in: idsToDelete },
-                  sender: sender, // 🔐 only sender can delete for all
-                },
-                {
-                  $set: {
-                    text: "This message was deleted",
-                    type: "deleted",
-                    deletedForEveryone: true,
-                  },
-                }
-              );
-
-              // 🔄 Update lastMessage if needed
-              const lastMsg = await Message.findOne({
-                conversationId,
-              }).sort({ createdAt: -1 });
-
-              if (lastMsg) {
-                await Conversation.findByIdAndUpdate(conversationId, {
-                  lastMessage: lastMsg._id,
-                });
-              }
-
-              /* =========================
-                 📡 REALTIME EMIT
-              ========================== */
-              io.to(conversationId.toString()).emit("messageDeleted", {
-                messageIds: idsToDelete,
-                conversationId,
-                deleteFor: "everyone",
-              });
-
-              socket.emit("delete:success", {
-                deletedCount: updatedMessages.modifiedCount,
-              });
-
-              console.log(
-                `🗑️ Deleted ${updatedMessages.modifiedCount} messages for everyone`
-              );
-            }
-          } catch (err) {
-            console.error("❌ deleteMessage error:", err);
-
-            socket.emit("delete:error", {
-              message: "Failed to delete messages",
-            });
-          }
-        });
 
         /* ================================ 
            🔥 NEW PART – CHAT LIST UPDATE 
@@ -422,6 +191,214 @@ export const setupSocket = (io) => {
         }
       } catch (err) {
         console.error("❌ sendMessage error:", err);
+      }
+    });
+
+    /* =========================
+   🔁 FORWARD MESSAGE (PRODUCTION)
+========================= */
+
+
+socket.on("forwardMessage", async (data) => {
+  try {
+    const { sender, messageId, text, messageIds = [], targetConversationIds = [] } = data;
+
+    /* ============================================================
+       📥 COLLECT ORIGINALS (The "Baap" Fix)
+    ============================================================ */
+    let originals = [];
+
+    // 1. Array banao saari IDs ka jo frontend se aayi hain
+    const incomingIds = [...messageIds, messageId].filter(Boolean);
+    console.log(`🔁 [FORWARD] Incoming IDs: ${incomingIds.join(", ")}`);
+
+    // 2. 🔥 Sabse Zaroori: Sirf wahi IDs filter karo jo asli 24-char Hex hain
+    // Isse 'temp-...' waali IDs query tak pahunchengi hi nahi, toh CastError nahi aayega
+    const validMongoIds = incomingIds.filter(id => 
+      id && typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id)
+    );
+    
+    const tempIds = incomingIds.filter(id => 
+      id && typeof id === 'string' && id.startsWith("temp-")
+    );
+    
+    if (tempIds.length > 0) {
+      console.warn(`⚠️ [FORWARD] Filtering out tempIds (not yet synced): ${tempIds.join(", ")}`);
+    }
+    console.log(`✅ [FORWARD] Valid Mongo IDs: ${validMongoIds.join(", ")}`);
+
+    // 3. Agar valid IDs mili, tabhi DB query karo
+    if (validMongoIds.length > 0) {
+      originals = await Message.find({ _id: { $in: validMongoIds } }).lean();
+      console.log(`✅ [FORWARD] Found ${originals.length} messages in DB`);
+    }
+
+    // 4. 🔥 Race Condition Fallback (Fresh Message Case)
+    // Agar DB mein kuch nahi mila (kyunki IDs temp thin) toh text fallback use karo
+    if (originals.length === 0 && text) {
+      console.log("⚠️ [FORWARD] DB sync pending (temp-id case), using fallback text");
+      originals = [{ text: text, sender: sender }]; 
+    }
+
+    if (originals.length === 0) {
+      console.error("❌ [FORWARD] No messages found and no fallback text provided");
+      return socket.emit("forward:error", { message: "Nothing to forward" });
+    }
+
+    /* =========================
+       🔁 BUILD + INSERT
+    ========================== */
+    const messagesToInsert = [];
+
+    for (const conversationId of targetConversationIds) {
+      // Conversation ID check
+      if (!conversationId || !/^[0-9a-fA-F]{24}$/.test(conversationId)) continue;
+
+      const conv = await Conversation.findById(conversationId).select("participants isGroup").lean();
+      if (!conv) continue;
+
+      let receiver = null;
+      if (!conv.isGroup && conv.participants) {
+        receiver = conv.participants.find(p => p.toString() !== sender.toString()) || null;
+      }
+
+      for (const original of originals) {
+        messagesToInsert.push({
+          conversationId: conversationId,
+          sender: sender,
+          receiver: receiver,
+          text: original.text || "",
+          forwarded: true,
+          forwardedFrom: (original.sender && /^[0-9a-fA-F]{24}$/.test(original.sender)) 
+                         ? original.sender 
+                         : sender,
+          status: "sent"
+        });
+      }
+    }
+
+    const savedMessages = await Message.insertMany(messagesToInsert);
+
+    /* =========================
+       📡 EMITS
+    ========================== */
+    for (const msg of savedMessages) {
+      io.to(msg.conversationId.toString()).emit("messageReceived", msg);
+      await Conversation.findByIdAndUpdate(msg.conversationId, { lastMessage: msg._id });
+
+      const chatListPayload = {
+        conversationId: msg.conversationId,
+        text: msg.text,
+        sender: msg.sender,
+        receiver: msg.receiver,
+        createdAt: msg.createdAt,
+      };
+
+      [msg.sender, msg.receiver].forEach(uid => {
+        if (uid) {
+          const sid = onlineUsers.get(uid.toString());
+          if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
+        }
+      });
+    }
+
+    socket.emit("forward:success", { count: savedMessages.length });
+
+  } catch (err) {
+    console.error("🔥 CRITICAL ERROR:", err);
+    socket.emit("forward:error", { message: "Internal server error" });
+  }
+});
+
+
+    /* =========================
+       🗑️ DELETE MESSAGE(S)
+    ========================== */
+    socket.on("deleteMessage", async (data) => {
+      try {
+        const {
+          sender,
+          messageId,        // OLD (single)
+          messageIds = [],  // NEW (multiple)
+          conversationId,
+          deleteFor = "everyone", // future-proof
+        } = data;
+
+        if (!sender || !conversationId) {
+          return socket.emit("delete:error", {
+            message: "Invalid delete payload",
+          });
+        }
+
+        /* =========================
+           📥 COLLECT MESSAGE IDS
+        ========================== */
+        const idsToDelete = [];
+
+        if (messageIds.length) {
+          idsToDelete.push(...messageIds);
+        } else if (messageId) {
+          idsToDelete.push(messageId);
+        }
+
+        if (!idsToDelete.length) {
+          return socket.emit("delete:error", {
+            message: "No messages selected",
+          });
+        }
+
+        /* =========================
+           🔐 DELETE FOR EVERYONE
+        ========================== */
+        if (deleteFor === "everyone") {
+          const updatedMessages = await Message.updateMany(
+            {
+              _id: { $in: idsToDelete },
+              sender: sender, // 🔐 only sender can delete for all
+            },
+            {
+              $set: {
+                text: "This message was deleted",
+                type: "deleted",
+                deletedForEveryone: true,
+              },
+            }
+          );
+
+          // 🔄 Update lastMessage if needed
+          const lastMsg = await Message.findOne({
+            conversationId,
+          }).sort({ createdAt: -1 });
+
+          if (lastMsg) {
+            await Conversation.findByIdAndUpdate(conversationId, {
+              lastMessage: lastMsg._id,
+            });
+          }
+
+          /* =========================
+             📡 REALTIME EMIT
+          ========================== */
+          io.to(conversationId.toString()).emit("messageDeleted", {
+            messageIds: idsToDelete,
+            conversationId,
+            deleteFor: "everyone",
+          });
+
+          socket.emit("delete:success", {
+            deletedCount: updatedMessages.modifiedCount,
+          });
+
+          console.log(
+            `🗑️ Deleted ${updatedMessages.modifiedCount} messages for everyone`
+          );
+        }
+      } catch (err) {
+        console.error("❌ deleteMessage error:", err);
+
+        socket.emit("delete:error", {
+          message: "Failed to delete messages",
+        });
       }
     });
 
