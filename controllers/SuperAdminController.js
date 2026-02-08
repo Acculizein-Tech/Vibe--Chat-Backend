@@ -76,7 +76,7 @@ export const addNewUser = asyncHandler(async (req, res) => {
   // }
 
   // Define allowed fields for the user
-  const allowedFields = ['fullName', 'email', 'password', 'role'];
+  const allowedFields = ['fullName', 'email', 'phone', 'password', 'role'];
   const userData = {};
 
   // Populate userData with allowed fields from req.body
@@ -123,7 +123,7 @@ export const addNewUser = asyncHandler(async (req, res) => {
       fullName: newUser.fullName,
       email: newUser.email,
       role: newUser.role,
-      
+      phone:newUser.phone,
       city: newUser.city,
       state: newUser.state,
       country: newUser.country,
@@ -139,7 +139,7 @@ export const addNewUser = asyncHandler(async (req, res) => {
 export const updateUserProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const allowedFields = ['fullName', 'email', 'role'];
+  const allowedFields = ['fullName', 'email', 'password', 'role'];
   const updateData = {};
 
   for (let key of allowedFields) {
