@@ -104,7 +104,7 @@ export const getChatUsers = async (req, res) => {
       if (!otherUserId) continue;  
   
       const user = await User.findById(otherUserId)  
-        .select("fullName firstName lastName phone username profile.avatar")  
+        .select("fullName firstName lastName phone username profile.avatar userImages")  
         .lean();  
   
       const contact = await UserContact.findOne({  
@@ -131,6 +131,7 @@ export const getChatUsers = async (req, res) => {
           receiver: otherUserId,  
           fullName: userFullName,  
           phone: user?.phone || "",
+          userImages: user?.userImages || [],
           profileAvatar: user?.profile?.avatar || null,  
           existingName: contact  
             ? `${contact.firstName} ${contact.lastName}`.trim()  
@@ -148,4 +149,30 @@ export const getChatUsers = async (req, res) => {
     console.error("❌ getChatUsers error", err);  
     res.status(500).json({ status: "Error", message: err.message });  
   }  
+};
+
+
+//\delete a conversation by ID
+export const deleteConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    // Check if the logged-in user is a participant of the conversation
+    if (!conversation.participants.includes(req.user._id)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    await Conversation.findByIdAndDelete(conversationId);
+    await Message.deleteMany({ conversationId });
+
+    res.json({ message: "Conversation and its messages deleted successfully" });
+  } catch (error) {
+    console.error("❌ deleteConversation error", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 };

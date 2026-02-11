@@ -6,6 +6,8 @@ import {
   onlineUsers,
   activeConversationViewers,
 } from "../utils/socketState.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import { uploadToS3 } from "../middlewares/upload.js";
 
 
 // ✅ Send a message
@@ -252,4 +254,87 @@ export const deleteMessage = async (req, res) => {
 };
 
 
-//multiple message select and forwanrd
+//multiple imags
+export const uploadChatImages = asyncHandler(async (req, res) => {
+  const { conversationId, receiverId } = req.body;
+  const files = req.files || [];
+
+  if (!conversationId) {
+    return res.status(400).json({
+      success: false,
+      message: "conversationId is required",
+    });
+  }
+
+  if (!files.length) {
+    return res.status(400).json({
+      success: false,
+      message: "No images received",
+    });
+  }
+
+  // 🔐 Validate conversation access
+  const conversation = await Conversation.findOne({
+    _id: conversationId,
+    participants: req.user._id,
+  });
+
+  if (!conversation) {
+    return res.status(403).json({
+      success: false,
+      message: "Not allowed to upload to this conversation",
+    });
+  }
+
+  // 🔥 Parallel S3 uploads
+  const uploadResults = await Promise.allSettled(
+    files.map((file) => uploadToS3(file, req))
+  );
+
+  const media = [];
+  const failedFiles = [];
+
+  uploadResults.forEach((result, index) => {
+    if (result.status === "fulfilled" && result.value.success) {
+      media.push({
+        url: result.value.url,
+        type: "image",
+      });
+    } else {
+      failedFiles.push({
+        fileName: files[index].originalname,
+        reason: result.reason?.message || "Upload failed",
+      });
+    }
+  });
+
+  if (!media.length) {
+    return res.status(500).json({
+      success: false,
+      message: "All uploads failed",
+      failed: failedFiles,
+    });
+  }
+
+  // 🟢 Create message with media
+  const message = await Message.create({
+    conversationId,
+    sender: req.user._id,
+    receiver: receiverId || null, // optional for 1-to-1
+    text: "",
+    media,
+    status: "sent",
+  });
+
+  // optional: update lastMessage
+  conversation.lastMessage = message._id;
+  await conversation.save();
+
+  return res.json({
+    success: true,
+    message: "Images uploaded & message created",
+    messageId: message._id,
+    media,
+    failed: failedFiles,
+  });
+});

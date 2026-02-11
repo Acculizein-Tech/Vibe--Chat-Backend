@@ -1,6 +1,6 @@
 import express from "express";
 import upload, { uploadToS3 } from "../middlewares/upload.js";
-import moment from "moment-timezone"; // ✅ Add this
+import moment from "moment-timezone";
 
 const router = express.Router();
 
@@ -10,113 +10,130 @@ const mediaFields = upload.fields([
   { name: "certificateImages", maxCount: 5 },
   { name: "galleryImages", maxCount: 100 },
   { name: "eventsImage", maxCount: 1 },
-  { name: "aadhaarFront", maxCount: 1 }, // ✅ Aadhaar front photo
-  { name: "aadhaarBack", maxCount: 1 }, // ✅ Aadhaar back photo
-  { name: "driverPhoto", maxCount: 1 }, // ✅ New: Driver Photo
-  { name: "licenseCopy", maxCount: 1 }, // ✅ New: License Copy
-  { name: "others", maxCount: 5 }, // ✅ New field
-  {name: "rewardImage", maxCount: 1},
-  {name: "ryngales-profile", maxCount: 1}, // 🆕 NEW: Ryngales profile image
+  { name: "aadhaarFront", maxCount: 1 },
+  { name: "aadhaarBack", maxCount: 1 },
+  { name: "driverPhoto", maxCount: 1 },
+  { name: "licenseCopy", maxCount: 1 },
+  { name: "others", maxCount: 5 },
+  { name: "rewardImage", maxCount: 1 },
+  { name: "ryngales-profile", maxCount: 1 },
+  { name: "attachments", maxCount: 30 },
 
-
-   // 🟢 Advertisement fields
+  // Advertisement
   { name: "adImage", maxCount: 5 },
   { name: "adVideo", maxCount: 1 },
 
-  {name : "qrCode", maxCount: 1}, // 🆕 NEW: Business QR code upload (usually 1 file
+  { name: "qrCode", maxCount: 1 },
 ]);
 
-// ✅ Multer wrapper
+// ✅ Multer wrapper (same, but clean exit)
 const handleUpload = (req, res, next) => {
   mediaFields(req, res, function (err) {
-    if (err) {
-      if (
-        err.code === "LIMIT_UNEXPECTED_FILE" &&
-        err.field === "galleryImages"
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "❌ You can upload maximum 100 images in galleryImages",
-        });
-      }
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res
-          .status(400)
-          .json({ success: false, message: "File size too large" });
-      }
-      if (err.code === "LIMIT_PART_COUNT") {
-        return res
-          .status(400)
-          .json({ success: false, message: "Too many parts in request" });
-      }
+    if (!err) return next();
 
-      if (err.code === "LIMIT_UNEXPECTED_FILE") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: `❌ Unexpected file field: ${err.field}`,
-          });
-      }
+    // 🧠 Known fields maxCount mapping
+    const fieldLimits = {
+      profileImage: 1,
+      coverImage: 1,
+      certificateImages: 5,
+      galleryImages: 100,
+      eventsImage: 1,
+      aadhaarFront: 1,
+      aadhaarBack: 1,
+      driverPhoto: 1,
+      licenseCopy: 1,
+      others: 5,
+      rewardImage: 1,
+      "ryngales-profile": 1,
+      "ryngales-store": 1,
+      adImage: 5,
+      adVideo: 1,
+      qrCode: 1,
+    };
+
+    // ❌ File size exceeded
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.json({
+        success: false,
+        message: "File size too large",
+      });
     }
-    next();
+
+    // ❌ Too many files for a known field
+    if (err.code === "LIMIT_UNEXPECTED_FILE" && fieldLimits[err.field]) {
+      return res.json({
+        success: false,
+        message: `You can upload maximum ${fieldLimits[err.field]} images in one time.`,
+      });
+    }
+
+    // ❌ Truly unknown field
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res.json({
+        success: false,
+        message: `Unexpected file field: ${err.field}`,
+      });
+    }
+
+    return res.json({
+      success: false,
+      message: "Upload error",
+    });
   });
 };
 
+
 router.post("/upload", handleUpload, async (req, res) => {
-  try {
-    const uploadedFiles = {};
-    const files = req.files || {};
+  const files = req.files || {};
 
-    // Get current time in Asia/Kolkata
-    const timestampIST = moment()
-      .tz("Asia/Kolkata")
-      .format("YYYY-MM-DD HH:mm:ss");
-
-    // for (const field in files) {
-    //   uploadedFiles[field] = [];
-
-    //   for (const file of files[field]) {
-    //     const s3Url = await uploadToS3(file, req);
-
-    //     console.log(`📦 Uploaded ${file.originalname} at ${timestampIST}`); // ✅ Log IST time
-
-    //     uploadedFiles[field].push({
-    //       url: s3Url,
-    //       uploadedAt: timestampIST, // ✅ Include timestamp in response
-    //     });
-    //   }
-    // }
-    for (const field in files) {
-
-      uploadedFiles[field] = [];
-      for (const file of files[field]) {
-  try {
-     // Pass adId if uploading advertisement media
-          if ((field === "adImage" || field === "adVideo") && req.body.adId) {
-            req.params.adId = req.body.adId; // ensure folder uses adId
-          }
-
-    const s3Url = await uploadToS3(file, req);
-    uploadedFiles[field].push({ url: s3Url, uploadedAt: timestampIST });
-  } catch (uploadErr) {
-    console.warn(`Failed to upload ${file.originalname}: ${uploadErr.message}`);
-  }
-}
-    }
-
-
-    res.json({
-      success: true,
-      message: "✅ Files uploaded successfully",
-      files: uploadedFiles,
+  // 🆕 No files safety
+  if (Object.keys(files).length === 0) {
+    return res.json({
+      success: false,
+      message: "No files received",
     });
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({ error: error.message });
   }
-  
 
+  const uploadedFiles = {};
+  const failedFiles = []; // 🆕 Vibechat-style partial failure
+
+  const timestampIST = moment()
+    .tz("Asia/Kolkata")
+    .format("YYYY-MM-DD HH:mm:ss");
+
+  for (const field in files) {
+    uploadedFiles[field] = [];
+
+    for (const file of files[field]) {
+      // 🆕 Advertisement folder support
+      if ((field === "adImage" || field === "adVideo") && req.body.adId) {
+        req.params.adId = req.body.adId;
+      }
+
+      const result = await uploadToS3(file, req);
+
+      if (result.success) {
+        uploadedFiles[field].push({
+          url: result.url,
+          uploadedAt: timestampIST,
+        });
+      } else {
+        // 🆕 silently collect failed ones
+        failedFiles.push({
+          field,
+          fileName: file.originalname,
+          reason: result.message,
+        });
+      }
+    }
+  }
+
+  return res.json({
+    success: true,
+    message: "Upload completed",
+    files: uploadedFiles,
+    failed: failedFiles, // 🆕 client can ignore or show
+  });
 });
 
 export default router;

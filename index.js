@@ -21,6 +21,7 @@ import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
 import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/superAdminRoute.js";
+import uploadRoutes from "./routes/uploadData.js";
 
 
 dotenv.config();
@@ -81,6 +82,8 @@ app.use("/api/contacts", contactRoutes);
 app.use("/api/notification", notificationRoutes);
 app.use("/api/usercontacts", UserContact);
 app.use("/api/superadmin", superAdminRoutes);
+app.use("/api", uploadRoutes);
+
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;

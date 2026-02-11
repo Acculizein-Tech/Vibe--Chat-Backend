@@ -1,7 +1,8 @@
 import express from 'express';
 import upload from '../middlewares/upload.js';
 import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral,
-   getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode, DeleteCustomCode, blockUser, unblockUser, getBlockedUsers, filterContacts, deleteUserAccount } from '../controllers/userController.js';
+   getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode,
+    DeleteCustomCode, blockUser, unblockUser, getBlockedUsers, filterContacts, deleteUserAccount} from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';

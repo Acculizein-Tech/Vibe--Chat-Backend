@@ -12,7 +12,7 @@ const generateToken = (id, expiresIn) => {
 
 // Helper: Generate 6-digit OTP
 const generateOTP = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
+  Math.floor(1000 + Math.random() * 9000).toString();
 // ✅ ADD THIS FUNCTION
 const generateReferralCode = () => {
   return "SLS" + Math.floor(1000 + Math.random() * 9000);

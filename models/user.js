@@ -77,7 +77,7 @@ blockedUsers: [
 originalEmail: {
   type: String,
   index: true,
-}
+},
 
 
 

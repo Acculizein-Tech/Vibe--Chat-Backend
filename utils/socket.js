@@ -199,7 +199,7 @@ export const setupSocket = (io) => {
 ========================= */
 
 
-socket.on("forwardMessage", async (data) => {
+   socket.on("forwardMessage", async (data) => {
   try {
     const { sender, messageId, text, messageIds = [], targetConversationIds = [] } = data;
 
@@ -308,7 +308,7 @@ socket.on("forwardMessage", async (data) => {
     console.error("🔥 CRITICAL ERROR:", err);
     socket.emit("forward:error", { message: "Internal server error" });
   }
-});
+   });
 
 
     /* =========================
@@ -351,7 +351,7 @@ socket.on("forwardMessage", async (data) => {
            🔐 DELETE FOR EVERYONE
         ========================== */
         if (deleteFor === "everyone") {
-          const updatedMessages = await Message.updateMany(
+          const updatedMessages = await Message.deleteMany(
             {
               _id: { $in: idsToDelete },
               sender: sender, // 🔐 only sender can delete for all
@@ -382,11 +382,12 @@ socket.on("forwardMessage", async (data) => {
           io.to(conversationId.toString()).emit("messageDeleted", {
             messageIds: idsToDelete,
             conversationId,
+            hardDelete: true,
             deleteFor: "everyone",
           });
 
           socket.emit("delete:success", {
-            deletedCount: updatedMessages.modifiedCount,
+            deletedCount: updatedMessages.deletedCount,
           });
 
           console.log(

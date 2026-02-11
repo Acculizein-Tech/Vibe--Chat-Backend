@@ -9,7 +9,7 @@ const conversationSchema = new mongoose.Schema(
         required: true,
       },
     ],
-     receiverPhone: { type: String }, // when user not yet registered
+    receiverPhone: { type: String }, // when user not yet registered
     status: {
       type: String,
       enum: ["active", "pending", "closed"],
@@ -24,7 +24,12 @@ const conversationSchema = new mongoose.Schema(
     groupName: String,
     groupAvatar: String,
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    userImages: {
+      type: [String],
+      default: []
+    },
   },
+
   { timestamps: true }
 );
 
