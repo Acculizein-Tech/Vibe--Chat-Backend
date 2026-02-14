@@ -22,7 +22,7 @@ import { setupSocket } from "./utils/socket.js";
 import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/superAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
-
+//backend superadmin routes fix
 
 dotenv.config();
 connectDB();
