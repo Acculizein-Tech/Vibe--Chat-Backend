@@ -20,7 +20,7 @@ import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
 import UserContact from "./routes/userContactRoute.js";
-import superAdminRoutes from "./routes/superAdminRoute.js";
+import superAdminRoutes from "./routes/SuperAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
 //backend superadmin routes fix
 
