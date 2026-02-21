@@ -22,6 +22,30 @@ const messageSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    encryptedText: {
+      type: String,
+      default: "",
+    },
+    textIv: {
+      type: String,
+      default: "",
+    },
+    textAuthTag: {
+      type: String,
+      default: "",
+    },
+    textAlg: {
+      type: String,
+      default: "aes-256-gcm",
+    },
+    encryptionVersion: {
+      type: Number,
+      default: 1,
+    },
+    isEncrypted: {
+      type: Boolean,
+      default: false,
+    },
     media: [
       {
         url: String, // image, video, audio, document
@@ -37,13 +61,19 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    deletedFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
       default: null,
     },
     forwarded: { type: Boolean, default: false },
-forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

@@ -1,5 +1,6 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
+import GroupConversation from "../models/GroupConversation.js";
 import { io } from "../index.js";
 import Notification from "../models/Notification.js";
 import {
@@ -8,6 +9,10 @@ import {
 } from "../utils/socketState.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { uploadToS3 } from "../middlewares/upload.js";
+import {
+  encryptMessageText,
+  materializeMessageForClient,
+} from "../utils/messageCrypto.js";
 
 
 // ✅ Send a message
@@ -136,22 +141,52 @@ export const sendMessage = async (req, res) => {
     const sender = req.user._id;
     const { conversationId, receiver, text } = req.body;
 
-    if (!conversationId || !receiver || !text) {
+    if (!conversationId || !text) {
       return res.status(400).json({ error: "Missing fields" });
     }
+
+    const directConversation = await Conversation.findById(conversationId)
+      .select("isGroup")
+      .lean();
+    const groupConversation = directConversation
+      ? null
+      : await GroupConversation.findById(conversationId)
+          .select("participants")
+          .lean();
+
+    const isGroupConversation = Boolean(groupConversation);
+    const conversation = directConversation || groupConversation;
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    if (!isGroupConversation && !receiver) {
+      return res.status(400).json({ error: "Receiver is required for direct chat" });
+    }
+
+    const encrypted = await encryptMessageText({
+      conversationId,
+      text,
+    });
 
     const message = await Message.create({
       conversationId,
       sender,
-      receiver,
-      text,
+      receiver: isGroupConversation ? null : receiver,
+      ...encrypted,
     });
 
-    await Conversation.findByIdAndUpdate(conversationId, {
-      lastMessage: message._id,
-    });
+    if (isGroupConversation) {
+      await GroupConversation.findByIdAndUpdate(conversationId, {
+        lastMessage: message._id,
+      });
+    } else {
+      await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessage: message._id,
+      });
+    }
 
-    res.status(201).json(message);
+    const outgoing = await materializeMessageForClient(message);
+    res.status(201).json(outgoing);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -163,10 +198,21 @@ export const sendMessage = async (req, res) => {
 export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const messages = await Message.find({ conversationId }).sort({
+    const userId = req.user?._id;
+    const query = { conversationId };
+
+    if (userId) {
+      query.deletedFor = { $nin: [userId] };
+    }
+
+    const messages = await Message.find(query).sort({
       createdAt: 1,
     });
-    res.json(messages);
+    const cache = new Map();
+    const outgoing = await Promise.all(
+      messages.map((msg) => materializeMessageForClient(msg, cache)),
+    );
+    res.json(outgoing);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -189,11 +235,23 @@ export const editMessage = async (req, res) => {
       return res.status(403).json({ error: "You can edit only your messages" });
     }
 
-    message.text = text;
+    const encrypted = await encryptMessageText({
+      conversationId: message.conversationId,
+      text,
+    });
+
+    message.text = encrypted.text;
+    message.encryptedText = encrypted.encryptedText;
+    message.textIv = encrypted.textIv;
+    message.textAuthTag = encrypted.textAuthTag;
+    message.textAlg = encrypted.textAlg;
+    message.encryptionVersion = encrypted.encryptionVersion;
+    message.isEncrypted = encrypted.isEncrypted;
     message.edited = true; // add this field in schema if not already
     await message.save();
 
-    res.status(200).json({ message: "Message updated successfully", data: message });
+    const outgoing = await materializeMessageForClient(message);
+    res.status(200).json({ message: "Message updated successfully", data: outgoing });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -235,7 +293,9 @@ export const deleteMessage = async (req, res) => {
     }
 
     // NEW AUTH LOGIC: Allow if user is in the conversation (not just sender)
-    const conversation = await Conversation.findById(message.conversationId);
+    const conversation =
+      (await Conversation.findById(message.conversationId)) ||
+      (await GroupConversation.findById(message.conversationId));
     if (!conversation || !conversation.participants.includes(userId)) {
       return res.status(403).json({ error: "You can only delete messages in your conversations" });
     }
@@ -274,10 +334,15 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
   }
 
   // 🔐 Validate conversation access
-  const conversation = await Conversation.findOne({
-    _id: conversationId,
-    participants: req.user._id,
-  });
+  const conversation =
+    (await Conversation.findOne({
+      _id: conversationId,
+      participants: req.user._id,
+    })) ||
+    (await GroupConversation.findOne({
+      _id: conversationId,
+      participants: req.user._id,
+    }));
 
   if (!conversation) {
     return res.status(403).json({

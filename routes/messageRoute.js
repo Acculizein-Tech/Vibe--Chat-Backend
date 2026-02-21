@@ -5,7 +5,7 @@ import { protect } from "../middlewares/auth.js";
 const router = express.Router();
 
 router.post("/", protect, sendMessage);
-router.get("/:conversationId", getMessages);
+router.get("/:conversationId", protect, getMessages);
 
 // ✅ Edit & delete
 router.put("/edit/:messageId", protect, editMessage);

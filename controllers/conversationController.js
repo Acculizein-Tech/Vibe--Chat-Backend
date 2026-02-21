@@ -2,6 +2,10 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";  
 import UserContact from "../models/UserContact.js";  
 import User from "../models/user.js";  
+import GroupConversation from "../models/GroupConversation.js";
+import { decryptMessageText } from "../utils/messageCrypto.js";
+import mongoose from "mongoose";
+import { onlineUsers } from "../utils/socketState.js";
 // ✅ Create or get existing conversation between two users  
   
    
@@ -14,8 +18,17 @@ export const getUserConversations = async (req, res) => {
     })  
       .populate("participants", "name email")  
       .populate("lastMessage");  
-      const getExistName = async  
-    res.status(200).json(conversations);  
+    const cache = new Map();
+    const hydrated = await Promise.all(
+      conversations.map(async (conv) => {
+        const plain = conv.toObject();
+        if (plain.lastMessage) {
+          plain.lastMessage.text = await decryptMessageText(plain.lastMessage, cache);
+        }
+        return plain;
+      }),
+    );
+    res.status(200).json(hydrated);  
   } catch (error) {  
     res.status(500).json({ error: error.message });  
   }  
@@ -83,6 +96,84 @@ export const getOrCreateConversation = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });  
   }  
 };  
+
+export const createGroupConversation = async (req, res) => {
+  try {
+    const creatorId = req.user?._id;
+    const { participantIds = [], groupName = "" } = req.body || {};
+
+    if (!creatorId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const cleanName = String(groupName || "").trim();
+    if (!cleanName) {
+      return res.status(400).json({ message: "Group name is required" });
+    }
+
+    const validParticipantIds = Array.from(
+      new Set(
+        (Array.isArray(participantIds) ? participantIds : [])
+          .map((id) => String(id || "").trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id)),
+      ),
+    );
+
+    const participants = Array.from(
+      new Set([String(creatorId), ...validParticipantIds]),
+    ).map((id) => new mongoose.Types.ObjectId(id));
+
+    if (participants.length < 2) {
+      return res.status(400).json({
+        message: "At least one valid participant is required to create group",
+      });
+    }
+
+    const groupConversation = await GroupConversation.create({
+      participants,
+      groupName: cleanName,
+      createdBy: creatorId,
+      admins: [creatorId],
+      status: "active",
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+      const creatorName =
+        req.user?.fullName ||
+        req.user?.username ||
+        req.user?.phone ||
+        "Someone";
+      const payload = {
+        conversationId: String(groupConversation._id),
+        action: "group:created",
+        type: "group",
+        name: cleanName,
+        avatar: String(groupConversation.groupAvatar || ""),
+        text: `Group created by ${creatorName}`,
+        createdAt: new Date().toISOString(),
+      };
+      participants.forEach((pid) => {
+        const uid = String(pid);
+        io.to(`user:${uid}`).emit("chat:list:refresh", payload);
+        io.to(`user:${uid}`).emit("chat:list:patch", payload);
+        const sid = onlineUsers.get(uid);
+        if (sid) {
+          io.to(sid).emit("chat:list:refresh", payload);
+          io.to(sid).emit("chat:list:patch", payload);
+        }
+      });
+    }
+
+    return res.status(201).json({
+      message: "Group conversation created",
+      groupConversation,
+    });
+  } catch (error) {
+    console.error("createGroupConversation error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
   
 //get those users whose have the converstaion with the logged in user  
 // Get all users who have a conversation with the logged-in user  
@@ -95,8 +186,56 @@ export const getChatUsers = async (req, res) => {
     }).lean();  
   
     const uniqueUsers = [];  
-  
-    for (const convo of conversations) {  
+
+    const groupConversations = await GroupConversation.find({
+      participants: ownerId,
+    })
+      .populate("createdBy", "fullName firstName lastName username phone")
+      .lean();
+
+    for (const group of groupConversations) {
+      let lastMessage = null;
+      if (group.lastMessage && mongoose.Types.ObjectId.isValid(group.lastMessage)) {
+        lastMessage = await Message.findById(group.lastMessage)
+          .select(
+            "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt",
+          )
+          .lean();
+      }
+
+      const lastMessageText = lastMessage
+        ? await decryptMessageText(lastMessage)
+        : null;
+
+      const createdByName =
+        group?.createdBy?.fullName ||
+        [group?.createdBy?.firstName, group?.createdBy?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        group?.createdBy?.username ||
+        group?.createdBy?.phone ||
+        "Unknown";
+
+      uniqueUsers.push({
+        conversationId: group._id,
+        type: "group",
+        participant: {
+          receiver: null,
+          fullName: group.groupName || "Unnamed Group",
+          phone: "",
+          userImages: [],
+          profileAvatar: group.groupAvatar || null,
+          existingName: null,
+          existingUserId: null,
+          lastMessage: lastMessageText || null,
+          lastMessageAt: lastMessage?.createdAt || null,
+          groupCreatedBy: createdByName,
+        },
+      });
+    }
+
+    for (const convo of conversations) {
       const otherUserId = convo.participants.find(  
         (id) => id.toString() !== ownerId.toString()  
       );  
@@ -123,10 +262,14 @@ export const getChatUsers = async (req, res) => {
         "";  
       const lastMessage = await Message.findOne({  
         conversationId: convo._id,  
-      }).sort({ createdAt: -1 }).select("text createdAt").lean();  
+      }).sort({ createdAt: -1 }).select("text encryptedText textIv textAuthTag isEncrypted conversationId createdAt").lean();  
+      const lastMessageText = lastMessage
+        ? await decryptMessageText(lastMessage)
+        : null;
        
       uniqueUsers.push({  
         conversationId: convo._id,  
+        type: "individual",
         participant: {  
           receiver: otherUserId,  
           fullName: userFullName,  
@@ -137,7 +280,7 @@ export const getChatUsers = async (req, res) => {
             ? `${contact.firstName} ${contact.lastName}`.trim()  
             : null,  
             existingUserId: contact ? contact._id : null,  
-            lastMessage: lastMessage?.text || null, 
+            lastMessage: lastMessageText || null, 
             lastMessageAt: lastMessage?.createdAt || null,  
         },  
       })  

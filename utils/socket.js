@@ -1,8 +1,15 @@
-import Message from "../models/Message.js";
+﻿import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
+import GroupConversation from "../models/GroupConversation.js";
 import Notification from "../models/Notification.js";
 import { sendPushNotification } from "./pushService.js";
 import User from "../models/user.js";
+import mongoose from "mongoose";
+import {
+  encryptMessageText,
+  materializeMessageForClient,
+  decryptMessageText,
+} from "./messageCrypto.js";
 
 import {
   onlineUsers,
@@ -12,8 +19,70 @@ import {
 
 export const setupSocket = (io) => {
   io.on("connection", (socket) => {
-    console.log("🟢 Socket connected:", socket.id);
+    console.log("ðŸŸ¢ Socket connected:", socket.id);
 
+    const resolveConversation = async (conversationId) => {
+      if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
+        return null;
+      }
+
+      const direct = await Conversation.findById(conversationId)
+        .select("participants isGroup lastMessage")
+        .lean();
+      if (direct) {
+        return { ...direct, source: "direct", isGroup: Boolean(direct.isGroup) };
+      }
+
+      const group = await GroupConversation.findById(conversationId)
+        .select("participants groupName lastMessage")
+        .lean();
+      if (group) {
+        return { ...group, source: "group", isGroup: true };
+      }
+      return null;
+    };
+
+    const updateLastMessageRef = async ({ conversationId, source, messageId }) => {
+      if (!conversationId || !source || !messageId) return;
+      if (source === "group") {
+        await GroupConversation.findByIdAndUpdate(conversationId, {
+          lastMessage: messageId,
+        });
+        return;
+      }
+      await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessage: messageId,
+      });
+    };
+
+    const emitToUser = (userId, event, payload) => {
+      const uid = String(userId || "");
+      if (!uid) return;
+      io.to(`user:${uid}`).emit(event, payload);
+      const sid = onlineUsers.get(uid);
+      if (sid) io.to(sid).emit(event, payload);
+    };
+
+    // Dedupe repeated conversationOpen acknowledgements from same socket/user.
+    const lastReadResetEmitAt = new Map();
+    const READ_RESET_DEDUPE_MS = 1200;
+
+    const emitChatListPatch = async ({ conversationId, text, createdAt }) => {
+      if (!conversationId) return;
+      const conv = await resolveConversation(conversationId);
+      if (!conv?.participants?.length) return;
+
+      const payload = {
+        conversationId,
+        text: text ?? "",
+        createdAt: createdAt || new Date().toISOString(),
+      };
+
+      conv.participants.forEach((uid) => {
+        const sid = onlineUsers.get(uid.toString());
+        if (sid) io.to(sid).emit("chat:list:patch", payload);
+      });
+    };
     /* ========================= 
        REGISTER USER 
     ========================== */
@@ -21,7 +90,8 @@ export const setupSocket = (io) => {
       if (!userId) return;
       socket.userId = userId.toString();
       onlineUsers.set(socket.userId, socket.id);
-      console.log("✅ User registered:", socket.userId);
+      socket.join(`user:${socket.userId}`);
+      console.log("âœ… User registered:", socket.userId);
     });
 
     /* ========================= 
@@ -35,18 +105,84 @@ export const setupSocket = (io) => {
     /* ========================= 
        CHAT OPEN / CLOSE 
     ========================== */
-    socket.on("conversationOpen", ({ conversationId, userId }) => {
+    socket.on("conversationOpen", async ({ conversationId, userId }) => {
       if (!conversationId || !userId) return;
 
-      if (!activeConversationViewers.has(conversationId)) {
-        activeConversationViewers.set(conversationId, new Set());
+      console.log("?? Chat open:", conversationId, userId);
+
+      try {
+        if (
+          !mongoose.Types.ObjectId.isValid(conversationId) ||
+          !mongoose.Types.ObjectId.isValid(userId)
+        ) {
+          return;
+        }
+
+        const conversation = await resolveConversation(conversationId);
+        const isParticipant = !!conversation?.participants?.some(
+          (p) => String(p) === String(userId),
+        );
+        if (!isParticipant) return;
+
+        if (!activeConversationViewers.has(conversationId)) {
+          activeConversationViewers.set(conversationId, new Set());
+        }
+        activeConversationViewers.get(conversationId).add(userId.toString());
+
+        const conversationObjectId = new mongoose.Types.ObjectId(conversationId);
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+
+        const targetNotifications = await Notification.find(
+          {
+            recipient: userObjectId,
+            type: "NEW_MESSAGE",
+            "data.conversationId": conversationObjectId,
+            isRead: false,
+          },
+          { _id: 1 },
+        ).lean();
+
+        if (!targetNotifications.length) {
+          return;
+        }
+
+        const readResult = await Notification.updateMany(
+          {
+            _id: { $in: targetNotifications.map((n) => n._id) },
+          },
+          { $set: { isRead: true } },
+        );
+
+        if (readResult.modifiedCount > 0) {
+          const unreadCount = await Notification.countDocuments({
+            recipient: userId,
+            isRead: false,
+          });
+          const resetPayload = {
+            conversationId: conversationId.toString(),
+            unread: 0,
+            unreadTotal: unreadCount,
+            updatedAt: new Date().toISOString(),
+          };
+          const dedupeKey = `${socket.id}:${String(userId)}:${String(conversationId)}`;
+          const nowTs = Date.now();
+          const lastTs = lastReadResetEmitAt.get(dedupeKey) || 0;
+
+          if (nowTs - lastTs >= READ_RESET_DEDUPE_MS) {
+            lastReadResetEmitAt.set(dedupeKey, nowTs);
+            emitToUser(userId, "conversationRead", resetPayload);
+            emitToUser(userId, "chat:unread:reset", resetPayload);
+            emitToUser(userId, "chat:list:patch", {
+              conversationId: conversationId.toString(),
+              unread: 0,
+              createdAt: resetPayload.updatedAt,
+            });
+            emitToUser(userId, "unreadCount", unreadCount);
+          }
+        }
+      } catch (err) {
+        console.error("conversationOpen read-sync error:", err);
       }
-
-      activeConversationViewers
-        .get(conversationId)
-        .add(userId.toString());
-
-      console.log("👀 Chat open:", conversationId, userId);
     });
 
     socket.on("conversationClose", ({ conversationId, userId }) => {
@@ -56,7 +192,7 @@ export const setupSocket = (io) => {
         .get(conversationId)
         ?.delete(userId.toString());
 
-      console.log("❌ Chat closed:", conversationId, userId);
+      console.log("âŒ Chat closed:", conversationId, userId);
     });
 
     /* ========================= 
@@ -65,7 +201,7 @@ export const setupSocket = (io) => {
     socket.on("appState", (state) => {
       if (!socket.userId) return;
       userAppState.set(socket.userId, state);
-      console.log("📱 AppState:", socket.userId, state);
+      console.log("ðŸ“± AppState:", socket.userId, state);
     });
 
     /* ========================= 
@@ -73,26 +209,45 @@ export const setupSocket = (io) => {
     ========================== */
     socket.on("sendMessage", async (data) => {
       try {
-        const { sender, receiver, text, conversationId } = data;
-        if (!sender || !receiver || !text || !conversationId) return;
-        if (sender.toString() === receiver.toString()) return;
+        const { sender, receiver, text, conversationId, tempId } = data;
+        if (!sender || !text || !conversationId) return;
+        const conversation = await resolveConversation(conversationId);
+        if (!conversation) return;
+        const isGroupConversation = Boolean(conversation.isGroup);
+        if (!isGroupConversation && !receiver) return;
+        if (
+          !isGroupConversation &&
+          receiver &&
+          sender.toString() === receiver.toString()
+        ) return;
+        const textValue = String(text || "");
+        const cryptoCache = new Map();
+        const encrypted = await encryptMessageText({
+          conversationId,
+          text: textValue,
+          cache: cryptoCache,
+        });
 
-        /* 1️⃣ SAVE MESSAGE */
+        /* 1ï¸âƒ£ SAVE MESSAGE */
         const msg = await Message.create({
           sender,
-          receiver,
-          text,
+          receiver: isGroupConversation ? null : receiver,
           conversationId,
+          ...encrypted,
         });
 
-        await Conversation.findByIdAndUpdate(conversationId, {
-          lastMessage: msg._id,
+        await updateLastMessageRef({
+          conversationId,
+          source: conversation.source,
+          messageId: msg._id,
         });
 
-        /* 2️⃣ REALTIME MESSAGE */
-        socket
-          .to(conversationId.toString())
-          .emit("messageReceived", msg);
+        /* 2ï¸âƒ£ REALTIME MESSAGE */
+        const outgoingMsg = {
+          ...(await materializeMessageForClient(msg, cryptoCache)),
+          tempId: tempId || null,
+        };
+        io.to(conversationId.toString()).emit("messageReceived", outgoingMsg);
 
 
 
@@ -102,100 +257,157 @@ export const setupSocket = (io) => {
 
 
         /* ================================ 
-           🔥 NEW PART – CHAT LIST UPDATE 
+           ðŸ”¥ NEW PART â€“ CHAT LIST UPDATE 
         ================================= */
 
         const chatListPayload = {
           conversationId,
-          text: msg.text,
+          text: textValue,
           sender: sender,
-          receiver: receiver,
+          receiver: isGroupConversation ? null : receiver,
           createdAt: msg.createdAt,
         };
-        const senderSocketId = onlineUsers.get(sender.toString());
-        const receiverSocketId = onlineUsers.get(receiver.toString());
-
-        // sender chat list update 
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("chat:list:update", chatListPayload);
-        }
-
-        // receiver chat list update 
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("chat:list:update", chatListPayload);
-        }
-        console.log("💬 Chat list update sent", chatListPayload);
+        const participantIds = (conversation.participants || []).map((p) =>
+          p.toString(),
+        );
+        participantIds.forEach((uid) => {
+          const sid = onlineUsers.get(uid);
+          if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
+        });
+        console.log("ðŸ’¬ Chat list update sent", chatListPayload);
         /* ================================ 
-           ⬆️ यही MISSING THA 
+           â¬†ï¸ à¤¯à¤¹à¥€ MISSING THA 
      
      
-            /* 3️⃣ CHECK IF RECEIVER IS IN SAME CHAT */
+            /* 3ï¸âƒ£ CHECK IF RECEIVER IS IN SAME CHAT */
         const viewers =
           activeConversationViewers.get(conversationId.toString()) ||
           new Set();
 
-        const receiverInChat = viewers.has(receiver.toString());
+        const recipients = (conversation.participants || [])
+          .map((p) => p.toString())
+          .filter((uid) => uid && uid !== sender.toString());
+        const senderUser = await User.findById(sender).select("fullName").lean();
 
-        /* 4️⃣ CREATE DB NOTIFICATION (ALWAYS IF NOT IN CHAT) */
-        if (!receiverInChat) {
+        /* 4? CREATE DB NOTIFICATION (GROUP + DIRECT) */
+        let deliveredNotifications = 0;
+        for (const recipientId of recipients) {
+          if (viewers.has(recipientId)) continue;
+
           const notification = await Notification.create({
-            recipient: receiver,
+            recipient: recipientId,
             scope: "USER",
             type: "NEW_MESSAGE",
-            title: "New Message",
-            message: text.length > 40 ? text.slice(0, 40) + "…" : text,
-            data: { conversationId, senderId: sender },
+            title: isGroupConversation ? "New Group Message" : "New Message",
+            message:
+              textValue.length > 40 ? textValue.slice(0, 40) + "..." : textValue,
+            data: {
+              conversationId,
+              senderId: sender,
+              isGroup: isGroupConversation,
+            },
             isRead: false,
           });
+          deliveredNotifications += 1;
 
-          /* 5️⃣ REALTIME COUNTER (DO NOT TOUCH) */
-          const receiverSocketId = onlineUsers.get(receiver.toString());
-
-          if (receiverSocketId) {
-            io.to(receiverSocketId).emit("newNotification", notification);
-
+          const recipientSocketId = onlineUsers.get(recipientId);
+          if (recipientSocketId) {
+            io.to(recipientSocketId).emit("newNotification", notification);
             const unreadCount = await Notification.countDocuments({
-              recipient: receiver,
+              recipient: recipientId,
               isRead: false,
             });
-
-            io.to(receiverSocketId).emit("unreadCount", unreadCount);
-            console.log("🔢 Unread count:", unreadCount);
+            io.to(recipientSocketId).emit("unreadCount", unreadCount);
           }
 
-          /* 6️⃣ PUSH NOTIFICATION (🔥 GUARANTEED 🔥) */
-          const receiverUser = await User.findById(receiver).select("pushToken");
-          const senderUser = await User.findById(sender).select("fullName");
-
-          if (receiverUser?.pushToken) {
+          const recipientUser = await User.findById(recipientId)
+            .select("pushToken")
+            .lean();
+          if (recipientUser?.pushToken) {
             await sendPushNotification({
-              pushToken: receiverUser.pushToken,
-              title: `${senderUser.fullName} • Ryngales`,
-              body: text.length > 40 ? text.slice(0, 40) + "…" : text,
+              pushToken: recipientUser.pushToken,
+              title: `${senderUser?.fullName || "Ryngales"} • Ryngales`,
+              body:
+                textValue.length > 40 ? textValue.slice(0, 40) + "..." : textValue,
               data: {
                 type: "CHAT_MESSAGE",
                 conversationId,
                 senderId: sender,
+                isGroup: isGroupConversation,
               },
             });
-
-            console.log(
-              "📲 Push sent | socket:",
-              !!onlineUsers.get(receiver.toString()),
-              "| appState:",
-              userAppState.get(receiver.toString())
-            );
           }
-        } else {
-          console.log("🚫 Same chat open → no notification / no push");
+        }
+        if (!deliveredNotifications) {
+          console.log("Same chat open -> no notification / no push");
         }
       } catch (err) {
-        console.error("❌ sendMessage error:", err);
+        console.error("âŒ sendMessage error:", err);
       }
     });
 
     /* =========================
-   🔁 FORWARD MESSAGE (PRODUCTION)
+       âœï¸ EDIT MESSAGE (SOCKET REALTIME)
+    ========================== */
+    socket.on("editMessage", async (data) => {
+      try {
+        const { sender, messageId, conversationId, text } = data || {};
+        if (!sender || !messageId || !conversationId || !text?.trim()) {
+          return socket.emit("edit:error", { message: "Invalid edit payload" });
+        }
+        const textValue = text.trim();
+        const encrypted = await encryptMessageText({
+          conversationId,
+          text: textValue,
+        });
+
+        const updated = await Message.findOneAndUpdate(
+          {
+            _id: messageId,
+            conversationId,
+            sender,
+          },
+          { $set: encrypted },
+          { new: true },
+        );
+
+        if (!updated) {
+          return socket.emit("edit:error", {
+            message: "Message not found or not editable",
+          });
+        }
+
+        io.to(conversationId.toString()).emit("messageEdited", {
+          messageId: updated._id,
+          conversationId,
+          text: textValue,
+          updatedAt: updated.updatedAt,
+        });
+
+        const convo = await resolveConversation(conversationId);
+        const isLatestMessage =
+          convo?.lastMessage &&
+          String(convo.lastMessage) === String(updated._id);
+        if (isLatestMessage) {
+          await emitChatListPatch({
+            conversationId,
+            text: textValue,
+            createdAt: updated.updatedAt,
+          });
+        }
+
+        socket.emit("edit:success", {
+          messageId: updated._id,
+          conversationId,
+        });
+      } catch (err) {
+        console.error("editMessage error:", err);
+        socket.emit("edit:error", { message: "Failed to edit message" });
+      }
+    });
+
+    /* =========================
+   ðŸ” FORWARD MESSAGE (PRODUCTION)
 ========================= */
 
 
@@ -204,15 +416,15 @@ export const setupSocket = (io) => {
     const { sender, messageId, text, messageIds = [], targetConversationIds = [] } = data;
 
     /* ============================================================
-       📥 COLLECT ORIGINALS (The "Baap" Fix)
+       ðŸ“¥ COLLECT ORIGINALS (The "Baap" Fix)
     ============================================================ */
     let originals = [];
 
     // 1. Array banao saari IDs ka jo frontend se aayi hain
     const incomingIds = [...messageIds, messageId].filter(Boolean);
-    console.log(`🔁 [FORWARD] Incoming IDs: ${incomingIds.join(", ")}`);
+    console.log(`ðŸ” [FORWARD] Incoming IDs: ${incomingIds.join(", ")}`);
 
-    // 2. 🔥 Sabse Zaroori: Sirf wahi IDs filter karo jo asli 24-char Hex hain
+    // 2. ðŸ”¥ Sabse Zaroori: Sirf wahi IDs filter karo jo asli 24-char Hex hain
     // Isse 'temp-...' waali IDs query tak pahunchengi hi nahi, toh CastError nahi aayega
     const validMongoIds = incomingIds.filter(id => 
       id && typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id)
@@ -223,39 +435,41 @@ export const setupSocket = (io) => {
     );
     
     if (tempIds.length > 0) {
-      console.warn(`⚠️ [FORWARD] Filtering out tempIds (not yet synced): ${tempIds.join(", ")}`);
+      console.warn(`âš ï¸ [FORWARD] Filtering out tempIds (not yet synced): ${tempIds.join(", ")}`);
     }
-    console.log(`✅ [FORWARD] Valid Mongo IDs: ${validMongoIds.join(", ")}`);
+    console.log(`âœ… [FORWARD] Valid Mongo IDs: ${validMongoIds.join(", ")}`);
 
     // 3. Agar valid IDs mili, tabhi DB query karo
     if (validMongoIds.length > 0) {
       originals = await Message.find({ _id: { $in: validMongoIds } }).lean();
-      console.log(`✅ [FORWARD] Found ${originals.length} messages in DB`);
+      console.log(`âœ… [FORWARD] Found ${originals.length} messages in DB`);
     }
 
-    // 4. 🔥 Race Condition Fallback (Fresh Message Case)
+    // 4. ðŸ”¥ Race Condition Fallback (Fresh Message Case)
     // Agar DB mein kuch nahi mila (kyunki IDs temp thin) toh text fallback use karo
     if (originals.length === 0 && text) {
-      console.log("⚠️ [FORWARD] DB sync pending (temp-id case), using fallback text");
+      console.log("âš ï¸ [FORWARD] DB sync pending (temp-id case), using fallback text");
       originals = [{ text: text, sender: sender }]; 
     }
 
     if (originals.length === 0) {
-      console.error("❌ [FORWARD] No messages found and no fallback text provided");
+      console.error("âŒ [FORWARD] No messages found and no fallback text provided");
       return socket.emit("forward:error", { message: "Nothing to forward" });
     }
 
     /* =========================
-       🔁 BUILD + INSERT
+       ðŸ” BUILD + INSERT
     ========================== */
     const messagesToInsert = [];
+    const targetMetaMap = new Map();
 
     for (const conversationId of targetConversationIds) {
       // Conversation ID check
       if (!conversationId || !/^[0-9a-fA-F]{24}$/.test(conversationId)) continue;
 
-      const conv = await Conversation.findById(conversationId).select("participants isGroup").lean();
+      const conv = await resolveConversation(conversationId);
       if (!conv) continue;
+      targetMetaMap.set(String(conversationId), conv);
 
       let receiver = null;
       if (!conv.isGroup && conv.participants) {
@@ -263,11 +477,16 @@ export const setupSocket = (io) => {
       }
 
       for (const original of originals) {
+        const originalText = await decryptMessageText(original);
+        const encrypted = await encryptMessageText({
+          conversationId,
+          text: originalText || "",
+        });
         messagesToInsert.push({
           conversationId: conversationId,
           sender: sender,
           receiver: receiver,
-          text: original.text || "",
+          ...encrypted,
           forwarded: true,
           forwardedFrom: (original.sender && /^[0-9a-fA-F]{24}$/.test(original.sender)) 
                          ? original.sender 
@@ -280,49 +499,59 @@ export const setupSocket = (io) => {
     const savedMessages = await Message.insertMany(messagesToInsert);
 
     /* =========================
-       📡 EMITS
+       ðŸ“¡ EMITS
     ========================== */
     for (const msg of savedMessages) {
-      io.to(msg.conversationId.toString()).emit("messageReceived", msg);
-      await Conversation.findByIdAndUpdate(msg.conversationId, { lastMessage: msg._id });
+      const outgoingMsg = await materializeMessageForClient(msg);
+      const previewText = String(outgoingMsg?.text || "");
+      io.to(msg.conversationId.toString()).emit("messageReceived", outgoingMsg);
+      const convMeta = targetMetaMap.get(String(msg.conversationId));
+      await updateLastMessageRef({
+        conversationId: msg.conversationId,
+        source: convMeta?.source || "direct",
+        messageId: msg._id,
+      });
 
       const chatListPayload = {
         conversationId: msg.conversationId,
-        text: msg.text,
+        text: previewText,
         sender: msg.sender,
         receiver: msg.receiver,
         createdAt: msg.createdAt,
       };
 
-      [msg.sender, msg.receiver].forEach(uid => {
-        if (uid) {
-          const sid = onlineUsers.get(uid.toString());
-          if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
-        }
+      const participantIds = (convMeta?.participants || [msg.sender, msg.receiver])
+        .filter(Boolean)
+        .map((p) => p.toString());
+      participantIds.forEach((uid) => {
+        const sid = onlineUsers.get(uid);
+        if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
       });
     }
 
     socket.emit("forward:success", { count: savedMessages.length });
 
   } catch (err) {
-    console.error("🔥 CRITICAL ERROR:", err);
+    console.error("ðŸ”¥ CRITICAL ERROR:", err);
     socket.emit("forward:error", { message: "Internal server error" });
   }
    });
 
 
     /* =========================
-       🗑️ DELETE MESSAGE(S)
+       ðŸ—‘ï¸ DELETE MESSAGE(S)
     ========================== */
     socket.on("deleteMessage", async (data) => {
       try {
         const {
           sender,
-          messageId,        // OLD (single)
-          messageIds = [],  // NEW (multiple)
+          messageId,
+          messageIds = [],
           conversationId,
-          deleteFor = "everyone", // future-proof
+          deleteFor = "everyone",
         } = data;
+
+        console.log("Delete request:", data);
 
         if (!sender || !conversationId) {
           return socket.emit("delete:error", {
@@ -330,78 +559,135 @@ export const setupSocket = (io) => {
           });
         }
 
-        /* =========================
-           📥 COLLECT MESSAGE IDS
-        ========================== */
-        const idsToDelete = [];
+        const conversation = await resolveConversation(conversationId);
+        const isParticipant = !!conversation?.participants?.some(
+          (p) => p.toString() === sender.toString(),
+        );
 
+        if (!isParticipant) {
+          return socket.emit("delete:error", {
+            message: "You are not part of this conversation",
+          });
+        }
+
+        const idsToDelete = [];
         if (messageIds.length) {
           idsToDelete.push(...messageIds);
         } else if (messageId) {
           idsToDelete.push(messageId);
         }
 
-        if (!idsToDelete.length) {
+        const validIds = idsToDelete.filter((id) =>
+          mongoose.Types.ObjectId.isValid(id),
+        );
+
+        if (!validIds.length) {
           return socket.emit("delete:error", {
             message: "No messages selected",
           });
         }
 
-        /* =========================
-           🔐 DELETE FOR EVERYONE
-        ========================== */
         if (deleteFor === "everyone") {
-          const updatedMessages = await Message.deleteMany(
+          // Sender can delete-for-everyone only their own messages.
+          const ownMessageIds = (
+            await Message.find(
+              {
+                _id: { $in: validIds },
+                conversationId,
+                sender,
+              },
+              { _id: 1 },
+            ).lean()
+          ).map((m) => m._id);
+
+          if (!ownMessageIds.length) {
+            return socket.emit("delete:error", {
+              message: "No sender-owned messages found for delete for everyone",
+            });
+          }
+
+          const result = await Message.updateMany(
             {
-              _id: { $in: idsToDelete },
-              sender: sender, // 🔐 only sender can delete for all
+              _id: { $in: ownMessageIds },
             },
             {
               $set: {
                 text: "This message was deleted",
-                type: "deleted",
-                deletedForEveryone: true,
+                encryptedText: "",
+                textIv: "",
+                textAuthTag: "",
+                isEncrypted: false,
+                media: [],
               },
-            }
+            },
           );
 
-          // 🔄 Update lastMessage if needed
-          const lastMsg = await Message.findOne({
+          io.to(conversationId.toString()).emit("messageDeleted", {
+            messageIds: ownMessageIds,
             conversationId,
-          }).sort({ createdAt: -1 });
+            deleteFor: "everyone",
+            replacementText: "This message was deleted",
+          });
 
-          if (lastMsg) {
-            await Conversation.findByIdAndUpdate(conversationId, {
-              lastMessage: lastMsg._id,
+          const latestMessageId = conversation?.lastMessage
+            ? String(conversation.lastMessage)
+            : null;
+          const latestDeleted = latestMessageId
+            ? ownMessageIds.some((id) => String(id) === latestMessageId)
+            : false;
+          if (latestDeleted) {
+            await emitChatListPatch({
+              conversationId,
+              text: "This message was deleted",
+              createdAt: new Date().toISOString(),
             });
           }
 
-          /* =========================
-             📡 REALTIME EMIT
-          ========================== */
-          io.to(conversationId.toString()).emit("messageDeleted", {
-            messageIds: idsToDelete,
-            conversationId,
-            hardDelete: true,
+          socket.emit("delete:success", {
+            deletedCount: result.modifiedCount,
             deleteFor: "everyone",
           });
 
-          socket.emit("delete:success", {
-            deletedCount: updatedMessages.deletedCount,
-          });
-
           console.log(
-            `🗑️ Deleted ${updatedMessages.modifiedCount} messages for everyone`
+            `Delete for everyone applied to ${result.modifiedCount} messages`,
           );
+          return;
         }
+
+        const hidden = await Message.updateMany(
+          {
+            _id: { $in: validIds },
+            conversationId,
+          },
+          {
+            $addToSet: { deletedFor: sender },
+          },
+        );
+
+        socket.emit("messageDeleted", {
+          messageIds: validIds,
+          conversationId,
+          deleteFor: "me",
+        });
+
+        socket.emit("delete:success", {
+          deletedCount: hidden.modifiedCount || 0,
+          deleteFor: "me",
+        });
+
+        console.log(
+          `Hidden ${hidden.modifiedCount || 0} messages for user ${sender}`,
+        );
       } catch (err) {
-        console.error("❌ deleteMessage error:", err);
+        console.error("deleteMessage error:", err);
 
         socket.emit("delete:error", {
           message: "Failed to delete messages",
         });
       }
     });
+
+
 
     /* ========================= 
        DISCONNECT 
@@ -410,8 +696,11 @@ export const setupSocket = (io) => {
       if (socket.userId) {
         onlineUsers.delete(socket.userId);
         userAppState.delete(socket.userId);
-        console.log("🔴 User disconnected:", socket.userId);
+        console.log("ðŸ”´ User disconnected:", socket.userId);
       }
     });
   });
 };
+
+
+

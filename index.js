@@ -11,6 +11,7 @@ import requestIp from "request-ip";
 import authRoutes from "./routes/authRoute.js";
 import userRoutes from "./routes/userRoute.js";
 import conversationRoutes from "./routes/conversationRoute.js";
+import groupConversationRoutes from "./routes/groupConversationRoute.js";
 import messageRoutes from "./routes/messageRoute.js";
 import { errorHandler } from "./utils/errorHandler.js";
 import contactRoutes from "./routes/contactRoute.js";
@@ -64,6 +65,7 @@ export const io = new Server(httpServer, {
     methods: ["GET", "POST"],
   },
 });
+app.set("io", io);
 
 // index.js (after io init)
 setupSocket(io);
@@ -77,6 +79,7 @@ setupSocket(io);
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/conversation", conversationRoutes);
+app.use("/api/group-conversation", groupConversationRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/notification", notificationRoutes);

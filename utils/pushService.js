@@ -11,6 +11,11 @@ export const sendPushNotification = async ({
     return;
   }
 
+  const conversationId = data?.conversationId
+    ? String(data.conversationId)
+    : null;
+  const threadKey = conversationId ? `chat:${conversationId}` : null;
+
   const payload = {
     to: pushToken,
     sound: "default",
@@ -18,6 +23,9 @@ export const sendPushNotification = async ({
     title,
     body,
     data,
+    ...(threadKey ? { channelId: "chat-messages" } : {}),
+    ...(threadKey ? { threadId: threadKey } : {}),
+    ...(threadKey ? { collapseId: threadKey } : {}),
   };
 
   try {
