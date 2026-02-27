@@ -1,6 +1,7 @@
 // controllers/userController.js
 
 import User from "../models/user.js";
+import UserContact from "../models/UserContact.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 // import Business from "../models/Business.js";
@@ -80,7 +81,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
 
     // ✅ Update user immediately in DB
-    const updatedUser = await User.findByIdAndUpdate(
+    let updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       { $set: updatedFields },
       { new: true, runValidators: true }
@@ -91,6 +92,35 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+
+    // Ensure latest avatar is included when file upload happened.
+    updatedUser = await User.findById(req.params.id);
+
+    // Notify all owners who saved this user as contact so contacts list can refresh instantly.
+    try {
+      const io = req.app.get("io");
+      if (io && updatedUser?._id) {
+        const ownerRows = await UserContact.find(
+          { linkedUser: updatedUser._id },
+          { owner: 1 },
+        ).lean();
+
+        const ownerIds = Array.from(
+          new Set(ownerRows.map((r) => String(r?.owner || "")).filter(Boolean)),
+        );
+
+        ownerIds.forEach((ownerId) => {
+          io.to(`user:${ownerId}`).emit("contacts:changed", {
+            ownerId,
+            action: "profile_update",
+            linkedUserId: String(updatedUser._id),
+            updatedAt: new Date().toISOString(),
+          });
+        });
+      }
+    } catch (emitErr) {
+      console.error("contacts:changed emit on profile update failed:", emitErr);
     }
 
     // ✅ Respond to client immediately (within 1–2 sec)

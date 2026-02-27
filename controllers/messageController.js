@@ -167,11 +167,19 @@ export const sendMessage = async (req, res) => {
       conversationId,
       text,
     });
+    const groupReceiverIds = isGroupConversation
+      ? (conversation?.participants || [])
+          .map((id) => String(id || ""))
+          .filter((id) => id && id !== String(sender))
+      : null;
 
     const message = await Message.create({
       conversationId,
       sender,
-      receiver: isGroupConversation ? null : receiver,
+      receiver: isGroupConversation ? groupReceiverIds : receiver,
+      deliveryInfo: [],
+      readBy: [sender],
+      readInfo: [{ userId: sender, readAt: new Date() }],
       ...encrypted,
     });
 
@@ -247,7 +255,7 @@ export const editMessage = async (req, res) => {
     message.textAlg = encrypted.textAlg;
     message.encryptionVersion = encrypted.encryptionVersion;
     message.isEncrypted = encrypted.isEncrypted;
-    message.edited = true; // add this field in schema if not already
+    message.isEdited = true;
     await message.save();
 
     const outgoing = await materializeMessageForClient(message);
@@ -350,6 +358,8 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
       message: "Not allowed to upload to this conversation",
     });
   }
+  const isGroupConversationForUpload =
+    conversation?.constructor?.modelName === "GroupConversation";
 
   // 🔥 Parallel S3 uploads
   const uploadResults = await Promise.allSettled(
@@ -385,7 +395,14 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
   const message = await Message.create({
     conversationId,
     sender: req.user._id,
-    receiver: receiverId || null, // optional for 1-to-1
+    receiver: isGroupConversationForUpload
+      ? (conversation.participants || [])
+          .map((id) => String(id || ""))
+          .filter((id) => id && id !== String(req.user._id))
+      : receiverId || null,
+    deliveryInfo: [],
+    readBy: [req.user._id],
+    readInfo: [{ userId: req.user._id, readAt: new Date() }],
     text: "",
     media,
     status: "sent",

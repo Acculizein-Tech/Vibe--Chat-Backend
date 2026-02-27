@@ -55,12 +55,181 @@ export const setupSocket = (io) => {
       });
     };
 
+    const getActiveSocketId = (userId) => {
+      const uid = String(userId || "").trim();
+      if (!uid) return "";
+      const sid = String(onlineUsers.get(uid) || "").trim();
+      if (!sid) return "";
+      const socketRef = io?.sockets?.sockets?.get(sid);
+      if (!socketRef || socketRef.disconnected) {
+        // stale online map entry cleanup
+        if (onlineUsers.get(uid) === sid) {
+          onlineUsers.delete(uid);
+        }
+        return "";
+      }
+      return sid;
+    };
+
     const emitToUser = (userId, event, payload) => {
       const uid = String(userId || "");
       if (!uid) return;
       io.to(`user:${uid}`).emit(event, payload);
-      const sid = onlineUsers.get(uid);
+      const sid = getActiveSocketId(uid);
       if (sid) io.to(sid).emit(event, payload);
+    };
+
+    const isUserOnline = (userId) => {
+      return Boolean(getActiveSocketId(userId));
+    };
+
+    const markMessagesDeliveredForUser = async ({
+      conversationId,
+      userId,
+      messageIds = [],
+    }) => {
+      if (
+        !conversationId ||
+        !userId ||
+        !mongoose.Types.ObjectId.isValid(conversationId) ||
+        !mongoose.Types.ObjectId.isValid(userId)
+      ) {
+        return { deliveredIds: [], deliveredAt: null };
+      }
+      const conversationObjectId = new mongoose.Types.ObjectId(conversationId);
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      const idsFilter = Array.isArray(messageIds) && messageIds.length
+        ? {
+            _id: {
+              $in: messageIds
+                .map((id) => String(id || ""))
+                .filter((id) => mongoose.Types.ObjectId.isValid(id))
+                .map((id) => new mongoose.Types.ObjectId(id)),
+            },
+          }
+        : {};
+
+      const target = await Message.find(
+        {
+          conversationId: conversationObjectId,
+          sender: { $ne: userObjectId },
+          readBy: { $ne: userObjectId },
+          status: "sent",
+          ...idsFilter,
+        },
+        { _id: 1, sender: 1, deliveryInfo: 1 },
+      ).lean();
+      if (!target.length) return { deliveredIds: [], deliveredAt: null };
+
+      const deliveredIds = target.map((m) => String(m._id || "")).filter(Boolean);
+      const deliveredAt = new Date();
+      await Message.updateMany(
+        {
+          _id: {
+            $in: deliveredIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+        { $set: { status: "delivered" } },
+      );
+
+      await Message.bulkWrite(
+        target.map((doc) => {
+          const existing = Array.isArray(doc?.deliveryInfo)
+            ? doc.deliveryInfo.filter(
+                (di) => String(di?.userId || "") !== String(userObjectId),
+              )
+            : [];
+          existing.push({ userId: userObjectId, deliveredAt });
+          return {
+            updateOne: {
+              filter: { _id: doc._id },
+              update: { $set: { deliveryInfo: existing } },
+            },
+          };
+        }),
+      );
+
+      const senderIds = Array.from(
+        new Set(
+          target
+            .map((m) => String(m?.sender || "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+      return { deliveredIds, deliveredAt, senderIds };
+    };
+
+    const markPendingMessagesDeliveredForUser = async ({ userId }) => {
+      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        return { updates: [], deliveredAt: null };
+      }
+
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      const pending = await Message.find(
+        {
+          sender: { $ne: userObjectId },
+          readBy: { $ne: userObjectId },
+          status: "sent",
+          $or: [
+            { receiver: String(userId) },
+            { receiver: userObjectId },
+            { receiver: { $in: [String(userId)] } },
+            { receiver: { $in: [userObjectId] } },
+          ],
+        },
+        { _id: 1, conversationId: 1, sender: 1, deliveryInfo: 1 },
+      ).lean();
+
+      if (!pending.length) return { updates: [], deliveredAt: null };
+
+      const deliveredAt = new Date();
+      const ids = pending.map((m) => m._id);
+      await Message.updateMany(
+        { _id: { $in: ids } },
+        { $set: { status: "delivered" } },
+      );
+
+      await Message.bulkWrite(
+        pending.map((doc) => {
+          const existing = Array.isArray(doc?.deliveryInfo)
+            ? doc.deliveryInfo.filter(
+                (di) => String(di?.userId || "") !== String(userObjectId),
+              )
+            : [];
+          existing.push({ userId: userObjectId, deliveredAt });
+          return {
+            updateOne: {
+              filter: { _id: doc._id },
+              update: { $set: { deliveryInfo: existing } },
+            },
+          };
+        }),
+      );
+
+      const perConversation = new Map();
+      pending.forEach((doc) => {
+        const cid = String(doc.conversationId || "");
+        if (!cid) return;
+        if (!perConversation.has(cid)) {
+          perConversation.set(cid, { messageIds: [], senderIds: new Set() });
+        }
+        const bucket = perConversation.get(cid);
+        bucket.messageIds.push(String(doc._id));
+        const senderId = String(doc?.sender || "").trim();
+        if (senderId) bucket.senderIds.add(senderId);
+      });
+
+      return {
+        deliveredAt,
+        updates: Array.from(perConversation.entries()).map(
+          ([conversationId, info]) => ({
+            conversationId,
+            messageIds: info.messageIds,
+            senderIds: Array.from(info.senderIds),
+          }),
+        ),
+      };
     };
 
     // Dedupe repeated conversationOpen acknowledgements from same socket/user.
@@ -79,27 +248,100 @@ export const setupSocket = (io) => {
       };
 
       conv.participants.forEach((uid) => {
-        const sid = onlineUsers.get(uid.toString());
+        const sid = getActiveSocketId(uid.toString());
         if (sid) io.to(sid).emit("chat:list:patch", payload);
       });
     };
     /* ========================= 
        REGISTER USER 
     ========================== */
-    socket.on("register", (userId) => {
+    socket.on("register", async (userId) => {
       if (!userId) return;
-      socket.userId = userId.toString();
+      const nextUserId = userId.toString();
+      const prevUserId = String(socket.userId || "").trim();
+
+      // Account switched on same socket: clear old mapping first.
+      if (prevUserId && prevUserId !== nextUserId) {
+        if (onlineUsers.get(prevUserId) === socket.id) {
+          onlineUsers.delete(prevUserId);
+        }
+        userAppState.delete(prevUserId);
+        socket.leave(`user:${prevUserId}`);
+      }
+
+      socket.userId = nextUserId;
       onlineUsers.set(socket.userId, socket.id);
       socket.join(`user:${socket.userId}`);
       console.log("âœ… User registered:", socket.userId);
+
+      try {
+        const { updates, deliveredAt } =
+          await markPendingMessagesDeliveredForUser({ userId: socket.userId });
+        if (updates.length) {
+          const deliveredAtIso =
+            deliveredAt?.toISOString?.() || new Date().toISOString();
+          updates.forEach(({ conversationId, messageIds, senderIds = [] }) => {
+            const deliveredPayload = {
+              conversationId: String(conversationId),
+              userId: String(socket.userId),
+              messageIds,
+              deliveredAt: deliveredAtIso,
+            };
+            io.to(String(conversationId)).emit("messagesDelivered", deliveredPayload);
+            emitToUser(String(socket.userId), "messagesDelivered", deliveredPayload);
+            senderIds
+              .filter((sid) => String(sid) && String(sid) !== String(socket.userId))
+              .forEach((sid) => {
+                emitToUser(String(sid), "messagesDelivered", deliveredPayload);
+              });
+          });
+        }
+      } catch (err) {
+        console.error("register delivery-sync error:", err);
+      }
+    });
+
+    socket.on("unregister", (userId) => {
+      const uid = String(userId || socket.userId || "").trim();
+      if (!uid) return;
+      if (onlineUsers.get(uid) === socket.id) {
+        onlineUsers.delete(uid);
+      }
+      userAppState.delete(uid);
+      socket.leave(`user:${uid}`);
     });
 
     /* ========================= 
        JOIN ROOM 
     ========================== */
-    socket.on("joinRoom", ({ conversationId }) => {
+    socket.on("joinRoom", async ({ conversationId, userId }) => {
       if (!conversationId) return;
       socket.join(conversationId.toString());
+      const uid = String(userId || socket.userId || "").trim();
+      if (!uid) return;
+      try {
+        const { deliveredIds, deliveredAt, senderIds = [] } = await markMessagesDeliveredForUser({
+          conversationId: String(conversationId),
+          userId: uid,
+        });
+        if (deliveredIds.length) {
+          const deliveredPayload = {
+            conversationId: String(conversationId),
+            userId: uid,
+            messageIds: deliveredIds,
+            deliveredAt: deliveredAt?.toISOString?.() || new Date().toISOString(),
+          };
+          io.to(String(conversationId)).emit("messagesDelivered", deliveredPayload);
+          emitToUser(uid, "messagesDelivered", deliveredPayload);
+          senderIds
+            .filter((sid) => String(sid) && String(sid) !== String(uid))
+            .forEach((sid) => {
+              emitToUser(String(sid), "messagesDelivered", deliveredPayload);
+            });
+        }
+      } catch (err) {
+        console.error("joinRoom delivery-sync error:", err);
+      }
     });
 
     /* ========================= 
@@ -131,6 +373,85 @@ export const setupSocket = (io) => {
 
         const conversationObjectId = new mongoose.Types.ObjectId(conversationId);
         const userObjectId = new mongoose.Types.ObjectId(userId);
+        const unreadMessagesForUser = await Message.find(
+          {
+            conversationId: conversationObjectId,
+            sender: { $ne: userObjectId },
+            readBy: { $ne: userObjectId },
+          },
+          { _id: 1 },
+        ).lean();
+
+        const unreadMessageIds = unreadMessagesForUser.map((m) =>
+          String(m?._id || ""),
+        );
+
+        if (unreadMessageIds.length) {
+          const { deliveredIds, deliveredAt } = await markMessagesDeliveredForUser({
+            conversationId: String(conversationId),
+            userId: String(userId),
+            messageIds: unreadMessageIds,
+          });
+          if (deliveredIds.length) {
+            const deliveredPayload = {
+              conversationId: conversationId.toString(),
+              userId: userId.toString(),
+              messageIds: deliveredIds,
+              deliveredAt:
+                deliveredAt?.toISOString?.() || new Date().toISOString(),
+            };
+            io.to(conversationId.toString()).emit("messagesDelivered", deliveredPayload);
+            emitToUser(userId, "messagesDelivered", deliveredPayload);
+          }
+
+          const readAt = new Date();
+          await Message.updateMany(
+            {
+              _id: {
+                $in: unreadMessageIds.map((id) => new mongoose.Types.ObjectId(id)),
+              },
+            },
+            {
+              $addToSet: { readBy: userObjectId },
+              $set: { status: "read" },
+            },
+          );
+
+          const readInfoDocs = await Message.find(
+            {
+              _id: {
+                $in: unreadMessageIds.map((id) => new mongoose.Types.ObjectId(id)),
+              },
+            },
+            { _id: 1, readInfo: 1 },
+          ).lean();
+
+          if (readInfoDocs.length) {
+            await Message.bulkWrite(
+              readInfoDocs.map((doc) => {
+                const existing = Array.isArray(doc?.readInfo)
+                  ? doc.readInfo.filter(
+                      (ri) => String(ri?.userId || "") !== String(userObjectId),
+                    )
+                  : [];
+                existing.push({ userId: userObjectId, readAt });
+                return {
+                  updateOne: {
+                    filter: { _id: doc._id },
+                    update: { $set: { readInfo: existing } },
+                  },
+                };
+              }),
+            );
+          }
+
+          io.to(conversationId.toString()).emit("messagesRead", {
+            conversationId: conversationId.toString(),
+            userId: userId.toString(),
+            messageIds: unreadMessageIds,
+            readAt: readAt.toISOString(),
+          });
+        }
 
         const targetNotifications = await Notification.find(
           {
@@ -142,43 +463,39 @@ export const setupSocket = (io) => {
           { _id: 1 },
         ).lean();
 
-        if (!targetNotifications.length) {
-          return;
+        if (targetNotifications.length) {
+          await Notification.updateMany(
+            {
+              _id: { $in: targetNotifications.map((n) => n._id) },
+            },
+            { $set: { isRead: true } },
+          );
         }
 
-        const readResult = await Notification.updateMany(
-          {
-            _id: { $in: targetNotifications.map((n) => n._id) },
-          },
-          { $set: { isRead: true } },
-        );
+        const unreadCount = await Notification.countDocuments({
+          recipient: userId,
+          isRead: false,
+        });
+        const resetPayload = {
+          conversationId: conversationId.toString(),
+          unread: 0,
+          unreadTotal: unreadCount,
+          updatedAt: new Date().toISOString(),
+        };
+        const dedupeKey = `${socket.id}:${String(userId)}:${String(conversationId)}`;
+        const nowTs = Date.now();
+        const lastTs = lastReadResetEmitAt.get(dedupeKey) || 0;
 
-        if (readResult.modifiedCount > 0) {
-          const unreadCount = await Notification.countDocuments({
-            recipient: userId,
-            isRead: false,
-          });
-          const resetPayload = {
+        if (nowTs - lastTs >= READ_RESET_DEDUPE_MS) {
+          lastReadResetEmitAt.set(dedupeKey, nowTs);
+          emitToUser(userId, "conversationRead", resetPayload);
+          emitToUser(userId, "chat:unread:reset", resetPayload);
+          emitToUser(userId, "chat:list:patch", {
             conversationId: conversationId.toString(),
             unread: 0,
-            unreadTotal: unreadCount,
-            updatedAt: new Date().toISOString(),
-          };
-          const dedupeKey = `${socket.id}:${String(userId)}:${String(conversationId)}`;
-          const nowTs = Date.now();
-          const lastTs = lastReadResetEmitAt.get(dedupeKey) || 0;
-
-          if (nowTs - lastTs >= READ_RESET_DEDUPE_MS) {
-            lastReadResetEmitAt.set(dedupeKey, nowTs);
-            emitToUser(userId, "conversationRead", resetPayload);
-            emitToUser(userId, "chat:unread:reset", resetPayload);
-            emitToUser(userId, "chat:list:patch", {
-              conversationId: conversationId.toString(),
-              unread: 0,
-              createdAt: resetPayload.updatedAt,
-            });
-            emitToUser(userId, "unreadCount", unreadCount);
-          }
+            createdAt: resetPayload.updatedAt,
+          });
+          emitToUser(userId, "unreadCount", unreadCount);
         }
       } catch (err) {
         console.error("conversationOpen read-sync error:", err);
@@ -227,12 +544,45 @@ export const setupSocket = (io) => {
           text: textValue,
           cache: cryptoCache,
         });
+        const recipients = (
+          isGroupConversation
+            ? (conversation.participants || [])
+                .map((id) => String(id || ""))
+                .filter((id) => id && id !== String(sender))
+            : [String(receiver || "").trim()].filter(Boolean)
+        ).map((id) => String(id));
+
+        // Snapshot once to avoid racey status decisions.
+        const viewers = new Set(
+          activeConversationViewers.get(String(conversationId)) || []
+        );
+        const onlineRecipientIds = recipients.filter((id) => isUserOnline(id));
+        const readRecipientIds = recipients.filter((id) => viewers.has(id));
+
+        // Rules:
+        // 1) offline -> sent
+        // 2) online  -> delivered
+        // 3) active viewer -> read (applied after initial create)
+        const allRecipientsDelivered =
+          recipients.length > 0 &&
+          onlineRecipientIds.length === recipients.length;
+
+        const initialStatus = allRecipientsDelivered ? "delivered" : "sent";
+
+        const now = new Date();
 
         /* 1ï¸âƒ£ SAVE MESSAGE */
         const msg = await Message.create({
           sender,
-          receiver: isGroupConversation ? null : receiver,
+          receiver: isGroupConversation ? recipients : receiver,
           conversationId,
+          status: initialStatus,
+          deliveryInfo: onlineRecipientIds.map((id) => ({
+            userId: id,
+            deliveredAt: now,
+          })),
+          readBy: [sender],
+          readInfo: [{ userId: sender, readAt: now }],
           ...encrypted,
         });
 
@@ -248,6 +598,9 @@ export const setupSocket = (io) => {
           tempId: tempId || null,
         };
         io.to(conversationId.toString()).emit("messageReceived", outgoingMsg);
+        (conversation.participants || []).forEach((uid) => {
+          emitToUser(String(uid), "messageReceived", outgoingMsg);
+        });
 
 
 
@@ -264,14 +617,14 @@ export const setupSocket = (io) => {
           conversationId,
           text: textValue,
           sender: sender,
-          receiver: isGroupConversation ? null : receiver,
+          receiver: isGroupConversation ? recipients : receiver,
           createdAt: msg.createdAt,
         };
         const participantIds = (conversation.participants || []).map((p) =>
           p.toString(),
         );
         participantIds.forEach((uid) => {
-          const sid = onlineUsers.get(uid);
+          const sid = getActiveSocketId(uid);
           if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
         });
         console.log("ðŸ’¬ Chat list update sent", chatListPayload);
@@ -280,14 +633,61 @@ export const setupSocket = (io) => {
      
      
             /* 3ï¸âƒ£ CHECK IF RECEIVER IS IN SAME CHAT */
-        const viewers =
-          activeConversationViewers.get(conversationId.toString()) ||
-          new Set();
+        if (onlineRecipientIds.length) {
+          for (const recipientId of onlineRecipientIds) {
+            const deliveredPayload = {
+              conversationId: String(conversationId),
+              userId: String(recipientId),
+              messageIds: [String(msg._id)],
+              deliveredAt: now.toISOString(),
+            };
+            io.to(String(conversationId)).emit("messagesDelivered", deliveredPayload);
+            emitToUser(String(sender), "messagesDelivered", deliveredPayload);
+            emitToUser(String(recipientId), "messagesDelivered", deliveredPayload);
+          }
+        }
 
-        const recipients = (conversation.participants || [])
-          .map((p) => p.toString())
-          .filter((uid) => uid && uid !== sender.toString());
-        const senderUser = await User.findById(sender).select("fullName").lean();
+        if (readRecipientIds.length) {
+          const readAt = now;
+          const nextReadBy = Array.from(
+            new Set([String(sender), ...readRecipientIds.map((id) => String(id))]),
+          );
+          const nextReadInfo = [
+            { userId: sender, readAt },
+            ...readRecipientIds.map((id) => ({ userId: id, readAt })),
+          ];
+          await Message.findByIdAndUpdate(msg._id, {
+            $set: {
+              status: "read",
+              readBy: nextReadBy,
+              readInfo: nextReadInfo,
+            },
+          });
+
+          for (const recipientId of readRecipientIds) {
+            io.to(String(conversationId)).emit("messagesRead", {
+              conversationId: String(conversationId),
+              userId: String(recipientId),
+              messageIds: [String(msg._id)],
+              readAt: now.toISOString(),
+            });
+          }
+        }
+        const senderUser = await User.findById(sender)
+          .select("fullName username phone")
+          .lean();
+        const senderLabel =
+          String(
+            senderUser?.fullName ||
+              senderUser?.username ||
+              senderUser?.phone ||
+              "Ryngales",
+          ).trim() || "Ryngales";
+        const groupLabel =
+          String(conversation?.groupName || "").trim() || "Group";
+        const previewText =
+          textValue.length > 80 ? `${textValue.slice(0, 80).trimEnd()}...` : textValue;
+        const chatThreadKey = `chat:${String(conversationId)}`;
 
         /* 4? CREATE DB NOTIFICATION (GROUP + DIRECT) */
         let deliveredNotifications = 0;
@@ -298,19 +698,23 @@ export const setupSocket = (io) => {
             recipient: recipientId,
             scope: "USER",
             type: "NEW_MESSAGE",
-            title: isGroupConversation ? "New Group Message" : "New Message",
-            message:
-              textValue.length > 40 ? textValue.slice(0, 40) + "..." : textValue,
+            title: isGroupConversation ? groupLabel : "New Message",
+            message: isGroupConversation
+              ? `${senderLabel}: ${previewText}`
+              : previewText,
             data: {
               conversationId,
               senderId: sender,
               isGroup: isGroupConversation,
+              groupName: isGroupConversation ? groupLabel : "",
+              senderLabel,
+              threadKey: chatThreadKey,
             },
             isRead: false,
           });
           deliveredNotifications += 1;
 
-          const recipientSocketId = onlineUsers.get(recipientId);
+          const recipientSocketId = getActiveSocketId(recipientId);
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("newNotification", notification);
             const unreadCount = await Notification.countDocuments({
@@ -326,14 +730,20 @@ export const setupSocket = (io) => {
           if (recipientUser?.pushToken) {
             await sendPushNotification({
               pushToken: recipientUser.pushToken,
-              title: `${senderUser?.fullName || "Ryngales"} • Ryngales`,
-              body:
-                textValue.length > 40 ? textValue.slice(0, 40) + "..." : textValue,
+              title: isGroupConversation ? groupLabel : `${senderLabel} • Ryngales`,
+              body: isGroupConversation
+                ? `${senderLabel}: ${previewText}`
+                : previewText,
+              subtitle: isGroupConversation ? senderLabel : undefined,
+              threadKey: chatThreadKey,
               data: {
                 type: "CHAT_MESSAGE",
                 conversationId,
                 senderId: sender,
                 isGroup: isGroupConversation,
+                groupName: isGroupConversation ? groupLabel : "",
+                senderLabel,
+                threadKey: chatThreadKey,
               },
             });
           }
@@ -367,7 +777,7 @@ export const setupSocket = (io) => {
             conversationId,
             sender,
           },
-          { $set: encrypted },
+          { $set: { ...encrypted, isEdited: true } },
           { new: true },
         );
 
@@ -471,10 +881,19 @@ export const setupSocket = (io) => {
       if (!conv) continue;
       targetMetaMap.set(String(conversationId), conv);
 
-      let receiver = null;
-      if (!conv.isGroup && conv.participants) {
-        receiver = conv.participants.find(p => p.toString() !== sender.toString()) || null;
-      }
+        let receiver = null;
+        let deliveryUserIds = [];
+        if (conv.participants) {
+          const targetIds = conv.participants
+            .map((p) => p.toString())
+            .filter((id) => id !== sender.toString());
+          receiver = conv.isGroup ? targetIds : targetIds[0] || null;
+          deliveryUserIds = conv.isGroup
+            ? targetIds
+            : receiver
+              ? [String(receiver)]
+              : [];
+        }
 
       for (const original of originals) {
         const originalText = await decryptMessageText(original);
@@ -486,6 +905,12 @@ export const setupSocket = (io) => {
           conversationId: conversationId,
           sender: sender,
           receiver: receiver,
+          deliveryInfo: deliveryUserIds.map((id) => ({
+            userId: id,
+            deliveredAt: new Date(),
+          })),
+          readBy: [sender],
+          readInfo: [{ userId: sender, readAt: new Date() }],
           ...encrypted,
           forwarded: true,
           forwardedFrom: (original.sender && /^[0-9a-fA-F]{24}$/.test(original.sender)) 
@@ -520,11 +945,13 @@ export const setupSocket = (io) => {
         createdAt: msg.createdAt,
       };
 
-      const participantIds = (convMeta?.participants || [msg.sender, msg.receiver])
+      const participantIds = (
+        convMeta?.participants || [msg.sender, ...(Array.isArray(msg.receiver) ? msg.receiver : [msg.receiver])]
+      )
         .filter(Boolean)
         .map((p) => p.toString());
       participantIds.forEach((uid) => {
-        const sid = onlineUsers.get(uid);
+        const sid = getActiveSocketId(uid);
         if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
       });
     }
@@ -694,7 +1121,11 @@ export const setupSocket = (io) => {
     ========================== */
     socket.on("disconnect", () => {
       if (socket.userId) {
-        onlineUsers.delete(socket.userId);
+        const uid = String(socket.userId || "");
+        // avoid deleting a newer active socket mapping for same user
+        if (onlineUsers.get(uid) === socket.id) {
+          onlineUsers.delete(uid);
+        }
         userAppState.delete(socket.userId);
         console.log("ðŸ”´ User disconnected:", socket.userId);
       }

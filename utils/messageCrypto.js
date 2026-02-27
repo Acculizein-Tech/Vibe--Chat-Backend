@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import Conversation from "../models/Conversation.js";
+import GroupConversation from "../models/GroupConversation.js";
 
 const ENC_ALGO = "aes-256-gcm";
 const KEY_BYTES = 32;
@@ -81,8 +82,27 @@ const decryptConversationKey = (encryption) => {
   );
 };
 
-const saveConversationEncryption = async (conversationId, payload) => {
-  await Conversation.findByIdAndUpdate(conversationId, {
+const resolveConversationForEncryption = async (conversationId) => {
+  const directConversation = await Conversation.findById(conversationId)
+    .select("encryption")
+    .lean();
+  if (directConversation) {
+    return { source: "direct", conversation: directConversation };
+  }
+
+  const groupConversation = await GroupConversation.findById(conversationId)
+    .select("encryption")
+    .lean();
+  if (groupConversation) {
+    return { source: "group", conversation: groupConversation };
+  }
+
+  return null;
+};
+
+const saveConversationEncryption = async (conversationId, source, payload) => {
+  const Model = source === "group" ? GroupConversation : Conversation;
+  await Model.findByIdAndUpdate(conversationId, {
     $set: {
       encryption: {
         enabled: true,
@@ -104,10 +124,10 @@ export const getOrCreateConversationDataKey = async (
   if (!cacheKey) return null;
   if (cache?.has(cacheKey)) return cache.get(cacheKey);
 
-  const conversation = await Conversation.findById(conversationId)
-    .select("encryption")
-    .lean();
-  if (!conversation) return null;
+  const resolved = await resolveConversationForEncryption(conversationId);
+  if (!resolved?.conversation) return null;
+
+  const { conversation, source } = resolved;
 
   let dataKey = null;
   let existing = null;
@@ -125,7 +145,7 @@ export const getOrCreateConversationDataKey = async (
   if (!dataKey) {
     dataKey = crypto.randomBytes(KEY_BYTES);
     const wrapped = encryptWithKey(toBase64(dataKey), getMasterKey());
-    await saveConversationEncryption(conversationId, wrapped);
+    await saveConversationEncryption(conversationId, source, wrapped);
   }
 
   if (cache) cache.set(cacheKey, dataKey);

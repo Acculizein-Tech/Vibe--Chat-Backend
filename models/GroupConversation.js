@@ -39,6 +39,14 @@ const groupConversationSchema = new mongoose.Schema(
       ref: "Message",
       default: null,
     },
+    encryption: {
+      enabled: { type: Boolean, default: false },
+      keyCiphertext: { type: String, default: "" },
+      keyIv: { type: String, default: "" },
+      keyAuthTag: { type: String, default: "" },
+      keyAlg: { type: String, default: "aes-256-gcm" },
+      keyVersion: { type: Number, default: 1 },
+    },
   },
   { timestamps: true },
 );

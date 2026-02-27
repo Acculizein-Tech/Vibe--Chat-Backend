@@ -5,6 +5,8 @@ export const sendPushNotification = async ({
   title,
   body,
   data,
+  threadKey,
+  subtitle,
 }) => {
   if (!pushToken) {
     console.log("⚠️ No push token provided");
@@ -14,7 +16,8 @@ export const sendPushNotification = async ({
   const conversationId = data?.conversationId
     ? String(data.conversationId)
     : null;
-  const threadKey = conversationId ? `chat:${conversationId}` : null;
+  const resolvedThreadKey =
+    String(threadKey || "").trim() || (conversationId ? `chat:${conversationId}` : null);
 
   const payload = {
     to: pushToken,
@@ -23,9 +26,10 @@ export const sendPushNotification = async ({
     title,
     body,
     data,
-    ...(threadKey ? { channelId: "chat-messages" } : {}),
-    ...(threadKey ? { threadId: threadKey } : {}),
-    ...(threadKey ? { collapseId: threadKey } : {}),
+    ...(subtitle ? { subtitle } : {}),
+    ...(resolvedThreadKey ? { channelId: "chat-messages" } : {}),
+    ...(resolvedThreadKey ? { threadId: resolvedThreadKey } : {}),
+    ...(resolvedThreadKey ? { collapseId: resolvedThreadKey } : {}),
   };
 
   try {

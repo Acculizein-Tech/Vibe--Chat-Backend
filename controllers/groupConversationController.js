@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import GroupConversation from "../models/GroupConversation.js";
+import Message from "../models/Message.js";
 import { onlineUsers } from "../utils/socketState.js";
+import { decryptMessageText } from "../utils/messageCrypto.js";
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
@@ -155,15 +157,74 @@ export const getGroupConversations = async (req, res) => {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const groups = await populateGroup(
+    const groupsRaw = await populateGroup(
       GroupConversation.find({
         participants: userId,
       }).sort({ updatedAt: -1 }),
+    ).lean();
+
+    const cache = new Map();
+    const groups = await Promise.all(
+      (groupsRaw || []).map(async (group) => {
+        let lastMessageDoc = null;
+        const lastMessageId = String(group?.lastMessage || "");
+
+        if (lastMessageId && mongoose.Types.ObjectId.isValid(lastMessageId)) {
+          lastMessageDoc = await Message.findById(lastMessageId)
+            .select(
+              "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt sender receiver",
+            )
+            .lean();
+        }
+
+        const lastMessageText = lastMessageDoc
+          ? await decryptMessageText(lastMessageDoc, cache)
+          : "";
+
+        return {
+          ...group,
+          lastMessage: lastMessageDoc
+            ? {
+                ...lastMessageDoc,
+                text: lastMessageText,
+              }
+            : null,
+          lastMessageText: lastMessageText || "",
+          lastMessageAt:
+            lastMessageDoc?.createdAt || group?.updatedAt || group?.createdAt || null,
+        };
+      }),
     );
+
+    const chatUsers = groups.map((group) => {
+      const createdByName =
+        group?.createdBy?.fullName ||
+        group?.createdBy?.username ||
+        group?.createdBy?.phone ||
+        "Unknown";
+
+      return {
+        conversationId: group?._id,
+        type: "group",
+        participant: {
+          receiver: null,
+          fullName: group?.groupName || "Unnamed Group",
+          phone: "",
+          userImages: [],
+          profileAvatar: group?.groupAvatar || null,
+          existingName: null,
+          existingUserId: null,
+          lastMessage: group?.lastMessageText || null,
+          lastMessageAt: group?.lastMessageAt || null,
+          groupCreatedBy: createdByName,
+        },
+      };
+    });
 
     return res.status(200).json({
       status: "Success",
       groupConversations: groups,
+      chatUsers,
     });
   } catch (error) {
     console.error("getGroupConversations error:", error);
@@ -546,10 +607,13 @@ export const updateGroupMemberRole = async (req, res) => {
     }
 
     const isCreator = String(groupConversation.createdBy) === String(userId);
-    if (!isCreator) {
-      return res
-        .status(403)
-        .json({ message: "Only group creator can change member roles" });
+    const isSelfDemoteRequest =
+      String(memberId) === String(userId) && String(role) === "member";
+    if (!isCreator && !isSelfDemoteRequest) {
+      return res.status(403).json({
+        message:
+          "Only group creator can change member roles. Non-creator admins can only remove themselves as admin.",
+      });
     }
 
     const isParticipant = groupConversation.participants.some(

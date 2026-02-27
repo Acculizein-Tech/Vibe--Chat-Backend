@@ -13,8 +13,9 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
     receiver: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // for 1-to-1 chat
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      ref: "User", // 1-to-1 => ObjectId, group => ObjectId[]
     },
     // for group messages, we can later add groupId
     text: {
@@ -57,6 +58,10 @@ const messageSchema = new mongoose.Schema(
       enum: ["sent", "delivered", "read"],
       default: "sent",
     },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -65,6 +70,36 @@ const messageSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+      },
+    ],
+    deliveryInfo: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        deliveredAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    readInfo: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        readAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
     replyTo: {
