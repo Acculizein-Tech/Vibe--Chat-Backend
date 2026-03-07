@@ -51,6 +51,11 @@ const messageSchema = new mongoose.Schema(
       {
         url: String, // image, video, audio, document
         type: { type: String, enum: ["image", "video", "audio", "file"] },
+        thumbnailUrl: { type: String, default: "" },
+        fileName: { type: String, default: "" },
+        mimeType: { type: String, default: "" },
+        sizeBytes: { type: Number, default: null },
+        pageCount: { type: Number, default: null },
       },
     ],
     status: {

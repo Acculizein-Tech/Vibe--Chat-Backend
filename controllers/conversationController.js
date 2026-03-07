@@ -6,6 +6,17 @@ import GroupConversation from "../models/GroupConversation.js";
 import { decryptMessageText } from "../utils/messageCrypto.js";
 import mongoose from "mongoose";
 import { onlineUsers } from "../utils/socketState.js";
+const CHAT_USERS_CACHE_TTL_MS = 3000;
+const chatUsersCache = new Map();
+const mediaPreviewLabel = (media = []) => {
+  const list = Array.isArray(media) ? media : [];
+  if (!list.length) return "";
+  const firstType = String(list[0]?.type || "").trim().toLowerCase();
+  if (firstType === "image") return list.length > 1 ? "Photos" : "Photo";
+  if (firstType === "video") return list.length > 1 ? "Videos" : "Video";
+  if (firstType === "audio") return list.length > 1 ? "Audios" : "Audio";
+  return list.length > 1 ? "Documents" : "Document";
+};
 // ✅ Create or get existing conversation between two users  
   
    
@@ -177,15 +188,22 @@ export const createGroupConversation = async (req, res) => {
   
 //get those users whose have the converstaion with the logged in user  
 // Get all users who have a conversation with the logged-in user  
-export const getChatUsers = async (req, res) => {  
-  try {  
-    const ownerId = req.user._id;  
-  
-    const conversations = await Conversation.find({  
-      participants: ownerId,  
-    }).lean();  
-  
-    const uniqueUsers = [];  
+export const getChatUsers = async (req, res) => {
+  try {
+    const ownerId = req.user._id;
+    const cacheKey = String(ownerId || "");
+    const now = Date.now();
+    const cached = chatUsersCache.get(cacheKey);
+    if (cached && now - cached.ts < CHAT_USERS_CACHE_TTL_MS) {
+      return res.json(cached.payload);
+    }
+
+    const conversations = await Conversation.find({
+      participants: ownerId,
+    }).lean();
+
+    const uniqueUsers = [];
+    const cache = new Map();
 
     const groupConversations = await GroupConversation.find({
       participants: ownerId,
@@ -193,19 +211,36 @@ export const getChatUsers = async (req, res) => {
       .populate("createdBy", "fullName firstName lastName username phone")
       .lean();
 
-    for (const group of groupConversations) {
-      let lastMessage = null;
-      if (group.lastMessage && mongoose.Types.ObjectId.isValid(group.lastMessage)) {
-        lastMessage = await Message.findById(group.lastMessage)
+    const groupLastMessageIds = Array.from(
+      new Set(
+        (groupConversations || [])
+          .map((group) => String(group?.lastMessage || ""))
+          .filter((id) => mongoose.Types.ObjectId.isValid(id)),
+      ),
+    );
+    const groupLastMessages = groupLastMessageIds.length
+      ? await Message.find({ _id: { $in: groupLastMessageIds } })
           .select(
-            "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt",
+            "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt media",
           )
-          .lean();
-      }
+          .lean()
+      : [];
+    const groupLastMessageById = new Map(
+      (groupLastMessages || []).map((msg) => [String(msg?._id || ""), msg]),
+    );
+
+    for (const group of groupConversations) {
+      const lastMessage =
+        group.lastMessage && mongoose.Types.ObjectId.isValid(group.lastMessage)
+          ? groupLastMessageById.get(String(group.lastMessage)) || null
+          : null;
 
       const lastMessageText = lastMessage
-        ? await decryptMessageText(lastMessage)
+        ? await decryptMessageText(lastMessage, cache)
         : null;
+      const lastMessagePreview =
+        String(lastMessageText || "").trim() ||
+        mediaPreviewLabel(lastMessage?.media);
 
       const createdByName =
         group?.createdBy?.fullName ||
@@ -228,73 +263,117 @@ export const getChatUsers = async (req, res) => {
           profileAvatar: group.groupAvatar || null,
           existingName: null,
           existingUserId: null,
-          lastMessage: lastMessageText || null,
+          lastMessage: lastMessagePreview || null,
           lastMessageAt: lastMessage?.createdAt || null,
           groupCreatedBy: createdByName,
         },
       });
     }
 
+    const directConversationIds = (conversations || [])
+      .map((convo) => convo?._id)
+      .filter(Boolean);
+    const latestDirectMessageAgg = directConversationIds.length
+      ? await Message.aggregate([
+          { $match: { conversationId: { $in: directConversationIds } } },
+          { $sort: { createdAt: -1 } },
+          {
+            $group: {
+              _id: "$conversationId",
+              doc: { $first: "$$ROOT" },
+            },
+          },
+        ])
+      : [];
+    const latestDirectMessageByConversationId = new Map(
+      (latestDirectMessageAgg || []).map((row) => [
+        String(row?._id || ""),
+        row?.doc || null,
+      ]),
+    );
+
+    const otherUserIds = Array.from(
+      new Set(
+        (conversations || [])
+          .map((convo) =>
+            (convo?.participants || []).find(
+              (id) => String(id) !== String(ownerId),
+            ),
+          )
+          .filter(Boolean)
+          .map((id) => String(id)),
+      ),
+    );
+    const users = otherUserIds.length
+      ? await User.find({ _id: { $in: otherUserIds } })
+          .select("fullName firstName lastName phone username profile.avatar userImages")
+          .lean()
+      : [];
+    const userById = new Map(
+      (users || []).map((user) => [String(user?._id || ""), user]),
+    );
+    const contacts = otherUserIds.length
+      ? await UserContact.find({
+          owner: ownerId,
+          linkedUser: { $in: otherUserIds },
+          isBlocked: false,
+        }).lean()
+      : [];
+    const contactByLinkedUserId = new Map(
+      (contacts || []).map((contact) => [String(contact?.linkedUser || ""), contact]),
+    );
+
     for (const convo of conversations) {
-      const otherUserId = convo.participants.find(  
-        (id) => id.toString() !== ownerId.toString()  
-      );  
-  
-      if (!otherUserId) continue;  
-  
-      const user = await User.findById(otherUserId)  
-        .select("fullName firstName lastName phone username profile.avatar userImages")  
-        .lean();  
-  
-      const contact = await UserContact.findOne({  
-        owner: ownerId,  
-        linkedUser: otherUserId,  
-        isBlocked: false,  
-      }).lean();  
-  
-      // 🔥 IMPORTANT FIX  
-      if (!user && !contact) continue;  
-  
-      const userFullName =  
-        user?.fullName ||  
-        [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||  
-        user?.username ||  
-        "";  
-      const lastMessage = await Message.findOne({  
-        conversationId: convo._id,  
-      }).sort({ createdAt: -1 }).select("text encryptedText textIv textAuthTag isEncrypted conversationId createdAt").lean();  
+      const otherUserId = (convo?.participants || []).find(
+        (id) => String(id) !== String(ownerId),
+      );
+      if (!otherUserId) continue;
+
+      const user = userById.get(String(otherUserId)) || null;
+      const contact = contactByLinkedUserId.get(String(otherUserId)) || null;
+      if (!user && !contact) continue;
+
+      const userFullName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+        user?.username ||
+        "";
+      const lastMessage =
+        latestDirectMessageByConversationId.get(String(convo._id)) || null;
       const lastMessageText = lastMessage
-        ? await decryptMessageText(lastMessage)
+        ? await decryptMessageText(lastMessage, cache)
         : null;
-       
-      uniqueUsers.push({  
-        conversationId: convo._id,  
+      const lastMessagePreview =
+        String(lastMessageText || "").trim() ||
+        mediaPreviewLabel(lastMessage?.media);
+
+      uniqueUsers.push({
+        conversationId: convo._id,
         type: "individual",
-        participant: {  
-          receiver: otherUserId,  
-          fullName: userFullName,  
+        participant: {
+          receiver: otherUserId,
+          fullName: userFullName,
           phone: user?.phone || "",
           userImages: user?.userImages || [],
-          profileAvatar: user?.profile?.avatar || null,  
-          existingName: contact  
-            ? `${contact.firstName} ${contact.lastName}`.trim()  
-            : null,  
-            existingUserId: contact ? contact._id : null,  
-            lastMessage: lastMessageText || null, 
-            lastMessageAt: lastMessage?.createdAt || null,  
-        },  
-      })  
-        
-    }  
-  
-    res.json({ status: "Success", uniqueUsers });  
-  } catch (err) {  
-    console.error("❌ getChatUsers error", err);  
-    res.status(500).json({ status: "Error", message: err.message });  
-  }  
+          profileAvatar: user?.profile?.avatar || null,
+          existingName: contact
+            ? `${contact.firstName} ${contact.lastName}`.trim()
+            : null,
+          existingUserId: contact ? contact._id : null,
+          lastMessage: lastMessagePreview || null,
+          lastMessageAt: lastMessage?.createdAt || null,
+        },
+      });
+    }
+
+    const payload = { status: "Success", uniqueUsers };
+    chatUsersCache.set(cacheKey, { ts: now, payload });
+    res.json(payload);
+  } catch (err) {
+    console.error("getChatUsers error", err);
+    res.status(500).json({ status: "Error", message: err.message });
+  }
 };
-
-
 //\delete a conversation by ID
 export const deleteConversation = async (req, res) => {
   try {
@@ -319,3 +398,4 @@ export const deleteConversation = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+

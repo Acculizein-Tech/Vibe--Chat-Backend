@@ -527,7 +527,20 @@ export const setupSocket = (io) => {
     socket.on("sendMessage", async (data) => {
       try {
         const { sender, receiver, text, conversationId, tempId } = data;
-        if (!sender || !text || !conversationId) return;
+        const incomingMedia = Array.isArray(data?.media) ? data.media : [];
+        const mediaPayload = incomingMedia
+          .map((m) => ({
+            url: String(m?.url || "").trim(),
+            type: String(m?.type || "").trim(),
+          }))
+          .filter(
+            (m) =>
+              m.url &&
+              ["image", "video", "audio", "file"].includes(String(m.type)),
+          );
+        const hasText = Boolean(String(text || "").trim());
+        const hasMedia = mediaPayload.length > 0;
+        if (!sender || !conversationId || (!hasText && !hasMedia)) return;
         const conversation = await resolveConversation(conversationId);
         if (!conversation) return;
         const isGroupConversation = Boolean(conversation.isGroup);
@@ -583,6 +596,7 @@ export const setupSocket = (io) => {
           })),
           readBy: [sender],
           readInfo: [{ userId: sender, readAt: now }],
+          media: mediaPayload,
           ...encrypted,
         });
 
@@ -613,9 +627,28 @@ export const setupSocket = (io) => {
            ðŸ”¥ NEW PART â€“ CHAT LIST UPDATE 
         ================================= */
 
+        const mediaPreviewText = hasMedia
+          ? mediaPayload[0].type === "image"
+            ? mediaPayload.length > 1
+              ? "Photos"
+              : "Photo"
+            : mediaPayload[0].type === "video"
+              ? mediaPayload.length > 1
+                ? "Videos"
+                : "Video"
+              : mediaPayload[0].type === "audio"
+                ? mediaPayload.length > 1
+                  ? "Audios"
+                  : "Audio"
+                : mediaPayload.length > 1
+                  ? "Documents"
+                  : "Document"
+          : "";
+        const previewLabel = textValue || mediaPreviewText;
+
         const chatListPayload = {
           conversationId,
-          text: textValue,
+          text: previewLabel,
           sender: sender,
           receiver: isGroupConversation ? recipients : receiver,
           createdAt: msg.createdAt,
@@ -685,8 +718,9 @@ export const setupSocket = (io) => {
           ).trim() || "Ryngales";
         const groupLabel =
           String(conversation?.groupName || "").trim() || "Group";
-        const previewText =
-          textValue.length > 80 ? `${textValue.slice(0, 80).trimEnd()}...` : textValue;
+        const previewText = previewLabel.length > 80
+          ? `${previewLabel.slice(0, 80).trimEnd()}...`
+          : previewLabel;
         const chatThreadKey = `chat:${String(conversationId)}`;
 
         /* 4? CREATE DB NOTIFICATION (GROUP + DIRECT) */
@@ -823,7 +857,14 @@ export const setupSocket = (io) => {
 
    socket.on("forwardMessage", async (data) => {
   try {
-    const { sender, messageId, text, messageIds = [], targetConversationIds = [] } = data;
+    const {
+      sender,
+      messageId,
+      text,
+      messageIds = [],
+      targetConversationIds = [],
+      mediaByMessageId = {},
+    } = data;
 
     /* ============================================================
        ðŸ“¥ COLLECT ORIGINALS (The "Baap" Fix)
@@ -857,9 +898,15 @@ export const setupSocket = (io) => {
 
     // 4. ðŸ”¥ Race Condition Fallback (Fresh Message Case)
     // Agar DB mein kuch nahi mila (kyunki IDs temp thin) toh text fallback use karo
-    if (originals.length === 0 && text) {
+    if (originals.length === 0 && (text || Object.keys(mediaByMessageId || {}).length)) {
       console.log("âš ï¸ [FORWARD] DB sync pending (temp-id case), using fallback text");
-      originals = [{ text: text, sender: sender }]; 
+      const firstIncomingId = String(incomingIds[0] || "").trim();
+      const fallbackMediaKey =
+        firstIncomingId || String(Object.keys(mediaByMessageId || {})[0] || "").trim();
+      const fallbackMedia = Array.isArray(mediaByMessageId?.[fallbackMediaKey])
+        ? mediaByMessageId[fallbackMediaKey]
+        : [];
+      originals = [{ text: text || "", sender: sender, media: fallbackMedia }];
     }
 
     if (originals.length === 0) {
@@ -895,8 +942,82 @@ export const setupSocket = (io) => {
               : [];
         }
 
+      const normalizeForwardMediaType = (rawType, mimeType, mediaUrl) => {
+        const t = String(rawType || "").trim().toLowerCase();
+        const mime = String(mimeType || "").trim().toLowerCase();
+        if (["image", "video", "audio", "file"].includes(t)) return t;
+        if (t === "document") return "file";
+        if (mime.startsWith("image/")) return "image";
+        if (mime.startsWith("video/")) return "video";
+        if (mime.startsWith("audio/")) return "audio";
+        const url = String(mediaUrl || "").toLowerCase();
+        if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)(\?|$)/i.test(url)) return "image";
+        if (/\.(mp4|mov|m4v|webm|avi|mkv)(\?|$)/i.test(url)) return "video";
+        if (/\.(mp3|wav|m4a|aac|ogg|opus)(\?|$)/i.test(url)) return "audio";
+        if (/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|zip|rar)(\?|$)/i.test(url)) return "file";
+        if (mime || t) return "file";
+        return "";
+      };
+
       for (const original of originals) {
         const originalText = await decryptMessageText(original);
+        const originalMediaList = Array.isArray(original?.media)
+          ? original.media
+          : Array.isArray(original?.attachments)
+            ? original.attachments
+            : Array.isArray(original?.files)
+              ? original.files
+              : [];
+        let copiedMedia = Array.isArray(originalMediaList)
+          ? originalMediaList
+              .map((m) => ({
+                url: String(
+                  m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
+                ).trim(),
+                type: normalizeForwardMediaType(
+                  m?.type,
+                  m?.mimeType || m?.mimetype,
+                  m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
+                ),
+                thumbnailUrl: String(m?.thumbnailUrl || "").trim(),
+                fileName: String(m?.fileName || m?.name || "").trim(),
+                mimeType: String(m?.mimeType || m?.mimetype || "").trim(),
+                sizeBytes: Number(m?.sizeBytes || m?.size || 0) || null,
+                pageCount: Number(m?.pageCount || m?.pages || 0) || null,
+              }))
+              .filter(
+                (m) =>
+                  m.url &&
+                    ["image", "video", "audio", "file"].includes(String(m.type)),
+              )
+          : [];
+        if (!copiedMedia.length) {
+          const originalId = String(original?._id || "").trim();
+          const fallbackMedia = Array.isArray(mediaByMessageId?.[originalId])
+            ? mediaByMessageId[originalId]
+            : [];
+          copiedMedia = fallbackMedia
+            .map((m) => ({
+              url: String(
+                m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
+              ).trim(),
+              type: normalizeForwardMediaType(
+                m?.type,
+                m?.mimeType || m?.mimetype,
+                m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
+              ),
+              thumbnailUrl: String(m?.thumbnailUrl || "").trim(),
+              fileName: String(m?.fileName || m?.name || "").trim(),
+              mimeType: String(m?.mimeType || m?.mimetype || "").trim(),
+              sizeBytes: Number(m?.sizeBytes || m?.size || 0) || null,
+              pageCount: Number(m?.pageCount || m?.pages || 0) || null,
+            }))
+            .filter(
+              (m) =>
+                m.url &&
+                ["image", "video", "audio", "file"].includes(String(m.type)),
+            );
+        }
         const encrypted = await encryptMessageText({
           conversationId,
           text: originalText || "",
@@ -911,6 +1032,7 @@ export const setupSocket = (io) => {
           })),
           readBy: [sender],
           readInfo: [{ userId: sender, readAt: new Date() }],
+          media: copiedMedia,
           ...encrypted,
           forwarded: true,
           forwardedFrom: (original.sender && /^[0-9a-fA-F]{24}$/.test(original.sender)) 
@@ -922,13 +1044,35 @@ export const setupSocket = (io) => {
     }
 
     const savedMessages = await Message.insertMany(messagesToInsert);
+    const senderUser = await User.findById(sender)
+      .select("fullName username phone")
+      .lean();
+    const senderLabel =
+      String(
+        senderUser?.fullName ||
+          senderUser?.username ||
+          senderUser?.phone ||
+          "Ryngales",
+      ).trim() || "Ryngales";
+    const pushTokenCache = new Map();
+    const getMediaPreviewText = (media) => {
+      const list = Array.isArray(media) ? media : [];
+      if (!list.length) return "";
+      const firstType = String(list[0]?.type || "").toLowerCase();
+      if (firstType === "image") return list.length > 1 ? "Photos" : "Photo";
+      if (firstType === "video") return list.length > 1 ? "Videos" : "Video";
+      if (firstType === "audio") return list.length > 1 ? "Audios" : "Audio";
+      return list.length > 1 ? "Documents" : "Document";
+    };
 
     /* =========================
        ðŸ“¡ EMITS
     ========================== */
     for (const msg of savedMessages) {
       const outgoingMsg = await materializeMessageForClient(msg);
-      const previewText = String(outgoingMsg?.text || "");
+      const previewText =
+        String(outgoingMsg?.text || "").trim() ||
+        getMediaPreviewText(outgoingMsg?.media);
       io.to(msg.conversationId.toString()).emit("messageReceived", outgoingMsg);
       const convMeta = targetMetaMap.get(String(msg.conversationId));
       await updateLastMessageRef({
@@ -951,9 +1095,81 @@ export const setupSocket = (io) => {
         .filter(Boolean)
         .map((p) => p.toString());
       participantIds.forEach((uid) => {
-        const sid = getActiveSocketId(uid);
-        if (sid) io.to(sid).emit("chat:list:update", chatListPayload);
+        emitToUser(uid, "messageReceived", outgoingMsg);
+        emitToUser(uid, "chat:list:update", chatListPayload);
       });
+
+      const recipients = participantIds.filter(
+        (uid) => String(uid) !== String(sender),
+      );
+      const viewers = activeConversationViewers.get(String(msg.conversationId)) || new Set();
+      const groupLabel =
+        String(convMeta?.groupName || "").trim() || "Group";
+      const threadKey = `chat:${String(msg.conversationId)}`;
+      for (const recipientId of recipients) {
+        if (viewers.has(recipientId)) continue;
+
+        const previewForNotif =
+          previewText.length > 80
+            ? `${previewText.slice(0, 80).trimEnd()}...`
+            : previewText || "New message";
+        const notification = await Notification.create({
+          recipient: recipientId,
+          scope: "USER",
+          type: "NEW_MESSAGE",
+          title: convMeta?.isGroup ? groupLabel : "New Message",
+          message: convMeta?.isGroup
+            ? `${senderLabel}: ${previewForNotif}`
+            : previewForNotif,
+          data: {
+            conversationId: msg.conversationId,
+            senderId: sender,
+            isGroup: Boolean(convMeta?.isGroup),
+            groupName: convMeta?.isGroup ? groupLabel : "",
+            senderLabel,
+            threadKey,
+          },
+          isRead: false,
+        });
+
+        emitToUser(recipientId, "newNotification", notification);
+        const unreadCount = await Notification.countDocuments({
+          recipient: recipientId,
+          isRead: false,
+        });
+        emitToUser(recipientId, "unreadCount", unreadCount);
+
+        if (!pushTokenCache.has(recipientId)) {
+          const recipientUser = await User.findById(recipientId)
+            .select("pushToken")
+            .lean();
+          pushTokenCache.set(
+            recipientId,
+            String(recipientUser?.pushToken || "").trim(),
+          );
+        }
+        const recipientPushToken = pushTokenCache.get(recipientId);
+        if (recipientPushToken) {
+          await sendPushNotification({
+            pushToken: recipientPushToken,
+            title: convMeta?.isGroup ? groupLabel : `${senderLabel} • Ryngales`,
+            body: convMeta?.isGroup
+              ? `${senderLabel}: ${previewForNotif}`
+              : previewForNotif,
+            subtitle: convMeta?.isGroup ? senderLabel : undefined,
+            threadKey,
+            data: {
+              type: "CHAT_MESSAGE",
+              conversationId: msg.conversationId,
+              senderId: sender,
+              isGroup: Boolean(convMeta?.isGroup),
+              groupName: convMeta?.isGroup ? groupLabel : "",
+              senderLabel,
+              threadKey,
+            },
+          });
+        }
+      }
     }
 
     socket.emit("forward:success", { count: savedMessages.length });

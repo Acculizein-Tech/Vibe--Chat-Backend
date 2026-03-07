@@ -13,6 +13,191 @@ import {
   encryptMessageText,
   materializeMessageForClient,
 } from "../utils/messageCrypto.js";
+import User from "../models/user.js";
+import { sendPushNotification } from "../utils/pushService.js";
+
+const normalizeId = (value) => String(value || "").trim();
+const uniqueIds = (values = []) =>
+  Array.from(new Set(values.map((v) => normalizeId(v)).filter(Boolean)));
+
+const resolveConversationForMessage = async (conversationId) => {
+  const direct = await Conversation.findById(conversationId)
+    .select("participants isGroup lastMessage")
+    .lean();
+  if (direct) {
+    return { ...direct, source: "direct", isGroup: Boolean(direct.isGroup) };
+  }
+  const group = await GroupConversation.findById(conversationId)
+    .select("participants groupName lastMessage")
+    .lean();
+  if (group) {
+    return { ...group, source: "group", isGroup: true };
+  }
+  return null;
+};
+
+const updateLastMessageRef = async ({ conversationId, source, messageId }) => {
+  if (!conversationId || !source || !messageId) return;
+  if (source === "group") {
+    await GroupConversation.findByIdAndUpdate(conversationId, {
+      lastMessage: messageId,
+    });
+    return;
+  }
+  await Conversation.findByIdAndUpdate(conversationId, {
+    lastMessage: messageId,
+  });
+};
+
+const getActiveSocketId = (userId) => {
+  const uid = normalizeId(userId);
+  if (!uid) return "";
+  const sid = normalizeId(onlineUsers.get(uid));
+  if (!sid) return "";
+  const socketRef = io?.sockets?.sockets?.get(sid);
+  if (!socketRef || socketRef.disconnected) {
+    if (onlineUsers.get(uid) === sid) {
+      onlineUsers.delete(uid);
+    }
+    return "";
+  }
+  return sid;
+};
+
+const emitToUser = (userId, event, payload) => {
+  const uid = normalizeId(userId);
+  if (!uid) return;
+  io.to(`user:${uid}`).emit(event, payload);
+  const sid = getActiveSocketId(uid);
+  if (sid) io.to(sid).emit(event, payload);
+};
+
+const buildMediaPreviewText = (media = []) => {
+  const firstType = normalizeId(media?.[0]?.type);
+  if (!firstType) return "";
+  if (firstType === "image") return media.length > 1 ? "Photos" : "Photo";
+  if (firstType === "video") return media.length > 1 ? "Videos" : "Video";
+  if (firstType === "audio") return media.length > 1 ? "Audios" : "Audio";
+  return media.length > 1 ? "Documents" : "Document";
+};
+
+const truncatePreview = (value, max = 80) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}...`;
+};
+
+const emitMessageSideEffects = async ({
+  conversationId,
+  conversation,
+  senderId,
+  receiverIds = [],
+  outgoing,
+  previewLabel,
+  createdAt,
+}) => {
+  const cid = normalizeId(conversationId);
+  const sender = normalizeId(senderId);
+  if (!cid || !sender || !conversation || !outgoing) return;
+
+  const participantIds = uniqueIds(conversation?.participants || []);
+  const recipients = uniqueIds(receiverIds).filter((id) => id !== sender);
+  const isGroupConversation = Boolean(conversation?.isGroup);
+
+  io.to(cid).emit("messageReceived", outgoing);
+  participantIds.forEach((uid) => {
+    emitToUser(uid, "messageReceived", outgoing);
+  });
+
+  const chatListPayload = {
+    conversationId: cid,
+    text: String(previewLabel || ""),
+    sender,
+    receiver: isGroupConversation ? recipients : recipients[0] || null,
+    createdAt: createdAt || new Date().toISOString(),
+  };
+  participantIds.forEach((uid) => {
+    emitToUser(uid, "chat:list:update", chatListPayload);
+  });
+
+  const viewers = activeConversationViewers.get(cid) || new Set();
+  const [senderUser, recipientUsers] = await Promise.all([
+    User.findById(sender).select("fullName username phone").lean(),
+    recipients.length
+      ? User.find({ _id: { $in: recipients } }).select("_id pushToken").lean()
+      : [],
+  ]);
+  const recipientPushMap = new Map(
+    (recipientUsers || []).map((u) => [normalizeId(u?._id), String(u?.pushToken || "").trim()]),
+  );
+
+  const senderLabel =
+    String(
+      senderUser?.fullName ||
+        senderUser?.username ||
+        senderUser?.phone ||
+        "Ryngales",
+    ).trim() || "Ryngales";
+  const groupLabel = String(conversation?.groupName || "").trim() || "Group";
+  const previewText = truncatePreview(previewLabel, 80);
+  const chatThreadKey = `chat:${cid}`;
+
+  for (const recipientId of recipients) {
+    if (!recipientId || viewers.has(recipientId)) continue;
+    try {
+      const notification = await Notification.create({
+        recipient: recipientId,
+        scope: "USER",
+        type: "NEW_MESSAGE",
+        title: isGroupConversation ? groupLabel : "New Message",
+        message: isGroupConversation
+          ? `${senderLabel}: ${previewText || "New message"}`
+          : previewText || "New message",
+        data: {
+          conversationId: cid,
+          senderId: sender,
+          isGroup: isGroupConversation,
+          groupName: isGroupConversation ? groupLabel : "",
+          senderLabel,
+          threadKey: chatThreadKey,
+        },
+        isRead: false,
+      });
+
+      emitToUser(recipientId, "newNotification", notification);
+      const unreadCount = await Notification.countDocuments({
+        recipient: recipientId,
+        isRead: false,
+      });
+      emitToUser(recipientId, "unreadCount", unreadCount);
+
+      const pushToken = recipientPushMap.get(recipientId);
+      if (pushToken) {
+        await sendPushNotification({
+          pushToken,
+          title: isGroupConversation ? groupLabel : `${senderLabel} • Ryngales`,
+          body: isGroupConversation
+            ? `${senderLabel}: ${previewText || "New message"}`
+            : previewText || "New message",
+          subtitle: isGroupConversation ? senderLabel : undefined,
+          threadKey: chatThreadKey,
+          data: {
+            type: "CHAT_MESSAGE",
+            conversationId: cid,
+            senderId: sender,
+            isGroup: isGroupConversation,
+            groupName: isGroupConversation ? groupLabel : "",
+            senderLabel,
+            threadKey: chatThreadKey,
+          },
+        });
+      }
+    } catch (notificationErr) {
+      console.error("message side-effect notification error:", notificationErr);
+    }
+  }
+};
 
 
 // ✅ Send a message
@@ -145,17 +330,8 @@ export const sendMessage = async (req, res) => {
       return res.status(400).json({ error: "Missing fields" });
     }
 
-    const directConversation = await Conversation.findById(conversationId)
-      .select("isGroup")
-      .lean();
-    const groupConversation = directConversation
-      ? null
-      : await GroupConversation.findById(conversationId)
-          .select("participants")
-          .lean();
-
-    const isGroupConversation = Boolean(groupConversation);
-    const conversation = directConversation || groupConversation;
+    const conversation = await resolveConversationForMessage(conversationId);
+    const isGroupConversation = Boolean(conversation?.isGroup);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
@@ -183,17 +359,23 @@ export const sendMessage = async (req, res) => {
       ...encrypted,
     });
 
-    if (isGroupConversation) {
-      await GroupConversation.findByIdAndUpdate(conversationId, {
-        lastMessage: message._id,
-      });
-    } else {
-      await Conversation.findByIdAndUpdate(conversationId, {
-        lastMessage: message._id,
-      });
-    }
+    await updateLastMessageRef({
+      conversationId,
+      source: conversation.source,
+      messageId: message._id,
+    });
 
     const outgoing = await materializeMessageForClient(message);
+    const previewLabel = String(text || "").trim();
+    await emitMessageSideEffects({
+      conversationId,
+      conversation,
+      senderId: sender,
+      receiverIds: isGroupConversation ? groupReceiverIds : [receiver],
+      outgoing,
+      previewLabel,
+      createdAt: message.createdAt,
+    });
     res.status(201).json(outgoing);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -231,7 +413,16 @@ export const getMessages = async (req, res) => {
 export const editMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { text, userId } = req.body;
+    const { text } = req.body;
+    const requesterId = normalizeId(req.user?._id || req.user?.id);
+    const nextText = String(text || "").trim();
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!nextText) {
+      return res.status(400).json({ error: "Text is required" });
+    }
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -239,13 +430,13 @@ export const editMessage = async (req, res) => {
     }
 
     // Only sender can edit
-    if (message.sender.toString() !== userId) {
+    if (normalizeId(message.sender) !== requesterId) {
       return res.status(403).json({ error: "You can edit only your messages" });
     }
 
     const encrypted = await encryptMessageText({
       conversationId: message.conversationId,
-      text,
+      text: nextText,
     });
 
     message.text = encrypted.text;
@@ -293,7 +484,12 @@ export const editMessage = async (req, res) => {
 export const deleteMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { userId } = req.body;
+    const { deleteFor = "everyone" } = req.body || {};
+    const requesterId = normalizeId(req.user?._id || req.user?.id);
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -301,21 +497,62 @@ export const deleteMessage = async (req, res) => {
     }
 
     // NEW AUTH LOGIC: Allow if user is in the conversation (not just sender)
-    const conversation =
-      (await Conversation.findById(message.conversationId)) ||
-      (await GroupConversation.findById(message.conversationId));
-    if (!conversation || !conversation.participants.includes(userId)) {
+    const conversation = await resolveConversationForMessage(message.conversationId);
+    const isParticipant = Boolean(
+      conversation?.participants?.some((p) => normalizeId(p) === requesterId),
+    );
+    if (!conversation || !isParticipant) {
       return res.status(403).json({ error: "You can only delete messages in your conversations" });
     }
 
-    // OLD LOGIC (optional: uncomment if you want to keep sender-only restriction as fallback)
-    // if (message.sender.toString() !== userId) {
-    //   return res.status(403).json({ error: "You can delete only your messages" });
-    // }
+    if (String(deleteFor) === "me") {
+      await Message.updateOne(
+        { _id: messageId, conversationId: message.conversationId },
+        { $addToSet: { deletedFor: requesterId } },
+      );
+      emitToUser(requesterId, "messageDeleted", {
+        messageIds: [messageId],
+        conversationId: String(message.conversationId),
+        deleteFor: "me",
+      });
+      return res.status(200).json({
+        message: "Message deleted for me",
+        deleteFor: "me",
+        messageIds: [messageId],
+      });
+    }
 
-    await Message.findByIdAndDelete(messageId);
+    if (normalizeId(message.sender) !== requesterId) {
+      return res
+        .status(403)
+        .json({ error: "You can delete for everyone only your messages" });
+    }
 
-    res.status(200).json({ message: "Message deleted successfully" });
+    await Message.updateOne(
+      { _id: messageId, conversationId: message.conversationId },
+      {
+        $set: {
+          text: "This message was deleted",
+          encryptedText: "",
+          textIv: "",
+          textAuthTag: "",
+          isEncrypted: false,
+          media: [],
+        },
+      },
+    );
+
+    io.to(String(message.conversationId)).emit("messageDeleted", {
+      messageIds: [messageId],
+      conversationId: String(message.conversationId),
+      deleteFor: "everyone",
+      replacementText: "This message was deleted",
+    });
+    res.status(200).json({
+      message: "Message deleted for everyone",
+      deleteFor: "everyone",
+      messageIds: [messageId],
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -324,8 +561,34 @@ export const deleteMessage = async (req, res) => {
 
 //multiple imags
 export const uploadChatImages = asyncHandler(async (req, res) => {
-  const { conversationId, receiverId } = req.body;
+  const { conversationId, receiverId, tempId } = req.body;
   const files = req.files || [];
+  const parsePositiveNumber = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return Math.round(num);
+  };
+  let attachmentMetaByIndex = [];
+  try {
+    const rawMeta = req.body?.attachmentMeta;
+    const parsed = typeof rawMeta === "string" ? JSON.parse(rawMeta) : rawMeta;
+    if (Array.isArray(parsed)) {
+      attachmentMetaByIndex = parsed.map((item) => ({
+        fileName: String(item?.name || item?.fileName || "").trim(),
+        mimeType: String(item?.mimeType || item?.mimetype || "").trim(),
+        sizeBytes:
+          parsePositiveNumber(
+            item?.sizeBytes ?? item?.size ?? item?.fileSize ?? item?.bytes,
+          ) || null,
+        pageCount:
+          parsePositiveNumber(
+            item?.pageCount ?? item?.pages ?? item?.totalPages ?? item?.page_count,
+          ) || null,
+      }));
+    }
+  } catch (_metaErr) {
+    attachmentMetaByIndex = [];
+  }
 
   if (!conversationId) {
     return res.status(400).json({
@@ -337,7 +600,7 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
   if (!files.length) {
     return res.status(400).json({
       success: false,
-      message: "No images received",
+      message: "No attachments received",
     });
   }
 
@@ -369,11 +632,40 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
   const media = [];
   const failedFiles = [];
 
+  const getMediaType = (mimetype = "") => {
+    const mime = String(mimetype || "").toLowerCase();
+    if (mime.startsWith("image/")) return "image";
+    if (mime.startsWith("video/")) return "video";
+    if (mime.startsWith("audio/")) return "audio";
+    return "file";
+  };
+
   uploadResults.forEach((result, index) => {
+    const meta = attachmentMetaByIndex[index] || {};
     if (result.status === "fulfilled" && result.value.success) {
+      const uploadPageCount =
+        parsePositiveNumber(result?.value?.pageCount) || null;
+      const metaPageCount =
+        parsePositiveNumber(meta.pageCount) || null;
       media.push({
         url: result.value.url,
-        type: "image",
+        type: getMediaType(files[index]?.mimetype),
+        thumbnailUrl: String(result?.value?.thumbnailUrl || "").trim(),
+        fileName:
+          meta.fileName ||
+          files[index]?.originalname ||
+          "",
+        mimeType: meta.mimeType || files[index]?.mimetype || "",
+        sizeBytes:
+          meta.sizeBytes != null
+            ? meta.sizeBytes
+            : parsePositiveNumber(files[index]?.size),
+        pageCount:
+          uploadPageCount != null
+            ? uploadPageCount
+            : metaPageCount != null
+              ? metaPageCount
+              : null,
       });
     } else {
       failedFiles.push({
@@ -408,14 +700,50 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
     status: "sent",
   });
 
-  // optional: update lastMessage
-  conversation.lastMessage = message._id;
-  await conversation.save();
+  const resolvedConversation = await resolveConversationForMessage(conversationId);
+  if (resolvedConversation?.source) {
+    await updateLastMessageRef({
+      conversationId,
+      source: resolvedConversation.source,
+      messageId: message._id,
+    });
+  } else {
+    conversation.lastMessage = message._id;
+    await conversation.save();
+  }
+
+  const outgoing = {
+    ...(await materializeMessageForClient(message)),
+    tempId: String(tempId || "").trim() || null,
+  };
+  const mediaPreviewText = buildMediaPreviewText(media);
+  await emitMessageSideEffects({
+    conversationId,
+    conversation: resolvedConversation || {
+      participants: conversation?.participants || [],
+      isGroup: isGroupConversationForUpload,
+      groupName: conversation?.groupName || "",
+    },
+    senderId: req.user._id,
+    receiverIds: isGroupConversationForUpload
+      ? (conversation.participants || [])
+          .map((id) => String(id || ""))
+          .filter((id) => id && id !== String(req.user._id))
+      : [receiverId].filter(Boolean).length
+        ? [receiverId]
+        : (conversation.participants || [])
+            .map((id) => String(id || ""))
+            .filter((id) => id && id !== String(req.user._id)),
+    outgoing,
+    previewLabel: mediaPreviewText,
+    createdAt: message.createdAt,
+  });
 
   return res.json({
     success: true,
-    message: "Images uploaded & message created",
+    message: "Attachments uploaded & message created",
     messageId: message._id,
+    outgoing,
     media,
     failed: failedFiles,
   });

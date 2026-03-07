@@ -3,6 +3,17 @@ import GroupConversation from "../models/GroupConversation.js";
 import Message from "../models/Message.js";
 import { onlineUsers } from "../utils/socketState.js";
 import { decryptMessageText } from "../utils/messageCrypto.js";
+const GROUP_CONVERSATIONS_CACHE_TTL_MS = 3000;
+const groupConversationsCache = new Map();
+const mediaPreviewLabel = (media = []) => {
+  const list = Array.isArray(media) ? media : [];
+  if (!list.length) return "";
+  const firstType = String(list[0]?.type || "").trim().toLowerCase();
+  if (firstType === "image") return list.length > 1 ? "Photos" : "Photo";
+  if (firstType === "video") return list.length > 1 ? "Videos" : "Video";
+  if (firstType === "audio") return list.length > 1 ? "Audios" : "Audio";
+  return list.length > 1 ? "Documents" : "Document";
+};
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
@@ -156,6 +167,12 @@ export const getGroupConversations = async (req, res) => {
   try {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const cacheKey = String(userId || "");
+    const now = Date.now();
+    const cached = groupConversationsCache.get(cacheKey);
+    if (cached && now - cached.ts < GROUP_CONVERSATIONS_CACHE_TTL_MS) {
+      return res.status(200).json(cached.payload);
+    }
 
     const groupsRaw = await populateGroup(
       GroupConversation.find({
@@ -164,22 +181,39 @@ export const getGroupConversations = async (req, res) => {
     ).lean();
 
     const cache = new Map();
+    const lastMessageIds = Array.from(
+      new Set(
+        (groupsRaw || [])
+          .map((group) => String(group?.lastMessage || ""))
+          .filter((id) => mongoose.Types.ObjectId.isValid(id)),
+      ),
+    );
+    const lastMessages = lastMessageIds.length
+      ? await Message.find({ _id: { $in: lastMessageIds } })
+          .select(
+            "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt sender receiver media",
+          )
+          .lean()
+      : [];
+    const lastMessageById = new Map(
+      (lastMessages || []).map((msg) => [String(msg?._id || ""), msg]),
+    );
+
     const groups = await Promise.all(
       (groupsRaw || []).map(async (group) => {
         let lastMessageDoc = null;
         const lastMessageId = String(group?.lastMessage || "");
 
         if (lastMessageId && mongoose.Types.ObjectId.isValid(lastMessageId)) {
-          lastMessageDoc = await Message.findById(lastMessageId)
-            .select(
-              "text encryptedText textIv textAuthTag isEncrypted conversationId createdAt sender receiver",
-            )
-            .lean();
+          lastMessageDoc = lastMessageById.get(lastMessageId) || null;
         }
 
         const lastMessageText = lastMessageDoc
           ? await decryptMessageText(lastMessageDoc, cache)
           : "";
+        const lastMessagePreview =
+          String(lastMessageText || "").trim() ||
+          mediaPreviewLabel(lastMessageDoc?.media);
 
         return {
           ...group,
@@ -189,7 +223,7 @@ export const getGroupConversations = async (req, res) => {
                 text: lastMessageText,
               }
             : null,
-          lastMessageText: lastMessageText || "",
+          lastMessageText: lastMessagePreview || "",
           lastMessageAt:
             lastMessageDoc?.createdAt || group?.updatedAt || group?.createdAt || null,
         };
@@ -221,11 +255,13 @@ export const getGroupConversations = async (req, res) => {
       };
     });
 
-    return res.status(200).json({
+    const payload = {
       status: "Success",
       groupConversations: groups,
       chatUsers,
-    });
+    };
+    groupConversationsCache.set(cacheKey, { ts: now, payload });
+    return res.status(200).json(payload);
   } catch (error) {
     console.error("getGroupConversations error:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
