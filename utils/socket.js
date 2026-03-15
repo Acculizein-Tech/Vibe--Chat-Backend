@@ -649,6 +649,9 @@ export const setupSocket = (io) => {
         const chatListPayload = {
           conversationId,
           text: previewLabel,
+          forwarded: Boolean(outgoingMsg?.forwarded),
+          previewKind: getMediaPreviewKind(outgoingMsg?.media),
+          media: Array.isArray(outgoingMsg?.media) ? outgoingMsg.media : [],
           sender: sender,
           receiver: isGroupConversation ? recipients : receiver,
           createdAt: msg.createdAt,
@@ -850,6 +853,137 @@ export const setupSocket = (io) => {
       }
     });
 
+    const normalizeForwardMediaType = (rawType, mimeType, mediaUrl = "") => {
+      const type = String(rawType || "").trim().toLowerCase();
+      const mime = String(mimeType || "").trim().toLowerCase();
+      const url = String(mediaUrl || "").trim().toLowerCase();
+      if (["image", "video", "audio", "file"].includes(type)) return type;
+      if (["document", "doc", "attachment"].includes(type)) return "file";
+      if (mime.startsWith("image/")) return "image";
+      if (mime.startsWith("video/")) return "video";
+      if (mime.startsWith("audio/")) return "audio";
+      if (mime) return "file";
+      if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)(\?|$)/i.test(url)) return "image";
+      if (/\.(mp4|mov|m4v|webm|avi|mkv)(\?|$)/i.test(url)) return "video";
+      if (/\.(mp3|wav|m4a|aac|ogg|opus)(\?|$)/i.test(url)) return "audio";
+      if (url) return "file";
+      return "";
+    };
+
+    const normalizeForwardMediaList = (mediaInput = []) => {
+      const list = Array.isArray(mediaInput)
+        ? mediaInput
+        : Array.isArray(mediaInput?.media)
+          ? mediaInput.media
+          : Array.isArray(mediaInput?.attachments)
+            ? mediaInput.attachments
+            : Array.isArray(mediaInput?.files)
+              ? mediaInput.files
+              : [];
+
+      return list
+        .map((item) => {
+          const url = String(
+            item?.url ||
+              item?.uri ||
+              item?.secure_url ||
+              item?.fileUrl ||
+              item?.fileURL ||
+              item?.path ||
+              item?.src ||
+              item?.location ||
+              "",
+          ).trim();
+          if (!url) return null;
+
+          const mimeType = String(
+            item?.mimeType || item?.mimetype || item?.mime || "",
+          ).trim();
+          const normalizedType = normalizeForwardMediaType(
+            item?.type,
+            mimeType,
+            url,
+          );
+          if (!normalizedType) return null;
+
+          const sizeBytes = Number(
+            item?.sizeBytes ??
+              item?.size ??
+              item?.contentLength ??
+              item?.file_size_bytes ??
+              item?.fileSize ??
+              item?.file_size ??
+              item?.bytes ??
+              0,
+          );
+          const pageCount = Number(
+            item?.pageCount ??
+              item?.pages ??
+              item?.totalPages ??
+              item?.page ??
+              item?.numPages ??
+              item?.num_pages ??
+              item?.pageNo ??
+              item?.page_count ??
+              item?.pages_count ??
+              0,
+          );
+
+          return {
+            url,
+            type: normalizedType,
+            thumbnailUrl: String(
+              item?.thumbnailUrl || item?.thumbnail || item?.thumbUrl || "",
+            ).trim(),
+            fileName: String(
+              item?.fileName ||
+                item?.filename ||
+                item?.name ||
+                item?.originalName ||
+                item?.originalname ||
+                "",
+            ).trim(),
+            mimeType,
+            sizeBytes: Number.isFinite(sizeBytes) && sizeBytes > 0 ? sizeBytes : null,
+            pageCount: Number.isFinite(pageCount) && pageCount > 0 ? pageCount : null,
+          };
+        })
+        .filter(Boolean);
+    };
+
+    const getMediaPreviewKind = (media) => {
+      const list = Array.isArray(media) ? media : [];
+      if (!list.length) return null;
+      const firstType = String(list[0]?.type || "").toLowerCase();
+      if (firstType === "image") return "image";
+      if (firstType === "video") return "video";
+      if (firstType === "audio") return "audio";
+      if (firstType) return "document";
+      return null;
+    };
+    const isGenericMediaLabel = (value) => {
+      const normalized = String(value || "")
+        .trim()
+        .replace(/^forwarded\s*:?\s*/i, "")
+        .toLowerCase();
+      if (!normalized) return false;
+      return [
+        "photo",
+        "photos",
+        "image",
+        "images",
+        "video",
+        "videos",
+        "audio",
+        "audios",
+        "document",
+        "documents",
+        "file",
+        "files",
+        "pdf",
+      ].includes(normalized);
+    };
+
     /* =========================
    ðŸ” FORWARD MESSAGE (PRODUCTION)
 ========================= */
@@ -857,14 +991,18 @@ export const setupSocket = (io) => {
 
    socket.on("forwardMessage", async (data) => {
   try {
-    const {
-      sender,
-      messageId,
-      text,
-      messageIds = [],
-      targetConversationIds = [],
-      mediaByMessageId = {},
-    } = data;
+      const {
+        sender,
+        messageId,
+        text,
+        messageIds = [],
+        targetConversationIds = [],
+        mediaByMessageId = {},
+      } = data;
+      const normalizedSender = String(sender || socket.userId || "").trim();
+      if (!mongoose.Types.ObjectId.isValid(normalizedSender)) {
+        return socket.emit("forward:error", { message: "Invalid sender" });
+      }
 
     /* ============================================================
        ðŸ“¥ COLLECT ORIGINALS (The "Baap" Fix)
@@ -872,7 +1010,9 @@ export const setupSocket = (io) => {
     let originals = [];
 
     // 1. Array banao saari IDs ka jo frontend se aayi hain
-    const incomingIds = [...messageIds, messageId].filter(Boolean);
+    const incomingIds = [...messageIds, messageId]
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
     console.log(`ðŸ” [FORWARD] Incoming IDs: ${incomingIds.join(", ")}`);
 
     // 2. ðŸ”¥ Sabse Zaroori: Sirf wahi IDs filter karo jo asli 24-char Hex hain
@@ -920,103 +1060,49 @@ export const setupSocket = (io) => {
     const messagesToInsert = [];
     const targetMetaMap = new Map();
 
-    for (const conversationId of targetConversationIds) {
+    for (const conversationId of (Array.isArray(targetConversationIds)
+      ? targetConversationIds
+      : []
+    )
+      .map((id) => String(id || "").trim())
+      .filter(Boolean)) {
       // Conversation ID check
       if (!conversationId || !/^[0-9a-fA-F]{24}$/.test(conversationId)) continue;
 
       const conv = await resolveConversation(conversationId);
       if (!conv) continue;
+      const isAllowedTarget = Array.isArray(conv?.participants)
+        ? conv.participants.some(
+            (participantId) =>
+              String(participantId || "").trim() === normalizedSender,
+          )
+        : false;
+      if (!isAllowedTarget) continue;
       targetMetaMap.set(String(conversationId), conv);
 
-        let receiver = null;
-        let deliveryUserIds = [];
-        if (conv.participants) {
-          const targetIds = conv.participants
-            .map((p) => p.toString())
-            .filter((id) => id !== sender.toString());
-          receiver = conv.isGroup ? targetIds : targetIds[0] || null;
-          deliveryUserIds = conv.isGroup
-            ? targetIds
-            : receiver
-              ? [String(receiver)]
-              : [];
-        }
-
-      const normalizeForwardMediaType = (rawType, mimeType, mediaUrl) => {
-        const t = String(rawType || "").trim().toLowerCase();
-        const mime = String(mimeType || "").trim().toLowerCase();
-        if (["image", "video", "audio", "file"].includes(t)) return t;
-        if (t === "document") return "file";
-        if (mime.startsWith("image/")) return "image";
-        if (mime.startsWith("video/")) return "video";
-        if (mime.startsWith("audio/")) return "audio";
-        const url = String(mediaUrl || "").toLowerCase();
-        if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)(\?|$)/i.test(url)) return "image";
-        if (/\.(mp4|mov|m4v|webm|avi|mkv)(\?|$)/i.test(url)) return "video";
-        if (/\.(mp3|wav|m4a|aac|ogg|opus)(\?|$)/i.test(url)) return "audio";
-        if (/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|zip|rar)(\?|$)/i.test(url)) return "file";
-        if (mime || t) return "file";
-        return "";
-      };
+      let receiver = null;
+      let deliveryUserIds = [];
+      if (conv.participants) {
+        const targetIds = conv.participants
+          .map((p) => String(p || "").trim())
+          .filter((id) => id && id !== normalizedSender);
+        receiver = conv.isGroup ? targetIds : targetIds[0] || null;
+        deliveryUserIds = conv.isGroup
+          ? targetIds
+          : receiver
+            ? [String(receiver)]
+            : [];
+      }
 
       for (const original of originals) {
         const originalText = await decryptMessageText(original);
-        const originalMediaList = Array.isArray(original?.media)
-          ? original.media
-          : Array.isArray(original?.attachments)
-            ? original.attachments
-            : Array.isArray(original?.files)
-              ? original.files
-              : [];
-        let copiedMedia = Array.isArray(originalMediaList)
-          ? originalMediaList
-              .map((m) => ({
-                url: String(
-                  m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
-                ).trim(),
-                type: normalizeForwardMediaType(
-                  m?.type,
-                  m?.mimeType || m?.mimetype,
-                  m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
-                ),
-                thumbnailUrl: String(m?.thumbnailUrl || "").trim(),
-                fileName: String(m?.fileName || m?.name || "").trim(),
-                mimeType: String(m?.mimeType || m?.mimetype || "").trim(),
-                sizeBytes: Number(m?.sizeBytes || m?.size || 0) || null,
-                pageCount: Number(m?.pageCount || m?.pages || 0) || null,
-              }))
-              .filter(
-                (m) =>
-                  m.url &&
-                    ["image", "video", "audio", "file"].includes(String(m.type)),
-              )
-          : [];
+        let copiedMedia = normalizeForwardMediaList(original);
         if (!copiedMedia.length) {
           const originalId = String(original?._id || "").trim();
           const fallbackMedia = Array.isArray(mediaByMessageId?.[originalId])
             ? mediaByMessageId[originalId]
             : [];
-          copiedMedia = fallbackMedia
-            .map((m) => ({
-              url: String(
-                m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
-              ).trim(),
-              type: normalizeForwardMediaType(
-                m?.type,
-                m?.mimeType || m?.mimetype,
-                m?.url || m?.uri || m?.fileUrl || m?.path || m?.src || "",
-              ),
-              thumbnailUrl: String(m?.thumbnailUrl || "").trim(),
-              fileName: String(m?.fileName || m?.name || "").trim(),
-              mimeType: String(m?.mimeType || m?.mimetype || "").trim(),
-              sizeBytes: Number(m?.sizeBytes || m?.size || 0) || null,
-              pageCount: Number(m?.pageCount || m?.pages || 0) || null,
-            }))
-            .filter(
-              (m) =>
-                m.url &&
-                ["image", "video", "audio", "file"].includes(String(m.type)),
-            );
+          copiedMedia = normalizeForwardMediaList(fallbackMedia);
         }
         const encrypted = await encryptMessageText({
           conversationId,
@@ -1024,27 +1110,31 @@ export const setupSocket = (io) => {
         });
         messagesToInsert.push({
           conversationId: conversationId,
-          sender: sender,
+          sender: normalizedSender,
           receiver: receiver,
           deliveryInfo: deliveryUserIds.map((id) => ({
             userId: id,
             deliveredAt: new Date(),
           })),
-          readBy: [sender],
-          readInfo: [{ userId: sender, readAt: new Date() }],
+          readBy: [normalizedSender],
+          readInfo: [{ userId: normalizedSender, readAt: new Date() }],
           media: copiedMedia,
           ...encrypted,
           forwarded: true,
-          forwardedFrom: (original.sender && /^[0-9a-fA-F]{24}$/.test(original.sender)) 
-                         ? original.sender 
-                         : sender,
+          forwardedFrom: mongoose.Types.ObjectId.isValid(String(original?.sender || "").trim())
+            ? String(original.sender).trim()
+            : normalizedSender,
           status: "sent"
         });
       }
     }
 
+    if (!messagesToInsert.length) {
+      return socket.emit("forward:error", { message: "Nothing to forward" });
+    }
+
     const savedMessages = await Message.insertMany(messagesToInsert);
-    const senderUser = await User.findById(sender)
+    const senderUser = await User.findById(normalizedSender)
       .select("fullName username phone")
       .lean();
     const senderLabel =
@@ -1070,9 +1160,12 @@ export const setupSocket = (io) => {
     ========================== */
     for (const msg of savedMessages) {
       const outgoingMsg = await materializeMessageForClient(msg);
+      const rawText = String(outgoingMsg?.text || "").trim();
+      const mediaPreviewText = getMediaPreviewText(outgoingMsg?.media);
       const previewText =
-        String(outgoingMsg?.text || "").trim() ||
-        getMediaPreviewText(outgoingMsg?.media);
+        mediaPreviewText && isGenericMediaLabel(rawText)
+          ? mediaPreviewText
+          : rawText || mediaPreviewText;
       io.to(msg.conversationId.toString()).emit("messageReceived", outgoingMsg);
       const convMeta = targetMetaMap.get(String(msg.conversationId));
       await updateLastMessageRef({
@@ -1084,6 +1177,9 @@ export const setupSocket = (io) => {
       const chatListPayload = {
         conversationId: msg.conversationId,
         text: previewText,
+        forwarded: Boolean(outgoingMsg?.forwarded),
+        previewKind: getMediaPreviewKind(outgoingMsg?.media),
+        media: Array.isArray(outgoingMsg?.media) ? outgoingMsg.media : [],
         sender: msg.sender,
         receiver: msg.receiver,
         createdAt: msg.createdAt,
@@ -1100,7 +1196,7 @@ export const setupSocket = (io) => {
       });
 
       const recipients = participantIds.filter(
-        (uid) => String(uid) !== String(sender),
+        (uid) => String(uid) !== String(normalizedSender),
       );
       const viewers = activeConversationViewers.get(String(msg.conversationId)) || new Set();
       const groupLabel =
@@ -1123,7 +1219,7 @@ export const setupSocket = (io) => {
             : previewForNotif,
           data: {
             conversationId: msg.conversationId,
-            senderId: sender,
+            senderId: normalizedSender,
             isGroup: Boolean(convMeta?.isGroup),
             groupName: convMeta?.isGroup ? groupLabel : "",
             senderLabel,
@@ -1161,7 +1257,7 @@ export const setupSocket = (io) => {
             data: {
               type: "CHAT_MESSAGE",
               conversationId: msg.conversationId,
-              senderId: sender,
+              senderId: normalizedSender,
               isGroup: Boolean(convMeta?.isGroup),
               groupName: convMeta?.isGroup ? groupLabel : "",
               senderLabel,

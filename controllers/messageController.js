@@ -81,6 +81,15 @@ const buildMediaPreviewText = (media = []) => {
   return media.length > 1 ? "Documents" : "Document";
 };
 
+const buildMediaPreviewKind = (media = []) => {
+  const firstType = normalizeId(media?.[0]?.type).toLowerCase();
+  if (firstType === "image") return "image";
+  if (firstType === "video") return "video";
+  if (firstType === "audio") return "audio";
+  if (firstType) return "document";
+  return null;
+};
+
 const truncatePreview = (value, max = 80) => {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -113,6 +122,9 @@ const emitMessageSideEffects = async ({
   const chatListPayload = {
     conversationId: cid,
     text: String(previewLabel || ""),
+    forwarded: Boolean(outgoing?.forwarded),
+    previewKind: buildMediaPreviewKind(outgoing?.media),
+    media: Array.isArray(outgoing?.media) ? outgoing.media : [],
     sender,
     receiver: isGroupConversation ? recipients : recipients[0] || null,
     createdAt: createdAt || new Date().toISOString(),

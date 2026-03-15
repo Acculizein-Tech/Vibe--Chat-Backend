@@ -3,7 +3,7 @@ import GroupConversation from "../models/GroupConversation.js";
 import Message from "../models/Message.js";
 import { onlineUsers } from "../utils/socketState.js";
 import { decryptMessageText } from "../utils/messageCrypto.js";
-const GROUP_CONVERSATIONS_CACHE_TTL_MS = 3000;
+const GROUP_CONVERSATIONS_CACHE_TTL_MS = 0;
 const groupConversationsCache = new Map();
 const mediaPreviewLabel = (media = []) => {
   const list = Array.isArray(media) ? media : [];
@@ -13,6 +13,28 @@ const mediaPreviewLabel = (media = []) => {
   if (firstType === "video") return list.length > 1 ? "Videos" : "Video";
   if (firstType === "audio") return list.length > 1 ? "Audios" : "Audio";
   return list.length > 1 ? "Documents" : "Document";
+};
+const isGenericMediaLabel = (value = "") => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/^forwarded\s*:?\s*/i, "")
+    .toLowerCase();
+  if (!normalized) return false;
+  return [
+    "photo",
+    "photos",
+    "image",
+    "images",
+    "video",
+    "videos",
+    "audio",
+    "audios",
+    "document",
+    "documents",
+    "file",
+    "files",
+    "pdf",
+  ].includes(normalized);
 };
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
@@ -211,9 +233,12 @@ export const getGroupConversations = async (req, res) => {
         const lastMessageText = lastMessageDoc
           ? await decryptMessageText(lastMessageDoc, cache)
           : "";
+        const lastMessageTextValue = String(lastMessageText || "").trim();
+        const mediaPreview = mediaPreviewLabel(lastMessageDoc?.media);
         const lastMessagePreview =
-          String(lastMessageText || "").trim() ||
-          mediaPreviewLabel(lastMessageDoc?.media);
+          mediaPreview && isGenericMediaLabel(lastMessageTextValue)
+            ? mediaPreview
+            : lastMessageTextValue || mediaPreview;
 
         return {
           ...group,

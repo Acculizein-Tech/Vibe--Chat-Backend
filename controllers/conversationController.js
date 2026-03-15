@@ -6,7 +6,7 @@ import GroupConversation from "../models/GroupConversation.js";
 import { decryptMessageText } from "../utils/messageCrypto.js";
 import mongoose from "mongoose";
 import { onlineUsers } from "../utils/socketState.js";
-const CHAT_USERS_CACHE_TTL_MS = 3000;
+const CHAT_USERS_CACHE_TTL_MS = 0;
 const chatUsersCache = new Map();
 const mediaPreviewLabel = (media = []) => {
   const list = Array.isArray(media) ? media : [];
@@ -16,6 +16,28 @@ const mediaPreviewLabel = (media = []) => {
   if (firstType === "video") return list.length > 1 ? "Videos" : "Video";
   if (firstType === "audio") return list.length > 1 ? "Audios" : "Audio";
   return list.length > 1 ? "Documents" : "Document";
+};
+const isGenericMediaLabel = (value = "") => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/^forwarded\s*:?\s*/i, "")
+    .toLowerCase();
+  if (!normalized) return false;
+  return [
+    "photo",
+    "photos",
+    "image",
+    "images",
+    "video",
+    "videos",
+    "audio",
+    "audios",
+    "document",
+    "documents",
+    "file",
+    "files",
+    "pdf",
+  ].includes(normalized);
 };
 // ✅ Create or get existing conversation between two users  
   
@@ -238,9 +260,12 @@ export const getChatUsers = async (req, res) => {
       const lastMessageText = lastMessage
         ? await decryptMessageText(lastMessage, cache)
         : null;
+      const lastMessageTextValue = String(lastMessageText || "").trim();
+      const mediaPreview = mediaPreviewLabel(lastMessage?.media);
       const lastMessagePreview =
-        String(lastMessageText || "").trim() ||
-        mediaPreviewLabel(lastMessage?.media);
+        mediaPreview && isGenericMediaLabel(lastMessageTextValue)
+          ? mediaPreview
+          : lastMessageTextValue || mediaPreview;
 
       const createdByName =
         group?.createdBy?.fullName ||
@@ -343,9 +368,12 @@ export const getChatUsers = async (req, res) => {
       const lastMessageText = lastMessage
         ? await decryptMessageText(lastMessage, cache)
         : null;
+      const lastMessageTextValue = String(lastMessageText || "").trim();
+      const mediaPreview = mediaPreviewLabel(lastMessage?.media);
       const lastMessagePreview =
-        String(lastMessageText || "").trim() ||
-        mediaPreviewLabel(lastMessage?.media);
+        mediaPreview && isGenericMediaLabel(lastMessageTextValue)
+          ? mediaPreview
+          : lastMessageTextValue || mediaPreview;
 
       uniqueUsers.push({
         conversationId: convo._id,
