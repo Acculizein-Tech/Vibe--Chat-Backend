@@ -83,6 +83,19 @@ export const setupSocket = (io) => {
       return Boolean(getActiveSocketId(userId));
     };
 
+    const removeViewerForUser = (userId) => {
+      const uid = String(userId || "").trim();
+      if (!uid) return;
+      for (const [cid, viewers] of activeConversationViewers.entries()) {
+        if (!viewers || typeof viewers.delete !== "function") continue;
+        if (viewers.delete(uid)) {
+          if (viewers.size === 0) {
+            activeConversationViewers.delete(cid);
+          }
+        }
+      }
+    };
+
     const markMessagesDeliveredForUser = async ({
       conversationId,
       userId,
@@ -266,6 +279,7 @@ export const setupSocket = (io) => {
           onlineUsers.delete(prevUserId);
         }
         userAppState.delete(prevUserId);
+        removeViewerForUser(prevUserId);
         socket.leave(`user:${prevUserId}`);
       }
 
@@ -308,6 +322,7 @@ export const setupSocket = (io) => {
         onlineUsers.delete(uid);
       }
       userAppState.delete(uid);
+      removeViewerForUser(uid);
       socket.leave(`user:${uid}`);
     });
 
@@ -648,6 +663,7 @@ export const setupSocket = (io) => {
 
         const chatListPayload = {
           conversationId,
+          messageId: msg._id,
           text: previewLabel,
           forwarded: Boolean(outgoingMsg?.forwarded),
           previewKind: getMediaPreviewKind(outgoingMsg?.media),
@@ -1176,12 +1192,14 @@ export const setupSocket = (io) => {
 
       const chatListPayload = {
         conversationId: msg.conversationId,
+        messageId: msg._id,
         text: previewText,
         forwarded: Boolean(outgoingMsg?.forwarded),
         previewKind: getMediaPreviewKind(outgoingMsg?.media),
         media: Array.isArray(outgoingMsg?.media) ? outgoingMsg.media : [],
         sender: msg.sender,
         receiver: msg.receiver,
+        status: msg.status || "sent",
         createdAt: msg.createdAt,
       };
 
@@ -1439,6 +1457,7 @@ export const setupSocket = (io) => {
           onlineUsers.delete(uid);
         }
         userAppState.delete(socket.userId);
+        removeViewerForUser(uid);
         console.log("ðŸ”´ User disconnected:", socket.userId);
       }
     });

@@ -121,12 +121,14 @@ const emitMessageSideEffects = async ({
 
   const chatListPayload = {
     conversationId: cid,
+    messageId: outgoing?._id,
     text: String(previewLabel || ""),
     forwarded: Boolean(outgoing?.forwarded),
     previewKind: buildMediaPreviewKind(outgoing?.media),
     media: Array.isArray(outgoing?.media) ? outgoing.media : [],
     sender,
     receiver: isGroupConversation ? recipients : recipients[0] || null,
+    status: outgoing?.status || "sent",
     createdAt: createdAt || new Date().toISOString(),
   };
   participantIds.forEach((uid) => {

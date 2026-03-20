@@ -53,6 +53,8 @@ const fileFilter = (req, file, cb) => {
       videoTypes.includes(ext) ||
       audioTypes.includes(ext) ||
       docTypes.includes(ext) ||
+      mime.startsWith("image/") ||
+      mime.startsWith("video/") ||
       mime.startsWith("application/") ||
       mime.startsWith("text/") ||
       mime.startsWith("audio/")
@@ -261,10 +263,17 @@ export const uploadToS3 = async (file, req) => {
   const videoTypes = ['.mp4','.mov','.avi','.mkv'];
   const imageTypes = [
     '.jpg','.jpeg','.png','.webp','.avif',
-    '.gif','.bmp','.tiff','.svg','.jfif'
+    '.gif','.bmp','.tiff','.svg','.jfif',
+    '.heic','.heif'
   ];
   const isVideo = videoTypes.includes(ext);
   const isImage = imageTypes.includes(ext);
+  const mime = String(file?.mimetype || "").toLowerCase();
+  const isHeic =
+    ext === ".heic" ||
+    ext === ".heif" ||
+    mime.includes("heic") ||
+    mime.includes("heif");
   const isPdf = ext === ".pdf" || String(file?.mimetype || "").toLowerCase().includes("pdf");
   const parsePdfPageCountFromBuffer = (buffer) => {
     try {
@@ -404,6 +413,22 @@ export const uploadToS3 = async (file, req) => {
         pageCount,
       };
     }
+
+    if (isHeic) {
+      const key = `${folder}/${Date.now()}-${uuidv4()}${ext || ""}`;
+      await s3.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype || "image/heic",
+      }));
+
+      return {
+        success: true,
+        url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
+      };
+    }
+
 
     // 🖼 Image → resize + webp
     const key = `${folder}/${Date.now()}-${uuidv4()}.webp`;
