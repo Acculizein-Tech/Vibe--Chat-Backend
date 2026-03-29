@@ -189,6 +189,7 @@ export const register = asyncHandler(async (req, res) => {
   </body>
 </html>`
   });
+  console.log("✅ EMAIL SENT TO:", user.email);
 
   // 🔐 Generate tokens
   const accessToken = generateToken(user._id, "15m");
@@ -324,6 +325,8 @@ export const login = asyncHandler(async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        accountType: user.accountType || "personal",
+        businessProfile: user.businessProfile || null,
         avatar:
           user.avatar ||
           "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",

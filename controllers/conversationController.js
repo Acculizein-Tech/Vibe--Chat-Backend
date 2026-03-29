@@ -290,6 +290,7 @@ export const getChatUsers = async (req, res) => {
           existingUserId: null,
           lastMessage: lastMessagePreview || null,
           lastMessageAt: lastMessage?.createdAt || null,
+          conversationCreatedAt: group?.createdAt || null,
           groupCreatedBy: createdByName,
         },
       });
@@ -331,7 +332,9 @@ export const getChatUsers = async (req, res) => {
     );
     const users = otherUserIds.length
       ? await User.find({ _id: { $in: otherUserIds } })
-          .select("fullName firstName lastName phone username profile.avatar userImages")
+          .select(
+            "fullName firstName lastName phone username profile.avatar userImages accountType businessProfile",
+          )
           .lean()
       : [];
     const userById = new Map(
@@ -384,12 +387,15 @@ export const getChatUsers = async (req, res) => {
           phone: user?.phone || "",
           userImages: user?.userImages || [],
           profileAvatar: user?.profile?.avatar || null,
+          accountType: user?.accountType || "personal",
+          businessProfile: user?.businessProfile || null,
           existingName: contact
             ? `${contact.firstName} ${contact.lastName}`.trim()
             : null,
           existingUserId: contact ? contact._id : null,
           lastMessage: lastMessagePreview || null,
           lastMessageAt: lastMessage?.createdAt || null,
+          conversationCreatedAt: convo?.createdAt || null,
         },
       });
     }
@@ -424,6 +430,51 @@ export const deleteConversation = async (req, res) => {
   } catch (error) {
     console.error("❌ deleteConversation error", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const deleteConversations = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { conversationIds = [] } = req.body || {};
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const ids = Array.isArray(conversationIds)
+      ? conversationIds
+          .map((id) => String(id || "").trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      : [];
+    if (!ids.length) {
+      return res.status(400).json({ message: "No valid conversationIds provided" });
+    }
+
+    const conversations = await Conversation.find({
+      _id: { $in: ids },
+      participants: userId,
+    }).lean();
+    const allowedIds = new Set(
+      conversations.map((c) => String(c?._id || "")).filter(Boolean),
+    );
+
+    const deleted = Array.from(allowedIds);
+    const failed = ids
+      .filter((id) => !allowedIds.has(String(id)))
+      .map((id) => ({ id, reason: "Not found or unauthorized" }));
+
+    if (deleted.length) {
+      await Message.deleteMany({ conversationId: { $in: deleted } });
+      await Conversation.deleteMany({ _id: { $in: deleted } });
+    }
+
+    return res.status(200).json({
+      message: "Bulk conversation delete completed",
+      deleted,
+      failed,
+    });
+  } catch (error) {
+    console.error("deleteConversations error", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 

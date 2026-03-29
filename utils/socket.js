@@ -20,6 +20,7 @@ import {
 export const setupSocket = (io) => {
   io.on("connection", (socket) => {
     console.log("ðŸŸ¢ Socket connected:", socket.id);
+    const senderAccountTypeCache = new Map();
 
     const resolveConversation = async (conversationId) => {
       if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
@@ -77,6 +78,22 @@ export const setupSocket = (io) => {
       io.to(`user:${uid}`).emit(event, payload);
       const sid = getActiveSocketId(uid);
       if (sid) io.to(sid).emit(event, payload);
+    };
+
+    const resolveSenderAccountType = async (senderId) => {
+      const key = String(senderId || "").trim();
+      if (!key) return "";
+      if (senderAccountTypeCache.has(key)) {
+        return senderAccountTypeCache.get(key);
+      }
+      try {
+        const user = await User.findById(key).select("accountType").lean();
+        const accountType = String(user?.accountType || "").trim();
+        senderAccountTypeCache.set(key, accountType);
+        return accountType;
+      } catch (_err) {
+        return "";
+      }
     };
 
     const isUserOnline = (userId) => {
@@ -256,7 +273,7 @@ export const setupSocket = (io) => {
 
       const payload = {
         conversationId,
-        text: text ?? "",
+        text: text ?? null,
         createdAt: createdAt || new Date().toISOString(),
       };
 
@@ -598,6 +615,7 @@ export const setupSocket = (io) => {
         const initialStatus = allRecipientsDelivered ? "delivered" : "sent";
 
         const now = new Date();
+        const senderAccountType = await resolveSenderAccountType(sender);
 
         /* 1ï¸âƒ£ SAVE MESSAGE */
         const msg = await Message.create({
@@ -612,6 +630,7 @@ export const setupSocket = (io) => {
           readBy: [sender],
           readInfo: [{ userId: sender, readAt: now }],
           media: mediaPayload,
+          senderAccountType,
           ...encrypted,
         });
 

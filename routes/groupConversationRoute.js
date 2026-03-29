@@ -6,6 +6,7 @@ import {
   getGroupConversationById,
   updateGroupConversation,
   deleteGroupConversation,
+  deleteGroupConversations,
   addGroupMembers,
   removeGroupMember,
   updateGroupMemberRole,
@@ -19,6 +20,7 @@ router.get("/", protect, getGroupConversations);
 router.get("/:groupConversationId", protect, getGroupConversationById);
 router.put("/:groupConversationId", protect, updateGroupConversation);
 router.delete("/:groupConversationId", protect, deleteGroupConversation);
+router.post("/delete-bulk", protect, deleteGroupConversations);
 router.post("/:groupConversationId/leave", protect, leaveGroupConversation);
 router.post("/:groupConversationId/members", protect, addGroupMembers);
 router.delete(

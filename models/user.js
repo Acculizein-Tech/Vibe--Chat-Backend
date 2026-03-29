@@ -26,6 +26,32 @@ const userSchema = new mongoose.Schema({
     default: 'customer'
   },
 
+  accountType: {
+    type: String,
+    enum: ['personal', 'professional'],
+    default: 'personal',
+  },
+  businessProfile: {
+    name: { type: String },
+    category: { type: String },
+    description: { type: String },
+    email: { type: String },
+    website: { type: String },
+    address: { type: String },
+    services: [{ type: String }],
+    quickReplies: [{ type: String }],
+    catalogUrl: { type: String },
+    timezone: { type: String },
+    schedule: [
+      {
+        day: { type: String },
+        open: { type: String },
+        close: { type: String },
+        closed: { type: Boolean, default: false },
+      },
+    ],
+  },
+
 
 phone: {
     type: String,

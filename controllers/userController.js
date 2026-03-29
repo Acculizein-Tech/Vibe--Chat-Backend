@@ -40,6 +40,8 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 export const updateUserProfile = asyncHandler(async (req, res) => {
   try {
     const { fullName, email, phone } = req.body;
+    const rawAccountType = String(req.body?.accountType || "").trim().toLowerCase();
+    let rawBusinessProfile = req.body?.businessProfile;
 
     // ✅ Phone number space check
     if (phone && phone.includes(" ")) {
@@ -60,11 +62,70 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
 
     // ✅ Prepare updated fields (without avatar for now)
-    const updatedFields = {
-      fullName: fullName?.trim(),
-      email: email?.trim(),
-      phone
-    };
+    const updatedFields = {};
+
+    if (typeof fullName === "string" && fullName.trim()) {
+      updatedFields.fullName = fullName.trim();
+    }
+    if (typeof email === "string" && email.trim()) {
+      updatedFields.email = email.trim();
+    }
+    if (typeof phone === "string") {
+      updatedFields.phone = phone;
+    }
+
+    if (rawAccountType && ["personal", "professional"].includes(rawAccountType)) {
+      updatedFields.accountType = rawAccountType;
+    }
+
+    if (typeof rawBusinessProfile === "string" && rawBusinessProfile.trim()) {
+      try {
+        rawBusinessProfile = JSON.parse(rawBusinessProfile);
+      } catch (_err) {
+        rawBusinessProfile = null;
+      }
+    }
+
+    if (rawBusinessProfile && typeof rawBusinessProfile === "object") {
+      const schedule = Array.isArray(rawBusinessProfile.schedule)
+        ? rawBusinessProfile.schedule
+            .map((entry) => ({
+              day: String(entry?.day || "").trim(),
+              open: String(entry?.open || "").trim(),
+              close: String(entry?.close || "").trim(),
+              closed: Boolean(entry?.closed),
+            }))
+            .filter((entry) => entry.day)
+        : [];
+
+      updatedFields.businessProfile = {
+        name: String(rawBusinessProfile?.name || "").trim(),
+        category: String(rawBusinessProfile?.category || "").trim(),
+        description: String(rawBusinessProfile?.description || "").trim(),
+        email: String(rawBusinessProfile?.email || "").trim(),
+        website: String(rawBusinessProfile?.website || "").trim(),
+        address: String(rawBusinessProfile?.address || "").trim(),
+        services: Array.isArray(rawBusinessProfile?.services)
+          ? rawBusinessProfile.services
+              .map((s) => String(s || "").trim())
+              .filter(Boolean)
+          : [],
+        quickReplies: Array.isArray(rawBusinessProfile?.quickReplies)
+          ? rawBusinessProfile.quickReplies
+              .map((s) => String(s || "").trim())
+              .filter(Boolean)
+          : [],
+        catalogUrl: String(rawBusinessProfile?.catalogUrl || "").trim(),
+        timezone: String(rawBusinessProfile?.timezone || "").trim(),
+        schedule,
+      };
+    }
+
+    const clearBusinessProfile =
+      String(req.body?.clearBusinessProfile || "").toLowerCase() === "true";
+    if (updatedFields.accountType === "personal" && clearBusinessProfile) {
+      updatedFields.businessProfile = null;
+    }
 
     // ✅ Handle avatar upload in background (non-blocking)
     if (req.file) {

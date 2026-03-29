@@ -5,6 +5,7 @@ import {
   getUserConversations,
   getChatUsers,
   deleteConversation,
+  deleteConversations,
   createGroupConversation,
 } from "../controllers/conversationController.js";
 import { protect } from "../middlewares/auth.js";
@@ -16,6 +17,7 @@ router.post("/", protect, getOrCreateConversation);
 router.post("/group", protect, createGroupConversation);
 router.get("/:userId", protect, getUserConversations);
 router.delete("/delete-conversation/:conversationId", protect, deleteConversation)
+router.post("/delete-conversations", protect, deleteConversations)
 
 
 export default router;

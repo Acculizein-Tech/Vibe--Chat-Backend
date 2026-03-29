@@ -370,6 +370,7 @@ export const sendMessage = async (req, res) => {
       deliveryInfo: [],
       readBy: [sender],
       readInfo: [{ userId: sender, readAt: new Date() }],
+      senderAccountType: String(req.user?.accountType || "").trim(),
       ...encrypted,
     });
 

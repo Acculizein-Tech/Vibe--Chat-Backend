@@ -51,9 +51,18 @@ const uniqueValidIds = (ids = []) =>
 
 const populateGroup = (query) =>
   query
-    .populate("participants", "fullName phone username profile.avatar")
-    .populate("createdBy", "fullName phone username profile.avatar")
-    .populate("admins", "fullName phone username profile.avatar");
+    .populate(
+      "participants",
+      "fullName phone username profile.avatar accountType businessProfile",
+    )
+    .populate(
+      "createdBy",
+      "fullName phone username profile.avatar accountType businessProfile",
+    )
+    .populate(
+      "admins",
+      "fullName phone username profile.avatar accountType businessProfile",
+    );
 
 const isAdminUser = (group, userId) => {
   const me = String(userId || "");
@@ -71,6 +80,73 @@ const emitToUser = (io, userId, event, payload) => {
   io.to(`user:${uid}`).emit(event, payload);
   const sid = onlineUsers.get(uid);
   if (sid) io.to(sid).emit(event, payload);
+};
+
+const deleteGroupConversationInternal = async ({
+  groupConversationId,
+  userId,
+  io,
+}) => {
+  if (!mongoose.Types.ObjectId.isValid(groupConversationId)) {
+    return { ok: false, reason: "Invalid groupConversationId" };
+  }
+
+  const groupConversation = await GroupConversation.findById(
+    groupConversationId,
+  );
+  if (!groupConversation) {
+    return { ok: false, reason: "Group conversation not found" };
+  }
+
+  const isCreator = String(groupConversation.createdBy) === String(userId);
+  if (!isCreator) {
+    return { ok: false, reason: "Only creator can delete this group" };
+  }
+
+  const hydrated = await populateGroup(
+    GroupConversation.findById(groupConversationId),
+  );
+  io?.to(String(groupConversationId)).emit("group:inchat:event", {
+    conversationId: String(groupConversationId),
+    action: "group:dismissed",
+    text: "Group dismissed",
+    createdAt: new Date().toISOString(),
+    removed: true,
+    type: "group",
+  });
+
+  await GroupConversation.findByIdAndDelete(groupConversationId);
+
+  const removedFor = extractParticipantIds(hydrated);
+  removedFor.forEach((uid) => {
+    emitToUser(io, uid, "group:inchat:event", {
+      conversationId: String(groupConversationId),
+      action: "group:dismissed",
+      text: "Group dismissed",
+      createdAt: new Date().toISOString(),
+      removed: true,
+      type: "group",
+      targetUserId: String(uid),
+    });
+    emitToUser(io, uid, "chat:list:refresh", {
+      conversationId: String(groupConversationId),
+      action: "group:dismissed",
+      text: "Group dismissed",
+      createdAt: new Date().toISOString(),
+      removed: true,
+      type: "group",
+    });
+    emitToUser(io, uid, "chat:list:patch", {
+      conversationId: String(groupConversationId),
+      action: "group:dismissed",
+      text: "Group dismissed",
+      createdAt: new Date().toISOString(),
+      removed: true,
+      type: "group",
+    });
+  });
+
+  return { ok: true };
 };
 
 const extractParticipantIds = (groupConversation) =>
@@ -232,7 +308,7 @@ export const getGroupConversations = async (req, res) => {
 
         const lastMessageText = lastMessageDoc
           ? await decryptMessageText(lastMessageDoc, cache)
-          : "";
+          : null;
         const lastMessageTextValue = String(lastMessageText || "").trim();
         const mediaPreview = mediaPreviewLabel(lastMessageDoc?.media);
         const lastMessagePreview =
@@ -248,7 +324,7 @@ export const getGroupConversations = async (req, res) => {
                 text: lastMessageText,
               }
             : null,
-          lastMessageText: lastMessagePreview || "",
+          lastMessageText: lastMessagePreview || null,
           lastMessageAt:
             lastMessageDoc?.createdAt || group?.updatedAt || group?.createdAt || null,
         };
@@ -460,64 +536,72 @@ export const deleteGroupConversation = async (req, res) => {
     const userId = req.user?._id;
     const { groupConversationId } = req.params;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    if (!mongoose.Types.ObjectId.isValid(groupConversationId)) {
-      return res.status(400).json({ message: "Invalid groupConversationId" });
+    const io = req.app.get("io");
+    const result = await deleteGroupConversationInternal({
+      groupConversationId,
+      userId,
+      io,
+    });
+    if (!result.ok) {
+      const status =
+        result.reason === "Invalid groupConversationId"
+          ? 400
+          : result.reason === "Group conversation not found"
+            ? 404
+            : result.reason === "Only creator can delete this group"
+              ? 403
+              : 400;
+      return res.status(status).json({ message: result.reason });
     }
+    return res
+      .status(200)
+      .json({ message: "Group conversation deleted successfully" });
+  } catch (error) {
+    console.error("deleteGroupConversation error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
-    const groupConversation = await GroupConversation.findById(groupConversationId);
-    if (!groupConversation) {
-      return res.status(404).json({ message: "Group conversation not found" });
-    }
+export const deleteGroupConversations = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { groupConversationIds = [] } = req.body || {};
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const isCreator = String(groupConversation.createdBy) === String(userId);
-    if (!isCreator) {
-      return res.status(403).json({ message: "Only creator can delete this group" });
+    const ids = Array.isArray(groupConversationIds)
+      ? groupConversationIds
+          .map((id) => String(id || "").trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      : [];
+    if (!ids.length) {
+      return res
+        .status(400)
+        .json({ message: "No valid groupConversationIds provided" });
     }
 
     const io = req.app.get("io");
-    const hydrated = await populateGroup(
-      GroupConversation.findById(groupConversationId),
-    );
-    io?.to(String(groupConversationId)).emit("group:inchat:event", {
-      conversationId: String(groupConversationId),
-      action: "group:dismissed",
-      text: "Group dismissed",
-      createdAt: new Date().toISOString(),
-      removed: true,
-      type: "group",
+    const deleted = [];
+    const failed = [];
+    for (const id of ids) {
+      const result = await deleteGroupConversationInternal({
+        groupConversationId: id,
+        userId,
+        io,
+      });
+      if (result.ok) {
+        deleted.push(id);
+      } else {
+        failed.push({ id, reason: result.reason || "Failed to delete" });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Bulk group delete completed",
+      deleted,
+      failed,
     });
-    await GroupConversation.findByIdAndDelete(groupConversationId);
-    const removedFor = extractParticipantIds(hydrated);
-    removedFor.forEach((uid) => {
-      emitToUser(io, uid, "group:inchat:event", {
-        conversationId: String(groupConversationId),
-        action: "group:dismissed",
-        text: "Group dismissed",
-        createdAt: new Date().toISOString(),
-        removed: true,
-        type: "group",
-        targetUserId: String(uid),
-      });
-      emitToUser(io, uid, "chat:list:refresh", {
-        conversationId: String(groupConversationId),
-        action: "group:dismissed",
-        text: "Group dismissed",
-        createdAt: new Date().toISOString(),
-        removed: true,
-        type: "group",
-      });
-      emitToUser(io, uid, "chat:list:patch", {
-        conversationId: String(groupConversationId),
-        action: "group:dismissed",
-        text: "Group dismissed",
-        createdAt: new Date().toISOString(),
-        removed: true,
-        type: "group",
-      });
-    });
-    return res.status(200).json({ message: "Group conversation deleted successfully" });
   } catch (error) {
-    console.error("deleteGroupConversation error:", error);
+    console.error("deleteGroupConversations error:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };

@@ -114,6 +114,8 @@ const messageSchema = new mongoose.Schema(
     },
     forwarded: { type: Boolean, default: false },
     forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // Business/account visibility markers
+    senderAccountType: { type: String, default: "" },
   },
   { timestamps: true }
 );
