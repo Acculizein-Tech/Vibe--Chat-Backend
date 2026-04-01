@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { AppError } from "../utils/errorHandler.js";
 import sendEmail from "../utils/emailSender.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -304,13 +305,11 @@ export const login = asyncHandler(async (req, res) => {
   if (user) {
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
-      res.status(401);
-      throw new Error("Invalid email or password");
+      throw new AppError("Invalid email or password", 401);
     }
 
     if (!user.isVerified) {
-      res.status(403);
-      throw new Error("Please verify your email first");
+      throw new AppError("Please verify your email first", 403);
     }
 
     const accessToken = generateToken(user._id, "30d");
@@ -349,8 +348,7 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   // ❌ 3. Truly invalid
-  res.status(401);
-  throw new Error("Invalid email or password");
+  throw new AppError("Invalid email or password", 401);
 });
 
 
