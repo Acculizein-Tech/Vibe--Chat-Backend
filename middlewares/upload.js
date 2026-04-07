@@ -21,9 +21,10 @@ const s3 = new S3Client({
 const storage = multer.memoryStorage();
 
 // 🆕 Vibechat limits
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;   // 10MB
-const MAX_VIDEO_SIZE = 120 * 1024 * 1024;  // 120MB
-const MAX_FILE_SIZE = 25 * 1024 * 1024;    // 25MB for documents/audio
+const MAX_ATTACHMENT_SIZE = 200 * 1024 * 1024; // 200 MB
+const MAX_IMAGE_SIZE = MAX_ATTACHMENT_SIZE;
+const MAX_VIDEO_SIZE = MAX_ATTACHMENT_SIZE;
+const MAX_FILE_SIZE = MAX_ATTACHMENT_SIZE;
 
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -75,7 +76,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: MAX_VIDEO_SIZE, // hard cap (video max)
+    fileSize: MAX_ATTACHMENT_SIZE, // hard cap for chat attachments
   },
 });
 
@@ -257,7 +258,8 @@ const getS3KeyPrefix = (req, file) => {
   return folder;
 };
 
-export const uploadToS3 = async (file, req) => {
+export const uploadToS3 = async (file, req, options = {}) => {
+  const abortSignal = options?.abortSignal;
   const folder = getS3KeyPrefix(req, file);
   const ext = path.extname(file.originalname).toLowerCase();
   const videoTypes = ['.mp4','.mov','.avi','.mkv'];
@@ -321,23 +323,45 @@ export const uploadToS3 = async (file, req) => {
       return null;
     }
   };
+  const isAbortLikeError = (error) => {
+    const name = String(error?.name || "").toLowerCase();
+    const code = String(error?.code || "").toUpperCase();
+    return (
+      code === "ECONNRESET" ||
+      code === "ECONNABORTED" ||
+      code === "EPIPE" ||
+      code === "ABORT_ERR" ||
+      name.includes("abort")
+    );
+  };
+  const sendToS3 = (command) => {
+    if (abortSignal?.aborted) {
+      const abortErr = new Error("Upload canceled by client");
+      abortErr.name = "AbortError";
+      abortErr.code = "ABORT_ERR";
+      throw abortErr;
+    }
+    return abortSignal
+      ? s3.send(command, { abortSignal })
+      : s3.send(command);
+  };
 
   try {
     // 🆕 Manual size validation (smooth fail)
     if (isImage && file.size > MAX_IMAGE_SIZE) {
-      return { success: false, message: "Image size too large" };
+      return { success: false, message: "Image size too large (max 200 MB)" };
     }
     if (isVideo && file.size > MAX_VIDEO_SIZE) {
-      return { success: false, message: "Video size too large" };
+      return { success: false, message: "Video size too large (max 200 MB)" };
     }
     if (!isImage && !isVideo && file.size > MAX_FILE_SIZE) {
-      return { success: false, message: "File size too large" };
+      return { success: false, message: "File size too large (max 200 MB)" };
     }
 
     // 🎥 Video upload (no conversion)
     if (isVideo) {
       const key = `${folder}/${Date.now()}-${uuidv4()}${ext}`;
-      await s3.send(new PutObjectCommand({
+      await sendToS3(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: key,
         Body: file.buffer,
@@ -353,7 +377,7 @@ export const uploadToS3 = async (file, req) => {
     // Generic files (docs/audio/etc): upload as-is
     if (!isImage) {
       const key = `${folder}/${Date.now()}-${uuidv4()}${ext || ""}`;
-      await s3.send(new PutObjectCommand({
+      await sendToS3(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: key,
         Body: file.buffer,
@@ -387,7 +411,7 @@ export const uploadToS3 = async (file, req) => {
             })
             .webp({ quality: 74 })
             .toBuffer();
-          await s3.send(new PutObjectCommand({
+          await sendToS3(new PutObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: thumbKey,
             Body: thumbBuffer,
@@ -416,7 +440,7 @@ export const uploadToS3 = async (file, req) => {
 
     if (isHeic) {
       const key = `${folder}/${Date.now()}-${uuidv4()}${ext || ""}`;
-      await s3.send(new PutObjectCommand({
+      await sendToS3(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: key,
         Body: file.buffer,
@@ -449,7 +473,7 @@ export const uploadToS3 = async (file, req) => {
 
     const webpBuffer = await pipeline.webp({ quality: 75 }).toBuffer();
 
-    await s3.send(new PutObjectCommand({
+    await sendToS3(new PutObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
       Body: webpBuffer,
@@ -461,6 +485,14 @@ export const uploadToS3 = async (file, req) => {
       url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`,
     };
   } catch (err) {
+    const wasClientAborted = Boolean(req?.aborted) || isAbortLikeError(err);
+    if (wasClientAborted) {
+      return {
+        success: false,
+        canceled: true,
+        message: "Upload canceled by client",
+      };
+    }
     console.error("Upload failed:", err.message);
     return {
       success: false,
@@ -474,3 +506,4 @@ export const uploadToS3 = async (file, req) => {
 };
 
 export default upload;
+

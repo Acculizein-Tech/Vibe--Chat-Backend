@@ -578,6 +578,19 @@ export const deleteMessage = async (req, res) => {
 export const uploadChatImages = asyncHandler(async (req, res) => {
   const { conversationId, receiverId, tempId } = req.body;
   const files = req.files || [];
+  const requestWasAborted = () => Boolean(req?.aborted);
+  const uploadAbortController = new AbortController();
+  const markCanceled = () => {
+    try {
+      uploadAbortController.abort();
+    } catch (_err) {
+      // noop
+    }
+  };
+  req.on("aborted", markCanceled);
+  req.on("close", () => {
+    if (req.aborted) markCanceled();
+  });
   const parsePositiveNumber = (value) => {
     const num = Number(value);
     if (!Number.isFinite(num) || num <= 0) return null;
@@ -641,11 +654,14 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
 
   // 🔥 Parallel S3 uploads
   const uploadResults = await Promise.allSettled(
-    files.map((file) => uploadToS3(file, req))
+    files.map((file) =>
+      uploadToS3(file, req, { abortSignal: uploadAbortController.signal }),
+    ),
   );
 
   const media = [];
   const failedFiles = [];
+  let canceledFilesCount = 0;
 
   const getMediaType = (mimetype = "") => {
     const mime = String(mimetype || "").toLowerCase();
@@ -683,14 +699,41 @@ export const uploadChatImages = asyncHandler(async (req, res) => {
               : null,
       });
     } else {
+      const canceled = Boolean(result?.value?.canceled) ||
+        ["ECONNRESET", "ECONNABORTED", "EPIPE", "ABORT_ERR"].includes(
+          String(result?.reason?.code || "").toUpperCase(),
+        );
+      if (canceled) canceledFilesCount += 1;
       failedFiles.push({
         fileName: files[index].originalname,
-        reason: result.reason?.message || "Upload failed",
+        reason:
+          result?.value?.message ||
+          result.reason?.message ||
+          "Upload failed",
+        ...(canceled ? { canceled: true } : {}),
       });
     }
   });
 
+  const wasCanceled = requestWasAborted() || uploadAbortController.signal.aborted;
+  if (wasCanceled) {
+    return res.status(499).json({
+      success: false,
+      canceled: true,
+      message: "Upload canceled by client",
+      failed: failedFiles,
+    });
+  }
+
   if (!media.length) {
+    if (canceledFilesCount === files.length || requestWasAborted()) {
+      return res.status(499).json({
+        success: false,
+        canceled: true,
+        message: "Upload canceled by client",
+        failed: failedFiles,
+      });
+    }
     return res.status(500).json({
       success: false,
       message: "All uploads failed",

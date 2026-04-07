@@ -95,6 +95,47 @@ export const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
   });
 });
 
+export const markConversationNotificationsAsRead = asyncHandler(
+  async (req, res) => {
+    const { _id: userId } = req.user;
+    const rawConversationId = String(req.params?.conversationId || "").trim();
+    if (!rawConversationId) {
+      return res.status(400).json({ message: "conversationId is required" });
+    }
+
+    const matchConversation = [{ "data.conversationId": rawConversationId }];
+    if (Notification?.db?.base?.Types?.ObjectId?.isValid?.(rawConversationId)) {
+      matchConversation.push({
+        "data.conversationId": new Notification.db.base.Types.ObjectId(
+          rawConversationId,
+        ),
+      });
+    }
+
+    const updateResult = await Notification.updateMany(
+      {
+        recipient: userId,
+        type: "NEW_MESSAGE",
+        isRead: false,
+        $or: matchConversation,
+      },
+      { $set: { isRead: true } },
+    );
+
+    const unreadCount = await Notification.countDocuments({
+      recipient: userId,
+      isRead: false,
+    });
+
+    res.status(200).json({
+      message: "Conversation notifications marked as read",
+      conversationId: rawConversationId,
+      modifiedCount: updateResult?.modifiedCount || 0,
+      unreadCount,
+    });
+  },
+);
+
 export const getChatUnreadCounts = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
