@@ -324,6 +324,7 @@ export const login = asyncHandler(async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        subscriptionPlan: user.subscriptionPlan || "free",
         accountType: user.accountType || "personal",
         businessProfile: user.businessProfile || null,
         avatar:

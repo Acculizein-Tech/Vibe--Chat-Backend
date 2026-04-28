@@ -23,6 +23,8 @@ import { setupSocket } from "./utils/socket.js";
 import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/SuperAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
+import bulkMessagingRoutes from "./routes/bulkMessagingRoute.js";
+import { startBulkMessageWorker } from "./workers/bulkMessageWorker.js";
 //backend superadmin routes fix
 
 dotenv.config();
@@ -87,10 +89,17 @@ app.use("/api/notification", notificationRoutes);
 app.use("/api/usercontacts", UserContact);
 app.use("/api/superadmin", superAdminRoutes);
 app.use("/api", uploadRoutes);
+app.use("/api", bulkMessagingRoutes);
 
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
+
+if (String(process.env.ENABLE_BULK_WORKER || "true").toLowerCase() !== "false") {
+  startBulkMessageWorker();
+  console.log("Bulk worker booted (ENABLE_BULK_WORKER=true)");
+}
+
 httpServer.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );

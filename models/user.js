@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'business', 'support', 'admin', 'superadmin', 'sales'],
     default: 'customer'
   },
+  subscriptionPlan: {
+    type: String,
+    enum: ['free', 'premium'],
+    default: 'free',
+  },
 
   accountType: {
     type: String,

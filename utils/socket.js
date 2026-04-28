@@ -1463,6 +1463,153 @@ export const setupSocket = (io) => {
       }
     });
 
+    socket.on("deleteMediaItem", async (data) => {
+      try {
+        const {
+          sender,
+          messageId,
+          conversationId,
+          mediaIndex,
+          mediaUrl = "",
+          deleteFor = "everyone",
+        } = data || {};
+
+        if (
+          !sender ||
+          !conversationId ||
+          !messageId ||
+          !mongoose.Types.ObjectId.isValid(messageId)
+        ) {
+          return socket.emit("delete:error", {
+            message: "Invalid media delete payload",
+          });
+        }
+
+        const conversation = await resolveConversation(conversationId);
+        const isParticipant = !!conversation?.participants?.some(
+          (p) => p.toString() === sender.toString(),
+        );
+        if (!isParticipant) {
+          return socket.emit("delete:error", {
+            message: "You are not part of this conversation",
+          });
+        }
+
+        const msg = await Message.findOne({
+          _id: messageId,
+          conversationId,
+        });
+        if (!msg) {
+          return socket.emit("delete:error", {
+            message: "Message not found",
+          });
+        }
+
+        const mediaList = Array.isArray(msg.media) ? [...msg.media] : [];
+        if (!mediaList.length) {
+          return socket.emit("delete:error", {
+            message: "No media found in message",
+          });
+        }
+
+        const normalizedMediaUrl = String(mediaUrl || "").trim();
+        const parsedIndex = Number(mediaIndex);
+        const hasValidIndex = Number.isInteger(parsedIndex) && parsedIndex >= 0;
+
+        let targetIndex = -1;
+        if (hasValidIndex && parsedIndex < mediaList.length) {
+          targetIndex = parsedIndex;
+        } else if (normalizedMediaUrl) {
+          targetIndex = mediaList.findIndex(
+            (m) => String(m?.url || "").trim() === normalizedMediaUrl,
+          );
+        }
+
+        if (targetIndex < 0 || targetIndex >= mediaList.length) {
+          return socket.emit("delete:error", {
+            message: "Media item not found",
+          });
+        }
+
+        const removed = mediaList[targetIndex];
+        const removedMediaUrl = String(removed?.url || normalizedMediaUrl || "").trim();
+
+        if (deleteFor === "everyone") {
+          if (String(msg.sender) !== String(sender)) {
+            return socket.emit("delete:error", {
+              message: "Only sender can delete media for everyone",
+            });
+          }
+
+          mediaList.splice(targetIndex, 1);
+          const trimmedText = String(msg.text || "").trim();
+          const shouldConvertToDeletedMessage =
+            mediaList.length === 0 && !trimmedText;
+
+          if (shouldConvertToDeletedMessage) {
+            msg.text = "This message was deleted";
+            msg.encryptedText = "";
+            msg.textIv = "";
+            msg.textAuthTag = "";
+            msg.isEncrypted = false;
+            msg.media = [];
+          } else {
+            msg.media = mediaList;
+          }
+          await msg.save();
+
+          io.to(conversationId.toString()).emit("mediaItemDeleted", {
+            conversationId,
+            messageId: String(msg._id),
+            mediaIndex: targetIndex,
+            mediaUrl: removedMediaUrl,
+            deleteFor: "everyone",
+            updatedMedia: Array.isArray(msg.media) ? msg.media : [],
+            messageDeleted: shouldConvertToDeletedMessage,
+            replacementText: shouldConvertToDeletedMessage
+              ? "This message was deleted"
+              : undefined,
+          });
+
+          if (shouldConvertToDeletedMessage) {
+            const latestMessageId = conversation?.lastMessage
+              ? String(conversation.lastMessage)
+              : null;
+            if (latestMessageId && latestMessageId === String(msg._id)) {
+              await emitChatListPatch({
+                conversationId,
+                text: "This message was deleted",
+                createdAt: new Date().toISOString(),
+              });
+            }
+          }
+
+          socket.emit("delete:success", {
+            deletedCount: 1,
+            deleteFor: "everyone",
+          });
+          return;
+        }
+
+        emitToUser(String(sender), "mediaItemDeleted", {
+          conversationId,
+          messageId: String(msg._id),
+          mediaIndex: targetIndex,
+          mediaUrl: removedMediaUrl,
+          deleteFor: "me",
+        });
+        socket.emit("delete:success", {
+          deletedCount: 1,
+          deleteFor: "me",
+        });
+      } catch (err) {
+        console.error("deleteMediaItem error:", err);
+        socket.emit("delete:error", {
+          message: "Failed to delete media item",
+        });
+      }
+    });
+
 
 
     /* ========================= 
