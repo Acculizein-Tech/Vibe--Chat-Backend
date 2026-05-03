@@ -24,6 +24,7 @@ import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/SuperAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
 import bulkMessagingRoutes from "./routes/bulkMessagingRoute.js";
+import statusRoutes from "./routes/statusRoute.js";
 import { startBulkMessageWorker } from "./workers/bulkMessageWorker.js";
 //backend superadmin routes fix
 
@@ -90,6 +91,7 @@ app.use("/api/usercontacts", UserContact);
 app.use("/api/superadmin", superAdminRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", bulkMessagingRoutes);
+app.use("/api/status", statusRoutes);
 
 app.use(errorHandler);
 

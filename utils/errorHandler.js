@@ -13,19 +13,62 @@ class AppError extends Error {
   }
 }
 
+const isConnectionResetLikeError = (err) => {
+  const code = String(err?.code || "").toUpperCase();
+  const syscall = String(err?.syscall || "").toLowerCase();
+  const name = String(err?.name || "").toLowerCase();
+  const msg = String(err?.message || "").toLowerCase();
+  return (
+    ["ECONNRESET", "ECONNABORTED", "EPIPE", "ETIMEDOUT", "ABORT_ERR"].includes(code) ||
+    syscall === "read" ||
+    name.includes("abort") ||
+    msg.includes("socket hang up") ||
+    msg.includes("connection reset")
+  );
+};
+
 const errorHandler = (err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
   // Default error response
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
+  // Normalize transient network errors (S3, upstream APIs, client disconnects)
+  if (isConnectionResetLikeError(err)) {
+    const isClientAbort =
+      String(err?.code || "").toUpperCase() === "ABORT_ERR" ||
+      Boolean(req?.aborted);
+    err.statusCode = isClientAbort ? 499 : 503;
+    err.status = 'error';
+    err.isOperational = true;
+    err.message =
+      err.message ||
+      (isClientAbort
+        ? "Request canceled by client"
+        : "Temporary network issue. Please retry.");
+  }
+
   // Log detailed error in development
   if (process.env.NODE_ENV === 'development') {
-    console.error('ERROR 💥', {
+    const payload = {
       status: err.status,
       message: err.message,
-      stack: err.stack,
-      error: err
-    });
+      code: err?.code,
+      statusCode: err?.statusCode,
+      path: req?.originalUrl || req?.url,
+      method: req?.method,
+    };
+
+    if (isConnectionResetLikeError(err)) {
+      console.warn('WARN network/transient error', payload);
+    } else {
+      console.error('ERROR ??', {
+        ...payload,
+        stack: err.stack,
+        error: err,
+      });
+    }
   }
 
   // Handle specific error types
@@ -74,7 +117,7 @@ const errorHandler = (err, req, res, next) => {
       });
     }
     // Programming or other unknown error: don't leak error details
-    console.error('ERROR 💥', err);
+    console.error('ERROR ??', err);
     return res.status(500).json({
       status: 'error',
       message: 'Something went very wrong!'
@@ -91,4 +134,3 @@ const errorHandler = (err, req, res, next) => {
 };
 
 export { AppError, errorHandler };
-;
