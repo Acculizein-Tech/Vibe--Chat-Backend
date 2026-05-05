@@ -105,6 +105,25 @@ blockedUsers: [
     ref: "User"
   }
 ],
+statusPrivacy: {
+  mode: {
+    type: String,
+    enum: ["my_contacts", "contacts_except", "only_share_with"],
+    default: "my_contacts",
+  },
+  exceptUserIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
+  onlyShareWithUserIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
+},
 originalEmail: {
   type: String,
   index: true,

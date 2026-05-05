@@ -94,6 +94,30 @@ const parseMediaCaptionsInput = (raw) => {
   return parsed.map((item) => String(item || "").trim().slice(0, 700));
 };
 
+const parseStatusPrivacyInput = (raw) => {
+  if (!raw) return null;
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const mode = String(parsed?.mode || "").toLowerCase();
+  const safeMode = ["my_contacts", "contacts_except", "only_share_with"].includes(mode)
+    ? mode
+    : "my_contacts";
+  const exceptUserIds = Array.isArray(parsed?.exceptUserIds)
+    ? parsed.exceptUserIds.map((id) => toObjectIdString(id)).filter(Boolean)
+    : [];
+  const onlyShareWithUserIds = Array.isArray(parsed?.onlyShareWithUserIds)
+    ? parsed.onlyShareWithUserIds.map((id) => toObjectIdString(id)).filter(Boolean)
+    : [];
+  return { mode: safeMode, exceptUserIds, onlyShareWithUserIds };
+};
+
 const runCmd = (bin, args) =>
   new Promise((resolve, reject) => {
     const cp = spawn(bin, args, { windowsHide: true });
@@ -248,6 +272,7 @@ export const createStatus = asyncHandler(async (req, res) => {
   const textStyle = parseTextStyleInput(req.body?.textStyle);
   const trimRanges = parseTrimRangesInput(req.body?.trimRanges);
   const mediaCaptions = parseMediaCaptionsInput(req.body?.mediaCaptions);
+  const incomingPrivacy = parseStatusPrivacyInput(req.body?.statusPrivacy);
   const files = Array.isArray(req.files) ? req.files : [];
 
   if (!text && files.length === 0) {
@@ -316,6 +341,13 @@ export const createStatus = asyncHandler(async (req, res) => {
     media.find((m) => String(m?.caption || "").trim())?.caption || "",
   ).trim();
   const resolvedText = text || firstMediaCaption;
+  const owner = await User.findById(userId).select("statusPrivacy").lean();
+  const ownerPrivacy = owner?.statusPrivacy || {};
+  const privacySnapshot = incomingPrivacy || {
+    mode: String(ownerPrivacy?.mode || "my_contacts"),
+    exceptUserIds: Array.isArray(ownerPrivacy?.exceptUserIds) ? ownerPrivacy.exceptUserIds.map((id) => toObjectIdString(id)).filter(Boolean) : [],
+    onlyShareWithUserIds: Array.isArray(ownerPrivacy?.onlyShareWithUserIds) ? ownerPrivacy.onlyShareWithUserIds.map((id) => toObjectIdString(id)).filter(Boolean) : [],
+  };
 
   const createdAt = getNow();
   const status = await Status.create({
@@ -324,6 +356,7 @@ export const createStatus = asyncHandler(async (req, res) => {
     textStyle: textStyle || undefined,
     media,
     visibility,
+    privacySnapshot,
     expiresAt: new Date(createdAt.getTime() + STATUS_LIFETIME_MS),
     createdAt,
     updatedAt: createdAt,
@@ -378,6 +411,7 @@ export const getMyStatuses = asyncHandler(async (req, res) => {
 export const getFeedStatuses = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const contactIds = await getContactUserIds(userId);
+  const viewerId = toObjectIdString(userId);
 
   const statuses = await Status.find({
     user: { $in: contactIds },
@@ -388,7 +422,21 @@ export const getFeedStatuses = asyncHandler(async (req, res) => {
     .populate("user", "fullName profile.photo profile.avatar")
     .lean();
 
-  const statusIds = statuses.map((s) => s._id);
+  const filteredStatuses = (Array.isArray(statuses) ? statuses : []).filter((status) => {
+    const snap = status?.privacySnapshot || {};
+    const mode = String(snap?.mode || "my_contacts");
+    const except = Array.isArray(snap?.exceptUserIds) ? snap.exceptUserIds.map((id) => toObjectIdString(id)) : [];
+    const only = Array.isArray(snap?.onlyShareWithUserIds) ? snap.onlyShareWithUserIds.map((id) => toObjectIdString(id)) : [];
+    if (mode === "contacts_except") {
+      return !except.includes(viewerId);
+    }
+    if (mode === "only_share_with") {
+      return only.includes(viewerId);
+    }
+    return true;
+  });
+
+  const statusIds = filteredStatuses.map((s) => s._id);
   const viewed = await StatusView.find({
     status: { $in: statusIds },
     viewer: userId,
@@ -398,7 +446,7 @@ export const getFeedStatuses = asyncHandler(async (req, res) => {
   const viewedSet = new Set(viewed.map((v) => toObjectIdString(v.status)));
 
   const groupedMap = new Map();
-  for (const status of statuses) {
+  for (const status of filteredStatuses) {
     const uid = toObjectIdString(status.user?._id);
     if (!uid) continue;
     if (!groupedMap.has(uid)) {
@@ -423,6 +471,39 @@ export const getFeedStatuses = asyncHandler(async (req, res) => {
   );
 
   return res.status(200).json({ success: true, groups });
+});
+
+export const getMyStatusPrivacy = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const user = await User.findById(userId).select("statusPrivacy").lean();
+  const snap = user?.statusPrivacy || {};
+  return res.status(200).json({
+    success: true,
+    privacy: {
+      mode: String(snap?.mode || "my_contacts"),
+      exceptUserIds: Array.isArray(snap?.exceptUserIds) ? snap.exceptUserIds.map((id) => toObjectIdString(id)).filter(Boolean) : [],
+      onlyShareWithUserIds: Array.isArray(snap?.onlyShareWithUserIds) ? snap.onlyShareWithUserIds.map((id) => toObjectIdString(id)).filter(Boolean) : [],
+    },
+  });
+});
+
+export const updateMyStatusPrivacy = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const parsed = parseStatusPrivacyInput(req.body?.statusPrivacy || req.body);
+  if (!parsed) {
+    return res.status(400).json({ success: false, message: "Invalid privacy payload" });
+  }
+  await User.updateOne(
+    { _id: userId },
+    {
+      $set: {
+        "statusPrivacy.mode": parsed.mode,
+        "statusPrivacy.exceptUserIds": parsed.exceptUserIds,
+        "statusPrivacy.onlyShareWithUserIds": parsed.onlyShareWithUserIds,
+      },
+    },
+  );
+  return res.status(200).json({ success: true, privacy: parsed });
 });
 
 export const markStatusViewed = asyncHandler(async (req, res) => {

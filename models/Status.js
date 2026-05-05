@@ -48,6 +48,25 @@ const statusSchema = new mongoose.Schema(
       enum: ["contacts", "all"],
       default: "contacts",
     },
+    privacySnapshot: {
+      mode: {
+        type: String,
+        enum: ["my_contacts", "contacts_except", "only_share_with"],
+        default: "my_contacts",
+      },
+      exceptUserIds: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      onlyShareWithUserIds: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+    },
     expiresAt: {
       type: Date,
       required: true,
