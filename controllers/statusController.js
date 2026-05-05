@@ -58,6 +58,8 @@ const parseTextStyleInput = (raw) => {
     letterSpacing: Number(parsed.letterSpacing || 0) || 0,
     fontFamily: String(parsed.fontFamily || "").slice(0, 60),
     presetKey: String(parsed.presetKey || "").slice(0, 30),
+    emotionKey: String(parsed.emotionKey || "").slice(0, 30),
+    useCustomTheme: Boolean(parsed.useCustomTheme),
   };
   return safe;
 };

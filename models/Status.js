@@ -28,6 +28,8 @@ const statusSchema = new mongoose.Schema(
       letterSpacing: { type: Number, default: 0 },
       fontFamily: { type: String, default: "" },
       presetKey: { type: String, default: "" },
+      emotionKey: { type: String, default: "" },
+      useCustomTheme: { type: Boolean, default: false },
     },
     media: {
       type: [
