@@ -16,11 +16,13 @@ import {
   activeConversationViewers,
   userAppState,
 } from "./socketState.js";
+import { registerCallHandlers } from "../sockets/callHandlers.js";
 
 export const setupSocket = (io) => {
   io.on("connection", (socket) => {
     console.log("ðŸŸ¢ Socket connected:", socket.id);
     const senderAccountTypeCache = new Map();
+    registerCallHandlers(socket, io);
 
     const resolveConversation = async (conversationId) => {
       if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
@@ -551,6 +553,58 @@ export const setupSocket = (io) => {
       if (!socket.userId) return;
       userAppState.set(socket.userId, state);
       console.log("ðŸ“± AppState:", socket.userId, state);
+    });
+
+    /* =========================
+       ONLINE DEBUG
+    ========================== */
+    socket.on("getOnlineUsers", () => {
+      const users = [];
+      for (const [uid, sid] of onlineUsers.entries()) {
+        const socketRef = io?.sockets?.sockets?.get(String(sid || ""));
+        const roomSize = io?.sockets?.adapter?.rooms?.get(`user:${uid}`)?.size || 0;
+        const connected = Boolean(socketRef && !socketRef.disconnected);
+        if (connected || roomSize > 0) {
+          users.push({
+            userId: String(uid),
+            socketId: String(sid || ""),
+            roomSize,
+            appState: String(userAppState.get(uid) || "unknown"),
+          });
+        }
+      }
+
+      socket.emit("onlineUsers", {
+        me: String(socket.userId || ""),
+        count: users.length,
+        users,
+        ts: new Date().toISOString(),
+      });
+    });
+
+    socket.on("isUserOnline", ({ userId } = {}) => {
+      const uid = String(userId || "").trim();
+      if (!uid) {
+        socket.emit("userOnlineStatus", {
+          userId: "",
+          online: false,
+          reason: "invalidUserId",
+          ts: new Date().toISOString(),
+        });
+        return;
+      }
+      const sid = String(onlineUsers.get(uid) || "").trim();
+      const socketRef = io?.sockets?.sockets?.get(sid);
+      const roomSize = io?.sockets?.adapter?.rooms?.get(`user:${uid}`)?.size || 0;
+      const online = Boolean((socketRef && !socketRef.disconnected) || roomSize > 0);
+      socket.emit("userOnlineStatus", {
+        userId: uid,
+        online,
+        socketId: sid,
+        roomSize,
+        appState: String(userAppState.get(uid) || "unknown"),
+        ts: new Date().toISOString(),
+      });
     });
 
     /* ========================= 

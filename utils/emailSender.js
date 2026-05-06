@@ -23,37 +23,89 @@
 
 
 
-import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+dotenv.config();
+
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+
+const sesClient = new SESv2Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID?.trim(),
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY?.trim(),
+  },
+});
 
 const sendEmail = async ({ to, subject, text, html }) => {
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST, // WorkMail SMTP host
-      port: process.env.EMAIL_PORT, // 465 or 587
-      secure: process.env.EMAIL_SECURE === "true", // "true" ya "false" string compare hoga
-      auth: {
-        user: process.env.EMAIL_USER, // WorkMail full email (verify@bizvility.com)
-        pass: process.env.EMAIL_PASS, // WorkMail SMTP password
+    // 🔍 DEBUG LOGS
+    console.log("📧 EMAIL DEBUG START -------------------");
+    console.log("FROM:", process.env.EMAIL_FROM);
+    console.log("TO:", to);
+    console.log("REGION:", process.env.AWS_REGION);
+    console.log(
+      "KEY EXISTS:",
+      !!process.env.AWS_ACCESS_KEY_ID,
+      "SECRET EXISTS:",
+      !!process.env.AWS_SECRET_ACCESS_KEY
+    );
+
+    // ❗ VALIDATION
+    if (!process.env.EMAIL_FROM) {
+      throw new Error("EMAIL_FROM missing in env");
+    }
+
+    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+      throw new Error("AWS credentials missing in env");
+    }
+
+    if (!to) {
+      throw new Error("Recipient email missing");
+    }
+
+    const command = new SendEmailCommand({
+      FromEmailAddress: process.env.EMAIL_FROM,
+      Destination: {
+        ToAddresses: [to],
+      },
+      Content: {
+        Simple: {
+          Subject: {
+            Data: subject || "No Subject",
+          },
+          Body: {
+            Text: {
+              Data: text || "No text content",
+            },
+            Html: {
+              Data: html || "<p>No HTML content</p>",
+            },
+          },
+        },
       },
     });
 
-    // Debug
-    console.log("📧 Sending email from:", process.env.EMAIL_USER);
+    const response = await sesClient.send(command);
 
-    const mailOptions = {
-      from: `"Bizvility" <${process.env.EMAIL_USER}>`, // Always verified domain email
-      to,
-      subject,
-      text,
-      html,
-    };
+    console.log("✅ SES Email sent successfully");
+    console.log("📨 MessageId:", response.MessageId);
+    console.log("📧 EMAIL DEBUG END -------------------");
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully:", info.messageId);
+    return response;
 
-    return info;
   } catch (err) {
-    console.error("❌ Email sending failed:", err.message);
+    console.error("❌ EMAIL FAILED -------------------");
+
+    // 🔍 Deep debug
+    console.error("MESSAGE:", err.message);
+    console.error("STACK:", err.stack);
+
+    if (err.name) console.error("ERROR NAME:", err.name);
+    if (err.Code) console.error("ERROR CODE:", err.Code);
+    if (err.$metadata) console.error("METADATA:", err.$metadata);
+
+    console.error("❌ EMAIL FAILED END -------------------");
+
     throw err;
   }
 };
