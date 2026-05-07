@@ -514,6 +514,7 @@ export const logout = asyncHandler(async (req, res) => {
   }
 
   user.refreshTokens = [];
+  user.pushToken = null;
   await user.save();
 
   res.json({ message: "Logged out successfully" });
