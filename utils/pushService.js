@@ -6,7 +6,8 @@ const EXPO_RECEIPT_API = "https://exp.host/--/api/v2/push/getReceipts";
 const RECEIPT_LOOKUP_DELAY_MS = 15000;
 
 const isExpoToken = (token) =>
-  typeof token === "string" && /^ExpoPushToken\[[^\]]+\]$/.test(token.trim());
+  typeof token === "string" &&
+  /^(Expo|Exponent)PushToken\[[^\]]+\]$/.test(token.trim());
 
 const clearPushTokenIfMatched = async (token) => {
   try {
