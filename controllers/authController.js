@@ -19,6 +19,25 @@ const generateReferralCode = () => {
   return "SLS" + Math.floor(1000 + Math.random() * 9000);
 };
 
+const normalizeDeviceType = (value) => {
+  const normalized = String(value || "unknown").trim().toLowerCase();
+  const allowed = new Set(["android", "ios", "ipad", "web"]);
+  return allowed.has(normalized) ? normalized : "unknown";
+};
+
+const buildLoginDeviceMeta = (req = {}) => {
+  const deviceType = normalizeDeviceType(req.body?.deviceType);
+  const platform =
+    String(req.body?.platform || deviceType || "unknown").trim().toLowerCase() ||
+    "unknown";
+  const userAgent = String(req.headers?.["user-agent"] || "").trim();
+  const ipAddress = String(req.clientIp || req.ip || "").trim();
+  return { deviceType, platform, userAgent, ipAddress };
+};
+
+const hashToken = (value) =>
+  crypto.createHash("sha256").update(String(value || "")).digest("hex");
+
 
 export const register = asyncHandler(async (req, res) => {
   const {
@@ -29,7 +48,16 @@ export const register = asyncHandler(async (req, res) => {
     role = "customer",
     profile = {},
     referralCode,
+    deviceType = "unknown",
+    platform = "unknown",
   } = req.body;
+
+  const normalizedDeviceType = String(deviceType || "unknown").trim().toLowerCase();
+  const allowedDeviceTypes = new Set(["android", "ios", "ipad", "web"]);
+  const safeDeviceType = allowedDeviceTypes.has(normalizedDeviceType)
+    ? normalizedDeviceType
+    : "unknown";
+  const safePlatform = String(platform || "unknown").trim().toLowerCase() || "unknown";
 
   // 🚫 Restrict admin/superadmin registration
  if (["admin", "superadmin"].includes(role)) {
@@ -123,6 +151,8 @@ export const register = asyncHandler(async (req, res) => {
     password,
     role,
     profile,
+    deviceType: safeDeviceType,
+    platform: safePlatform,
     emailVerifyOTP: otp,
     emailVerifyExpires: otpExpires,
     emailResendBlock: resendCooldown,
@@ -314,8 +344,29 @@ export const login = asyncHandler(async (req, res) => {
 
     const accessToken = generateToken(user._id, "30d");
     const refreshToken = generateToken(user._id, "7d");
+    const sessionId = crypto.randomBytes(16).toString("hex");
+    const refreshTokenHash = hashToken(refreshToken);
+    const now = new Date();
+    const deviceMeta = buildLoginDeviceMeta(req);
 
     user.refreshTokens.push(refreshToken);
+    user.loginDevices = Array.isArray(user.loginDevices) ? user.loginDevices : [];
+    user.loginDevices.push({
+      sessionId,
+      refreshTokenHash,
+      ...deviceMeta,
+      lastLoginAt: now,
+      lastActiveAt: now,
+    });
+    if (user.loginDevices.length > 20) {
+      user.loginDevices = user.loginDevices
+        .sort(
+          (a, b) =>
+            new Date(b?.lastActiveAt || 0).getTime() -
+            new Date(a?.lastActiveAt || 0).getTime(),
+        )
+        .slice(0, 20);
+    }
     await user.save();
 
     return res.json({
@@ -333,6 +384,7 @@ export const login = asyncHandler(async (req, res) => {
       },
       accessToken,
       refreshToken,
+      deviceSessionId: sessionId,
     });
   }
 
@@ -513,11 +565,72 @@ export const logout = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
-  user.refreshTokens = [];
+  const incomingRefreshToken = String(req.body?.refreshToken || "").trim();
+  const incomingSessionId = String(req.body?.deviceSessionId || "").trim();
+
+  if (incomingRefreshToken) {
+    user.refreshTokens = (user.refreshTokens || []).filter(
+      (t) => String(t || "") !== incomingRefreshToken,
+    );
+    const incomingHash = hashToken(incomingRefreshToken);
+    user.loginDevices = (user.loginDevices || []).filter(
+      (d) => String(d?.refreshTokenHash || "") !== incomingHash,
+    );
+  } else if (incomingSessionId) {
+    const matched = (user.loginDevices || []).find(
+      (d) => String(d?.sessionId || "") === incomingSessionId,
+    );
+    user.loginDevices = (user.loginDevices || []).filter(
+      (d) => String(d?.sessionId || "") !== incomingSessionId,
+    );
+    if (matched?.refreshTokenHash) {
+      user.refreshTokens = (user.refreshTokens || []).filter(
+        (t) => hashToken(t) !== matched.refreshTokenHash,
+      );
+    }
+  } else {
+    user.refreshTokens = [];
+    user.loginDevices = [];
+  }
   user.pushToken = null;
   await user.save();
 
   res.json({ message: "Logged out successfully" });
+});
+
+export const getMyLoginDevices = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("role loginDevices");
+  if (!user) {
+    return res.status(404).json({ success: false, message: "User not found" });
+  }
+  if (String(user.role || "").toLowerCase() !== "superadmin") {
+    return res.status(403).json({
+      success: false,
+      message: "Only superadmin can access device details",
+    });
+  }
+
+  const devices = (user.loginDevices || [])
+    .map((device) => ({
+      sessionId: String(device?.sessionId || ""),
+      deviceType: String(device?.deviceType || "unknown"),
+      platform: String(device?.platform || "unknown"),
+      userAgent: String(device?.userAgent || ""),
+      ipAddress: String(device?.ipAddress || ""),
+      lastLoginAt: device?.lastLoginAt || null,
+      lastActiveAt: device?.lastActiveAt || null,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b?.lastActiveAt || 0).getTime() -
+        new Date(a?.lastActiveAt || 0).getTime(),
+    );
+
+  return res.status(200).json({
+    success: true,
+    count: devices.length,
+    data: devices,
+  });
 });
 //resend OTP for email verification
 // export const resendOTP = asyncHandler(async (req, res) => {

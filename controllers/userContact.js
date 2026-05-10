@@ -5,6 +5,15 @@ import mongoose from "mongoose";
 
 const normalizePhone = (phone) => String(phone || "").replace(/\D/g, "").slice(-10);
 const hashPhone = (phone) => crypto.createHash("sha256").update(phone).digest("hex");
+const cleanText = (value) => String(value || "").trim();
+const splitDisplayName = (rawName) => {
+  const cleaned = cleanText(rawName);
+  if (!cleaned) return { firstName: "", lastName: "", contactName: "" };
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || "";
+  const lastName = parts.slice(1).join(" ");
+  return { firstName, lastName, contactName: cleaned };
+};
 
 const emitContactsChanged = (req, ownerId, payload = {}) => {
   try {
@@ -29,6 +38,7 @@ export const syncContacts = async (req, res) => {
   for (const c of contacts) {
     const normalized = normalizePhone(c?.phone);
     if (!normalized) continue;
+    const normalizedName = splitDisplayName(c?.name);
 
     const phoneHash = hashPhone(normalized);
     const matchedUser = await User.findOne({ phoneHash });
@@ -38,7 +48,9 @@ export const syncContacts = async (req, res) => {
         filter: { owner: userId, phoneHash },
         update: {
           $set: {
-            contactName: c?.name || "",
+            firstName: normalizedName.firstName,
+            lastName: normalizedName.lastName,
+            contactName: normalizedName.contactName,
             phone: normalized,
             phoneHash,
             linkedUser: matchedUser?._id || null,
@@ -61,6 +73,9 @@ export const syncContacts = async (req, res) => {
 export const saveChatContact = async (req, res) => {
   const ownerId = req.user._id;
   const { senderUserId, firstName, lastName } = req.body || {};
+  const safeFirstName = cleanText(firstName);
+  const safeLastName = cleanText(lastName);
+  const contactName = cleanText(`${safeFirstName} ${safeLastName}`);
 
   const sender = await User.findById(senderUserId).select("phone phoneHash");
   if (!sender || !sender.phone) {
@@ -74,8 +89,9 @@ export const saveChatContact = async (req, res) => {
     { owner: ownerId, phoneHash },
     {
       $set: {
-        firstName,
-        lastName,
+        firstName: safeFirstName,
+        lastName: safeLastName,
+        contactName,
         phone: normalizedPhone,
         phoneHash,
         linkedUser: sender._id,
@@ -97,6 +113,8 @@ export const editContact = async (req, res) => {
   try {
     const { contactId } = req.params;
     const { firstName, lastName } = req.body || {};
+    const safeFirstName = cleanText(firstName);
+    const safeLastName = cleanText(lastName);
 
     if (!mongoose.Types.ObjectId.isValid(contactId)) {
       return res.status(400).json({ message: "Invalid contact id" });
@@ -107,8 +125,9 @@ export const editContact = async (req, res) => {
       return res.status(404).json({ message: "Contact not found" });
     }
 
-    contact.firstName = firstName;
-    contact.lastName = lastName;
+    contact.firstName = safeFirstName;
+    contact.lastName = safeLastName;
+    contact.contactName = cleanText(`${safeFirstName} ${safeLastName}`);
     await contact.save();
 
     emitContactsChanged(req, contact.owner, {

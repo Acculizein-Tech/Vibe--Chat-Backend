@@ -1,6 +1,24 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 
+const loginDeviceSchema = new mongoose.Schema(
+  {
+    sessionId: { type: String, required: true },
+    refreshTokenHash: { type: String, required: true },
+    deviceType: {
+      type: String,
+      enum: ["android", "ios", "ipad", "web", "unknown"],
+      default: "unknown",
+    },
+    platform: { type: String, default: "unknown" },
+    userAgent: { type: String, default: "" },
+    ipAddress: { type: String, default: "" },
+    lastLoginAt: { type: Date, default: Date.now },
+    lastActiveAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   // username: {
@@ -69,6 +87,7 @@ phone: {
   zipCode: { type: String },
   isVerified: { type: Boolean, default: false },
   refreshTokens: [String],
+  loginDevices: [loginDeviceSchema],
   profile: {
     photo: { type: String },
 
@@ -82,11 +101,37 @@ emailResendBlock: Date, // 🟢 Add this line
 resetPasswordOTP: String,
 resetPasswordExpires: Date,
 
-pushToken: {
+  pushToken: {
   type: String,
   default: null,
 }
 ,
+deviceType: {
+  type: String,
+  enum: ["android", "ios", "ipad", "web", "unknown"],
+  default: "unknown",
+  index: true,
+},
+platform: {
+  type: String,
+  trim: true,
+  default: "unknown",
+  index: true,
+},
+deviceUsage: {
+  android: {
+    sessionCount: { type: Number, default: 0 },
+    totalUsageMinutes: { type: Number, default: 0 },
+    avgResponseMs: { type: Number, default: 0 },
+    lastSeenAt: { type: Date, default: null },
+  },
+  ios: {
+    sessionCount: { type: Number, default: 0 },
+    totalUsageMinutes: { type: Number, default: 0 },
+    avgResponseMs: { type: Number, default: 0 },
+    lastSeenAt: { type: Date, default: null },
+  },
+},
 isDeleted: { type: Boolean, default: false },
 deletedAt: { type: Date, default: null },
 customCodes: [

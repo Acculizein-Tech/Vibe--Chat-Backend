@@ -39,6 +39,15 @@ const isGenericMediaLabel = (value = "") => {
     "pdf",
   ].includes(normalized);
 };
+const buildExistingName = (contact) => {
+  if (!contact) return null;
+  const first = String(contact?.firstName || "").trim();
+  const last = String(contact?.lastName || "").trim();
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  const fallback = String(contact?.contactName || "").trim();
+  return fallback || null;
+};
 // ✅ Create or get existing conversation between two users  
   
    
@@ -389,9 +398,7 @@ export const getChatUsers = async (req, res) => {
           profileAvatar: user?.profile?.avatar || null,
           accountType: user?.accountType || "personal",
           businessProfile: user?.businessProfile || null,
-          existingName: contact
-            ? `${contact.firstName} ${contact.lastName}`.trim()
-            : null,
+          existingName: buildExistingName(contact),
           existingUserId: contact ? contact._id : null,
           lastMessage: lastMessagePreview || null,
           lastMessageAt: lastMessage?.createdAt || null,
@@ -477,4 +484,3 @@ export const deleteConversations = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-

@@ -1,7 +1,23 @@
 import express from "express";
+import crypto from "crypto";
 import User from "../models/user.js";
+import UserContact from "../models/UserContact.js";
+import { protect } from "../middlewares/auth.js";
+import role from "../middlewares/roles.js";
 
 const router = express.Router();
+const normalizePhone = (phone = "") =>
+  String(phone || "").replace(/\D/g, "").slice(-10);
+const hashPhone = (phone) =>
+  crypto.createHash("sha256").update(String(phone || "")).digest("hex");
+const buildExistingName = (contact) => {
+  if (!contact) return "";
+  const first = String(contact?.firstName || "").trim();
+  const last = String(contact?.lastName || "").trim();
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  return String(contact?.contactName || "").trim();
+};
 
 // router.post("/sync", async (req, res) => {
 //   try {
@@ -21,7 +37,7 @@ const router = express.Router();
 //   }
 // });
 
-router.post("/sync", async (req, res) => {
+router.post("/sync", protect, role("customer"), async (req, res) => {
   try {
     const { contacts } = req.body;
 
@@ -29,18 +45,59 @@ router.post("/sync", async (req, res) => {
       return res.status(400).json({ message: "Contacts must be an array" });
     }
 
-    const phoneNumbers = contacts
-      .map(c => c.phone?.replace(/\s+/g, "").replace(/^(\+91|91)/, "")) // normalize Indian numbers
+    const normalizedContacts = contacts
+      .map((c) => {
+        const normalizedPhone = normalizePhone(c?.phone);
+        const name = String(c?.name || "").trim();
+        if (!normalizedPhone) return null;
+        return { name, phone: normalizedPhone, phoneHash: hashPhone(normalizedPhone) };
+      })
       .filter(Boolean);
+    const phoneHashes = normalizedContacts.map((c) => c.phoneHash);
 
     const matchedUsers = await User.find({
-      phone: { $in: phoneNumbers },
+      phoneHash: { $in: phoneHashes },
     }).select("_id fullName phone email profile.avatar");
+    const matchedByPhoneHash = new Map(
+      matchedUsers.map((u) => [hashPhone(normalizePhone(u?.phone)), u]),
+    );
+
+    const ownerId = req.user?._id;
+    const ownerContacts = ownerId
+      ? await UserContact.find({
+          owner: ownerId,
+          phoneHash: { $in: phoneHashes },
+        }).select("phoneHash firstName lastName contactName linkedUser")
+      : [];
+    const ownerContactByHash = new Map(
+      ownerContacts.map((c) => [String(c?.phoneHash || ""), c]),
+    );
+
+    const hydratedMatchedUsers = [];
+    normalizedContacts.forEach((c) => {
+      const user = matchedByPhoneHash.get(c.phoneHash);
+      if (!user) return;
+      const contact = ownerContactByHash.get(c.phoneHash) || null;
+      const existingName =
+        buildExistingName(contact) ||
+        String(c?.name || "").trim() ||
+        String(user?.fullName || "").trim() ||
+        "";
+      hydratedMatchedUsers.push({
+        _id: user._id,
+        fullName: user.fullName || "",
+        phone: normalizePhone(user.phone),
+        email: user.email || "",
+        profile: user.profile || {},
+        existingName,
+        existingUserId: contact?._id || null,
+      });
+    });
 
     res.status(200).json({
-      matchedUsers,
-      unmatchedContacts: contacts.filter(
-        c => !matchedUsers.find(u => u.phone === c.phone.replace(/^(\+91|91)/, ""))
+      matchedUsers: hydratedMatchedUsers,
+      unmatchedContacts: normalizedContacts.filter(
+        (c) => !matchedByPhoneHash.has(c.phoneHash),
       ),
     });
   } catch (error) {

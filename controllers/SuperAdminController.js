@@ -176,3 +176,53 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     data: updatedUser,
   });
 });
+
+export const getDeviceAnalytics = asyncHandler(async (req, res) => {
+  const users = await User.find({ isDeleted: { $ne: true } })
+    .select("fullName email role deviceType platform createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const groupedUsers = {
+    android: [],
+    ios: [],
+    ipad: [],
+    web: [],
+    unknown: [],
+  };
+
+  const platformCounts = {};
+
+  users.forEach((user) => {
+    const dt = String(user.deviceType || "unknown").toLowerCase();
+    const normalizedDeviceType = ["android", "ios", "ipad", "web"].includes(dt) ? dt : "unknown";
+    const normalizedPlatform = String(user.platform || "unknown").toLowerCase() || "unknown";
+
+    groupedUsers[normalizedDeviceType].push({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      deviceType: normalizedDeviceType,
+      platform: normalizedPlatform,
+      createdAt: user.createdAt,
+    });
+
+    platformCounts[normalizedPlatform] = (platformCounts[normalizedPlatform] || 0) + 1;
+  });
+
+  const deviceTypeCounts = Object.keys(groupedUsers).reduce((acc, key) => {
+    acc[key] = groupedUsers[key].length;
+    return acc;
+  }, {});
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalUsers: users.length,
+      deviceTypeCounts,
+      platformCounts,
+      usersByDeviceType: groupedUsers,
+    },
+  });
+});

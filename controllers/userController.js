@@ -128,14 +128,19 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
 
     // ✅ Handle avatar upload in background (non-blocking)
+    const shouldRemoveAvatar =
+      String(req.body?.removeProfilePicture || req.body?.removeAvatar || "")
+        .trim()
+        .toLowerCase() === "true";
+
+    if (shouldRemoveAvatar && !req.file) {
+      updatedFields["profile.avatar"] = null;
+    }
+
     if (req.file) {
       try {
         const s3Result = await uploadToS3(req.file, req);
-        await User.findByIdAndUpdate(
-          req.params.id,
-          { $set: { "profile.avatar": s3Result.url } },
-          { new: true }
-        );
+        updatedFields["profile.avatar"] = s3Result.url;
       } catch (uploadErr) {
         console.error("S3 upload failed:", uploadErr.message);
       }
@@ -162,6 +167,12 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     try {
       const io = req.app.get("io");
       if (io && updatedUser?._id) {
+        io.to(`user:${String(updatedUser._id)}`).emit("profile:updated", {
+          userId: String(updatedUser._id),
+          avatar: String(updatedUser?.profile?.avatar || ""),
+          updatedAt: new Date().toISOString(),
+        });
+
         const ownerRows = await UserContact.find(
           { linkedUser: updatedUser._id },
           { owner: 1 },

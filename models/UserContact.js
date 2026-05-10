@@ -11,11 +11,17 @@ const userContactSchema = new mongoose.Schema(
 
     firstName: {
       type: String,
-      required: true,
+      default: "",
     },
-      lastName: {
+    lastName: {
       type: String,
-      required: true,
+      default: "",
+    },
+
+    // Full display label from device/Google sync
+    contactName: {
+      type: String,
+      default: "",
     },
 
     phone: {

@@ -8,7 +8,8 @@ import {
   verifyEmailOTP,
   verifyForgotOTP,
   resendOTP,
-  resetPassword
+  resetPassword,
+  getMyLoginDevices,
 } from '../controllers/authController.js';
 import { protect } from '../middlewares/auth.js';
 
@@ -37,5 +38,6 @@ router.post('/reset-password', resetPassword);
 router.get('/me', protect, (req, res) => {
   res.json(req.user);
 });
+router.get('/devices', protect, getMyLoginDevices);
 
 export default router;
