@@ -344,20 +344,65 @@ export const login = asyncHandler(async (req, res) => {
 
     const accessToken = generateToken(user._id, "30d");
     const refreshToken = generateToken(user._id, "7d");
-    const sessionId = crypto.randomBytes(16).toString("hex");
+    let sessionId = crypto.randomBytes(16).toString("hex");
     const refreshTokenHash = hashToken(refreshToken);
     const now = new Date();
     const deviceMeta = buildLoginDeviceMeta(req);
 
-    user.refreshTokens.push(refreshToken);
     user.loginDevices = Array.isArray(user.loginDevices) ? user.loginDevices : [];
-    user.loginDevices.push({
-      sessionId,
-      refreshTokenHash,
-      ...deviceMeta,
-      lastLoginAt: now,
-      lastActiveAt: now,
+    user.refreshTokens = Array.isArray(user.refreshTokens) ? user.refreshTokens : [];
+
+    const incomingSessionId = String(req.body?.deviceSessionId || "").trim();
+    const normalizedMeta = {
+      deviceType: String(deviceMeta?.deviceType || "unknown").trim().toLowerCase(),
+      platform: String(deviceMeta?.platform || "unknown").trim().toLowerCase(),
+      userAgent: String(deviceMeta?.userAgent || "").trim().toLowerCase(),
+    };
+
+    const existingIndex = user.loginDevices.findIndex((d) => {
+      const dSessionId = String(d?.sessionId || "").trim();
+      if (incomingSessionId && dSessionId === incomingSessionId) return true;
+
+      return (
+        String(d?.deviceType || "unknown").trim().toLowerCase() === normalizedMeta.deviceType &&
+        String(d?.platform || "unknown").trim().toLowerCase() === normalizedMeta.platform &&
+        String(d?.userAgent || "").trim().toLowerCase() === normalizedMeta.userAgent
+      );
     });
+
+    if (existingIndex >= 0) {
+      const existing = user.loginDevices[existingIndex];
+      sessionId = String(existing?.sessionId || sessionId);
+      const previousHash = String(existing?.refreshTokenHash || "").trim();
+
+      if (previousHash) {
+        user.refreshTokens = user.refreshTokens.filter(
+          (t) => hashToken(t) !== previousHash,
+        );
+      }
+
+      user.loginDevices[existingIndex] = {
+        ...existing,
+        sessionId,
+        refreshTokenHash,
+        ...deviceMeta,
+        lastLoginAt: now,
+        lastActiveAt: now,
+      };
+    } else {
+      user.loginDevices.push({
+        sessionId,
+        refreshTokenHash,
+        ...deviceMeta,
+        lastLoginAt: now,
+        lastActiveAt: now,
+      });
+    }
+
+    user.refreshTokens = user.refreshTokens.filter(
+      (t) => String(t || "") !== String(refreshToken),
+    );
+    user.refreshTokens.push(refreshToken);
     if (user.loginDevices.length > 20) {
       user.loginDevices = user.loginDevices
         .sort(
