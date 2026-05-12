@@ -25,12 +25,34 @@ const normalizeDeviceType = (value) => {
   return allowed.has(normalized) ? normalized : "unknown";
 };
 
+const detectDeviceTypeFromUserAgent = (userAgent = "") => {
+  const ua = String(userAgent || "").toLowerCase();
+  if (!ua) return "unknown";
+  if (ua.includes("android")) return "android";
+  if (ua.includes("ipad")) return "ipad";
+  if (ua.includes("iphone") || ua.includes("ios")) return "ios";
+  if (
+    ua.includes("mozilla") ||
+    ua.includes("chrome") ||
+    ua.includes("safari") ||
+    ua.includes("firefox") ||
+    ua.includes("edg/")
+  ) {
+    return "web";
+  }
+  return "unknown";
+};
+
 const buildLoginDeviceMeta = (req = {}) => {
-  const deviceType = normalizeDeviceType(req.body?.deviceType);
+  const userAgent = String(req.headers?.["user-agent"] || "").trim();
+  const parsedDeviceType = normalizeDeviceType(req.body?.deviceType);
+  const deviceType =
+    parsedDeviceType === "unknown"
+      ? detectDeviceTypeFromUserAgent(userAgent)
+      : parsedDeviceType;
   const platform =
     String(req.body?.platform || deviceType || "unknown").trim().toLowerCase() ||
     "unknown";
-  const userAgent = String(req.headers?.["user-agent"] || "").trim();
   const ipAddress = String(req.clientIp || req.ip || "").trim();
   return { deviceType, platform, userAgent, ipAddress };
 };
