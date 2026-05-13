@@ -59,6 +59,10 @@ const buildLoginDeviceMeta = (req = {}) => {
 
 const hashToken = (value) =>
   crypto.createHash("sha256").update(String(value || "")).digest("hex");
+const normalizePhone = (phone = "") =>
+  String(phone || "").replace(/\D/g, "").slice(-10);
+const hashPhone = (phone = "") =>
+  crypto.createHash("sha256").update(String(phone || "")).digest("hex");
 
 
 export const register = asyncHandler(async (req, res) => {
@@ -170,6 +174,7 @@ export const register = asyncHandler(async (req, res) => {
     fullName,
     email,
     phone,
+    phoneHash: hashPhone(normalizePhone(phone)),
     password,
     role,
     profile,

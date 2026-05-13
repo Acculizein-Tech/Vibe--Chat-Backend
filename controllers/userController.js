@@ -3,6 +3,7 @@
 import User from "../models/user.js";
 import UserContact from "../models/UserContact.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import crypto from "crypto";
 
 // import Business from "../models/Business.js";
 // import Review from "../models/Review.js";
@@ -14,6 +15,11 @@ import axios from "axios";
 // import Priceplan from "../models/Priceplan.js";
 
 import { generateNameBasedCode } from "../utils/generateReferralCode.js";
+
+const normalizePhone = (phone = "") =>
+  String(phone || "").replace(/\D/g, "").slice(-10);
+const hashPhone = (phone = "") =>
+  crypto.createHash("sha256").update(String(phone || "")).digest("hex");
 
 // @desc    Get current user details
 // @route   GET /api/user/profile/:id
@@ -72,6 +78,8 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
     if (typeof phone === "string") {
       updatedFields.phone = phone;
+      const normalizedPhone = normalizePhone(phone);
+      updatedFields.phoneHash = normalizedPhone ? hashPhone(normalizedPhone) : null;
     }
 
     if (rawAccountType && ["personal", "professional"].includes(rawAccountType)) {

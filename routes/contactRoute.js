@@ -10,6 +10,8 @@ const normalizePhone = (phone = "") =>
   String(phone || "").replace(/\D/g, "").slice(-10);
 const hashPhone = (phone) =>
   crypto.createHash("sha256").update(String(phone || "")).digest("hex");
+const escapeRegex = (value = "") =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const buildExistingName = (contact) => {
   if (!contact) return "";
   const first = String(contact?.firstName || "").trim();
@@ -55,9 +57,17 @@ router.post("/sync", protect, role("customer"), async (req, res) => {
       .filter(Boolean);
     const phoneHashes = normalizedContacts.map((c) => c.phoneHash);
 
+    const normalizedPhones = normalizedContacts.map((c) => c.phone);
+    const phoneSuffixPatterns = normalizedPhones.map(
+      (p) => new RegExp(`${escapeRegex(p)}$`),
+    );
     const matchedUsers = await User.find({
-      phoneHash: { $in: phoneHashes },
-    }).select("_id fullName phone email profile.avatar");
+      $or: [
+        { phoneHash: { $in: phoneHashes } },
+        { phone: { $in: normalizedPhones } },
+        { phone: { $in: phoneSuffixPatterns } },
+      ],
+    }).select("_id fullName phone email profile.avatar phoneHash");
     const matchedByPhoneHash = new Map(
       matchedUsers.map((u) => [hashPhone(normalizePhone(u?.phone)), u]),
     );

@@ -45,6 +45,7 @@ const allowedOrigins = [
   "https://vibechat.bizvility.com",
   "https://www.vibechat.bizvility.com",
   "http://localhost:5173",
+  "http://localhost:4173",
 ];
 
 app.use(
