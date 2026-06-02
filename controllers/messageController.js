@@ -1,6 +1,7 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import GroupConversation from "../models/GroupConversation.js";
+import mongoose from "mongoose";
 import { io } from "../index.js";
 import Notification from "../models/Notification.js";
 import {
@@ -187,6 +188,9 @@ const emitMessageSideEffects = async ({
       emitToUser(recipientId, "unreadCount", unreadCount);
 
       const pushToken = recipientPushMap.get(recipientId);
+      if (!pushToken) {
+        console.log(`No push token for recipient ${recipientId}, skipping push notification.`);
+      }
       if (pushToken) {
         await sendPushNotification({
           pushToken,
@@ -404,7 +408,30 @@ export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user?._id;
-    const query = { conversationId };
+    const normalizedConversationId = normalizeId(conversationId);
+    const requesterId = normalizeId(userId || req.user?.id);
+
+    // Production safety: never throw for stale/bad IDs from client cache.
+    if (
+      !normalizedConversationId ||
+      !mongoose.Types.ObjectId.isValid(normalizedConversationId)
+    ) {
+      return res.status(200).json([]);
+    }
+
+    const resolvedConversation = await resolveConversationForMessage(
+      normalizedConversationId,
+    );
+    if (!resolvedConversation) {
+      return res.status(200).json([]);
+    }
+
+    const participantIds = uniqueIds(resolvedConversation?.participants || []);
+    if (requesterId && participantIds.length && !participantIds.includes(requesterId)) {
+      return res.status(200).json([]);
+    }
+
+    const query = { conversationId: normalizedConversationId };
 
     if (userId) {
       query.deletedFor = { $nin: [userId] };

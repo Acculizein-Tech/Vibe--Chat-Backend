@@ -116,6 +116,18 @@ const messageSchema = new mongoose.Schema(
     forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     // Business/account visibility markers
     senderAccountType: { type: String, default: "" },
+    messageType: {
+      type: String,
+      enum: ["text", "event"],
+      default: "text",
+    },
+    eventData: {
+      name: { type: String, default: "" },
+      description: { type: String, default: "" },
+      date: { type: String, default: "" },
+      time: { type: String, default: "" },
+      location: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );

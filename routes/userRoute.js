@@ -2,7 +2,8 @@ import express from 'express';
 import upload from '../middlewares/upload.js';
 import { getUserProfile, updateUserProfile, getUserReviews, getUserListings, getAllSalesUsers, getUsersByReferral,
    getWalletInfo, applyReferral, createCustomCode, getCustomCodes, UpdateCustomCode,
-    DeleteCustomCode, blockUser, unblockUser, getBlockedUsers, filterContacts, deleteUserAccount} from '../controllers/userController.js';
+    DeleteCustomCode, blockUser, unblockUser, getBlockedUsers, filterContacts, deleteUserAccount,
+    getChatPreferences, upsertChatPreferences} from '../controllers/userController.js';
 
 
 import { protect } from '../middlewares/auth.js';
@@ -46,5 +47,7 @@ router.get("/blocked/:userId", getBlockedUsers);
 // ✅ New route to filter contacts
 router.post("/filterContacts", protect, filterContacts);
 router.delete("/delete-account/:id", protect, deleteUserAccount);
+router.get("/chat-preferences", protect, getChatPreferences);
+router.put("/chat-preferences", protect, upsertChatPreferences);
 
 export default router;

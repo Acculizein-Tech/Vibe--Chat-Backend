@@ -29,7 +29,8 @@ const notificationSchema = new mongoose.Schema(
         "LEAD_GENERATED",
         "BUSINESS_CREATED",
         "CUSTOMER_ENQUIRY",
-        "ADMIN_ALERT"
+        "ADMIN_ALERT",
+        "EVENT_REMINDER"
       ],
       required: true
     },
@@ -45,6 +46,10 @@ const notificationSchema = new mongoose.Schema(
       senderId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
+      },
+      eventId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "EventReminder"
       }
     },
 

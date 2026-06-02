@@ -19,6 +19,16 @@ const loginDeviceSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const chatTabSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, maxlength: 40 },
+    chatIds: [{ type: String, trim: true }],
+    createdAt: { type: Number, default: () => Date.now() },
+  },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   // username: {
@@ -54,12 +64,26 @@ const userSchema = new mongoose.Schema({
     enum: ['personal', 'professional'],
     default: 'personal',
   },
+  socialLinks: {
+    facebook: { type: String },
+    instagram: { type: String },
+    youtube: { type: String },
+    telegram: { type: String },
+    linkedin: { type: String },
+  },
   businessProfile: {
     name: { type: String },
     category: { type: String },
     description: { type: String },
     email: { type: String },
     website: { type: String },
+    socialLinks: {
+      facebook: { type: String },
+      instagram: { type: String },
+      youtube: { type: String },
+      telegram: { type: String },
+      linkedin: { type: String },
+    },
     address: { type: String },
     services: [{ type: String }],
     quickReplies: [{ type: String }],
@@ -172,6 +196,11 @@ statusPrivacy: {
 originalEmail: {
   type: String,
   index: true,
+},
+chatPreferences: {
+  activeFilter: { type: String, default: "personals", trim: true },
+  customTabs: { type: [chatTabSchema], default: [] },
+  updatedAt: { type: Date, default: Date.now },
 },
 
 

@@ -342,7 +342,7 @@ export const getChatUsers = async (req, res) => {
     const users = otherUserIds.length
       ? await User.find({ _id: { $in: otherUserIds } })
           .select(
-            "fullName firstName lastName phone username profile.avatar userImages accountType businessProfile",
+            "fullName firstName lastName phone username profile.avatar userImages accountType socialLinks businessProfile",
           )
           .lean()
       : [];
@@ -397,6 +397,7 @@ export const getChatUsers = async (req, res) => {
           userImages: user?.userImages || [],
           profileAvatar: user?.profile?.avatar || null,
           accountType: user?.accountType || "personal",
+          socialLinks: user?.socialLinks || null,
           businessProfile: user?.businessProfile || null,
           existingName: buildExistingName(contact),
           existingUserId: contact ? contact._id : null,
@@ -430,8 +431,30 @@ export const deleteConversation = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
+    const participantIds = (conversation.participants || []).map((pid) =>
+      String(pid || ""),
+    );
     await Conversation.findByIdAndDelete(conversationId);
     await Message.deleteMany({ conversationId });
+    const io = req.app.get("io");
+    if (io) {
+      const payload = {
+        conversationId: String(conversationId),
+        action: "conversation:deleted",
+        type: "direct",
+        createdAt: new Date().toISOString(),
+      };
+      participantIds.forEach((uid) => {
+        if (!uid) return;
+        io.to(`user:${uid}`).emit("chat:list:patch", payload);
+        io.to(`user:${uid}`).emit("chat:list:refresh", payload);
+        const sid = onlineUsers.get(uid);
+        if (sid) {
+          io.to(sid).emit("chat:list:patch", payload);
+          io.to(sid).emit("chat:list:refresh", payload);
+        }
+      });
+    }
 
     res.json({ message: "Conversation and its messages deleted successfully" });
   } catch (error) {
@@ -472,6 +495,31 @@ export const deleteConversations = async (req, res) => {
     if (deleted.length) {
       await Message.deleteMany({ conversationId: { $in: deleted } });
       await Conversation.deleteMany({ _id: { $in: deleted } });
+      const io = req.app.get("io");
+      if (io) {
+        const participantSet = new Set(
+          conversations
+            .flatMap((conv) => (conv?.participants || []).map((pid) => String(pid || "")))
+            .filter(Boolean),
+        );
+        deleted.forEach((conversationId) => {
+          const payload = {
+            conversationId: String(conversationId),
+            action: "conversation:deleted",
+            type: "direct",
+            createdAt: new Date().toISOString(),
+          };
+          participantSet.forEach((uid) => {
+            io.to(`user:${uid}`).emit("chat:list:patch", payload);
+            io.to(`user:${uid}`).emit("chat:list:refresh", payload);
+            const sid = onlineUsers.get(uid);
+            if (sid) {
+              io.to(sid).emit("chat:list:patch", payload);
+              io.to(sid).emit("chat:list:refresh", payload);
+            }
+          });
+        });
+      }
     }
 
     return res.status(200).json({

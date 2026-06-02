@@ -20,11 +20,13 @@ import Conversation from "./models/Conversation.js";
 import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
+import { startEventReminderJob } from "./cronJobs/eventReminderJob.js";
 import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/SuperAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
 import bulkMessagingRoutes from "./routes/bulkMessagingRoute.js";
 import statusRoutes from "./routes/statusRoute.js";
+import eventReminderRoutes from "./routes/eventReminderRoute.js";
 import { startBulkMessageWorker } from "./workers/bulkMessageWorker.js";
 //backend superadmin routes fix
 
@@ -74,6 +76,7 @@ app.set("io", io);
 
 // index.js (after io init)
 setupSocket(io);
+startEventReminderJob(io);
 
 
 
@@ -93,6 +96,7 @@ app.use("/api/superadmin", superAdminRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", bulkMessagingRoutes);
 app.use("/api/status", statusRoutes);
+app.use("/api/events", eventReminderRoutes);
 
 app.use(errorHandler);
 

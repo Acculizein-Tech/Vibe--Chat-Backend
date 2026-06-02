@@ -97,6 +97,17 @@ export const setupSocket = (io) => {
         return "";
       }
     };
+    const normalizeEventData = (input) => {
+      const src = input && typeof input === "object" ? input : {};
+      const out = {
+        name: String(src?.name || "").trim(),
+        description: String(src?.description || "").trim(),
+        date: String(src?.date || "").trim(),
+        time: String(src?.time || "").trim(),
+        location: String(src?.location || "").trim(),
+      };
+      return out.name ? out : null;
+    };
 
     const isUserOnline = (userId) => {
       return Boolean(getActiveSocketId(userId));
@@ -268,7 +279,12 @@ export const setupSocket = (io) => {
     const lastReadResetEmitAt = new Map();
     const READ_RESET_DEDUPE_MS = 1200;
 
-    const emitChatListPatch = async ({ conversationId, text, createdAt }) => {
+    const emitChatListPatch = async ({
+      conversationId,
+      text,
+      createdAt,
+      action,
+    }) => {
       if (!conversationId) return;
       const conv = await resolveConversation(conversationId);
       if (!conv?.participants?.length) return;
@@ -277,6 +293,7 @@ export const setupSocket = (io) => {
         conversationId,
         text: text ?? null,
         createdAt: createdAt || new Date().toISOString(),
+        ...(action ? { action } : {}),
       };
 
       conv.participants.forEach((uid) => {
@@ -306,6 +323,9 @@ export const setupSocket = (io) => {
       onlineUsers.set(socket.userId, socket.id);
       socket.join(`user:${socket.userId}`);
       console.log("âœ… User registered:", socket.userId);
+      try {
+        socket.emit("register:ack", { userId: socket.userId, ts: new Date().toISOString() });
+      } catch (_e) {}
 
       try {
         const { updates, deliveredAt } =
@@ -613,6 +633,8 @@ export const setupSocket = (io) => {
     socket.on("sendMessage", async (data) => {
       try {
         const { sender, receiver, text, conversationId, tempId } = data;
+        const normalizedEventData = normalizeEventData(data?.eventData);
+        const messageType = normalizedEventData ? "event" : "text";
         const incomingMedia = Array.isArray(data?.media) ? data.media : [];
         const mediaPayload = incomingMedia
           .map((m) => ({
@@ -626,7 +648,7 @@ export const setupSocket = (io) => {
           );
         const hasText = Boolean(String(text || "").trim());
         const hasMedia = mediaPayload.length > 0;
-        if (!sender || !conversationId || (!hasText && !hasMedia)) return;
+        if (!sender || !conversationId || (!hasText && !hasMedia && !normalizedEventData)) return;
         const conversation = await resolveConversation(conversationId);
         if (!conversation) return;
         const isGroupConversation = Boolean(conversation.isGroup);
@@ -637,6 +659,9 @@ export const setupSocket = (io) => {
           sender.toString() === receiver.toString()
         ) return;
         const textValue = String(text || "");
+        const eventPreview = normalizedEventData
+          ? `Event: ${normalizedEventData.name}`
+          : "";
         const cryptoCache = new Map();
         const encrypted = await encryptMessageText({
           conversationId,
@@ -685,6 +710,8 @@ export const setupSocket = (io) => {
           readInfo: [{ userId: sender, readAt: now }],
           media: mediaPayload,
           senderAccountType,
+          messageType,
+          eventData: normalizedEventData || undefined,
           ...encrypted,
         });
 
@@ -732,7 +759,7 @@ export const setupSocket = (io) => {
                   ? "Documents"
                   : "Document"
           : "";
-        const previewLabel = textValue || mediaPreviewText;
+        const previewLabel = eventPreview || textValue || mediaPreviewText;
 
         const chatListPayload = {
           conversationId,
@@ -813,6 +840,9 @@ export const setupSocket = (io) => {
         const previewText = previewLabel.length > 80
           ? `${previewLabel.slice(0, 80).trimEnd()}...`
           : previewLabel;
+        const notificationPreview = normalizedEventData
+          ? `Event shared: ${normalizedEventData.name}`
+          : previewText;
         const chatThreadKey = `chat:${String(conversationId)}`;
 
         /* 4? CREATE DB NOTIFICATION (GROUP + DIRECT) */
@@ -820,24 +850,24 @@ export const setupSocket = (io) => {
         for (const recipientId of recipients) {
           if (viewers.has(recipientId)) continue;
 
-          const notification = await Notification.create({
-            recipient: recipientId,
-            scope: "USER",
-            type: "NEW_MESSAGE",
-            title: isGroupConversation ? groupLabel : "New Message",
-            message: isGroupConversation
-              ? `${senderLabel}: ${previewText}`
-              : previewText,
-            data: {
-              conversationId,
-              senderId: sender,
-              isGroup: isGroupConversation,
-              groupName: isGroupConversation ? groupLabel : "",
-              senderLabel,
-              threadKey: chatThreadKey,
-            },
-            isRead: false,
-          });
+        const notification = await Notification.create({
+          recipient: recipientId,
+          scope: "USER",
+          type: "NEW_MESSAGE",
+          title: isGroupConversation ? groupLabel : "New Message",
+          message: isGroupConversation
+            ? `${senderLabel}: ${notificationPreview}`
+            : notificationPreview,
+          data: {
+            conversationId,
+            senderId: sender,
+            isGroup: isGroupConversation,
+            groupName: isGroupConversation ? groupLabel : "",
+            senderLabel,
+            threadKey: chatThreadKey,
+          },
+          isRead: false,
+        });
           deliveredNotifications += 1;
 
           const recipientSocketId = getActiveSocketId(recipientId);
@@ -858,20 +888,20 @@ export const setupSocket = (io) => {
               pushToken: recipientUser.pushToken,
               title: isGroupConversation ? groupLabel : `${senderLabel} • Ryngales`,
               body: isGroupConversation
-                ? `${senderLabel}: ${previewText}`
-                : previewText,
+                ? `${senderLabel}: ${notificationPreview}`
+                : notificationPreview,
               subtitle: isGroupConversation ? senderLabel : undefined,
               threadKey: chatThreadKey,
-              data: {
-                type: "CHAT_MESSAGE",
-                conversationId,
-                senderId: sender,
-                isGroup: isGroupConversation,
-                groupName: isGroupConversation ? groupLabel : "",
-                senderLabel,
-                threadKey: chatThreadKey,
-              },
-            });
+            data: {
+              type: "CHAT_MESSAGE",
+              conversationId,
+              senderId: sender,
+              isGroup: isGroupConversation,
+              groupName: isGroupConversation ? groupLabel : "",
+              senderLabel,
+              threadKey: chatThreadKey,
+            },
+          });
           }
         }
         if (!deliveredNotifications) {
@@ -929,6 +959,7 @@ export const setupSocket = (io) => {
             conversationId,
             text: textValue,
             createdAt: updated.updatedAt,
+            action: "message:edited",
           });
         }
 
@@ -1080,7 +1111,7 @@ export const setupSocket = (io) => {
 
    socket.on("forwardMessage", async (data) => {
   try {
-      const {
+        const {
         sender,
         messageId,
         text,
@@ -1185,6 +1216,8 @@ export const setupSocket = (io) => {
 
       for (const original of originals) {
         const originalText = await decryptMessageText(original);
+        const originalEventData = normalizeEventData(original?.eventData);
+        const originalMessageType = originalEventData ? "event" : "text";
         let copiedMedia = normalizeForwardMediaList(original);
         if (!copiedMedia.length) {
           const originalId = String(original?._id || "").trim();
@@ -1209,6 +1242,8 @@ export const setupSocket = (io) => {
           readInfo: [{ userId: normalizedSender, readAt: new Date() }],
           media: copiedMedia,
           ...encrypted,
+          messageType: originalMessageType,
+          eventData: originalEventData || undefined,
           forwarded: true,
           forwardedFrom: mongoose.Types.ObjectId.isValid(String(original?.sender || "").trim())
             ? String(original.sender).trim()
@@ -1252,6 +1287,9 @@ export const setupSocket = (io) => {
       const rawText = String(outgoingMsg?.text || "").trim();
       const mediaPreviewText = getMediaPreviewText(outgoingMsg?.media);
       const previewText =
+        outgoingMsg?.messageType === "event" && normalizeEventData(outgoingMsg?.eventData)
+          ? `Event: ${String(outgoingMsg?.eventData?.name || "").trim()}`
+          :
         mediaPreviewText && isGenericMediaLabel(rawText)
           ? mediaPreviewText
           : rawText || mediaPreviewText;
@@ -1300,14 +1338,19 @@ export const setupSocket = (io) => {
           previewText.length > 80
             ? `${previewText.slice(0, 80).trimEnd()}...`
             : previewText || "New message";
+        const eventTitle = String(outgoingMsg?.eventData?.name || "").trim();
+        const notificationPreview =
+          outgoingMsg?.messageType === "event" && eventTitle
+            ? `Event shared: ${eventTitle}`
+            : previewForNotif;
         const notification = await Notification.create({
           recipient: recipientId,
           scope: "USER",
           type: "NEW_MESSAGE",
           title: convMeta?.isGroup ? groupLabel : "New Message",
           message: convMeta?.isGroup
-            ? `${senderLabel}: ${previewForNotif}`
-            : previewForNotif,
+            ? `${senderLabel}: ${notificationPreview}`
+            : notificationPreview,
           data: {
             conversationId: msg.conversationId,
             senderId: normalizedSender,
@@ -1341,8 +1384,8 @@ export const setupSocket = (io) => {
             pushToken: recipientPushToken,
             title: convMeta?.isGroup ? groupLabel : `${senderLabel} • Ryngales`,
             body: convMeta?.isGroup
-              ? `${senderLabel}: ${previewForNotif}`
-              : previewForNotif,
+              ? `${senderLabel}: ${notificationPreview}`
+              : notificationPreview,
             subtitle: convMeta?.isGroup ? senderLabel : undefined,
             threadKey,
             data: {
@@ -1470,6 +1513,7 @@ export const setupSocket = (io) => {
               conversationId,
               text: "This message was deleted",
               createdAt: new Date().toISOString(),
+              action: "message:deleted",
             });
           }
 
@@ -1634,6 +1678,7 @@ export const setupSocket = (io) => {
                 conversationId,
                 text: "This message was deleted",
                 createdAt: new Date().toISOString(),
+                action: "message:deleted",
               });
             }
           }

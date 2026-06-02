@@ -2,6 +2,8 @@
 
 import User from "../models/user.js";
 import UserContact from "../models/UserContact.js";
+import Conversation from "../models/Conversation.js";
+import GroupConversation from "../models/GroupConversation.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import crypto from "crypto";
 
@@ -20,6 +22,58 @@ const normalizePhone = (phone = "") =>
   String(phone || "").replace(/\D/g, "").slice(-10);
 const hashPhone = (phone = "") =>
   crypto.createHash("sha256").update(String(phone || "")).digest("hex");
+const cleanText = (value = "") => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  const lowered = normalized.toLowerCase();
+  if (lowered === "null" || lowered === "undefined") return "";
+  return normalized;
+};
+const toConversationId = (value = "") => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return /^[0-9a-fA-F]{24}$/.test(normalized) ? normalized : "";
+};
+const sanitizeChatTabs = (tabs = []) => {
+  if (!Array.isArray(tabs)) return [];
+  return tabs
+    .map((tab) => {
+      const id = cleanText(tab?.id);
+      const name = cleanText(tab?.name).slice(0, 40);
+      if (!id || !name) return null;
+      const chatIds = Array.isArray(tab?.chatIds)
+        ? Array.from(new Set(tab.chatIds.map((idValue) => toConversationId(idValue)).filter(Boolean)))
+        : [];
+      const createdAtRaw = Number(tab?.createdAt || Date.now());
+      const createdAt = Number.isFinite(createdAtRaw) ? createdAtRaw : Date.now();
+      return { id, name, chatIds, createdAt };
+    })
+    .filter(Boolean);
+};
+const normalizeSocialLink = (platform = "", value = "") => {
+  const raw = cleanText(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const handle = raw
+    .replace(/^@/, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/^[^/]*\//, "")
+    .split(/[/?#]/)[0]
+    .trim();
+
+  if (!handle) return "";
+
+  if (platform === "facebook") return `https://www.facebook.com/${handle}`;
+  if (platform === "instagram") return `https://www.instagram.com/${handle}/`;
+  if (platform === "youtube") {
+    return `https://www.youtube.com/${handle.startsWith("@") ? handle : `@${handle}`}`;
+  }
+  if (platform === "telegram") return `https://t.me/${handle}`;
+  if (platform === "linkedin") return `https://www.linkedin.com/in/${handle}`;
+
+  return `https://${raw}`;
+};
 
 // @desc    Get current user details
 // @route   GET /api/user/profile/:id
@@ -48,6 +102,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     const { fullName, email, phone } = req.body;
     const rawAccountType = String(req.body?.accountType || "").trim().toLowerCase();
     let rawBusinessProfile = req.body?.businessProfile;
+    let rawSocialLinks = req.body?.socialLinks;
 
     // ✅ Phone number space check
     if (phone && phone.includes(" ")) {
@@ -112,6 +167,13 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
         description: String(rawBusinessProfile?.description || "").trim(),
         email: String(rawBusinessProfile?.email || "").trim(),
         website: String(rawBusinessProfile?.website || "").trim(),
+        socialLinks: {
+          facebook: normalizeSocialLink("facebook", rawBusinessProfile?.socialLinks?.facebook),
+          instagram: normalizeSocialLink("instagram", rawBusinessProfile?.socialLinks?.instagram),
+          youtube: normalizeSocialLink("youtube", rawBusinessProfile?.socialLinks?.youtube),
+          telegram: normalizeSocialLink("telegram", rawBusinessProfile?.socialLinks?.telegram),
+          linkedin: normalizeSocialLink("linkedin", rawBusinessProfile?.socialLinks?.linkedin),
+        },
         address: String(rawBusinessProfile?.address || "").trim(),
         services: Array.isArray(rawBusinessProfile?.services)
           ? rawBusinessProfile.services
@@ -126,6 +188,24 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
         catalogUrl: String(rawBusinessProfile?.catalogUrl || "").trim(),
         timezone: String(rawBusinessProfile?.timezone || "").trim(),
         schedule,
+      };
+    }
+
+    if (typeof rawSocialLinks === "string" && rawSocialLinks.trim()) {
+      try {
+        rawSocialLinks = JSON.parse(rawSocialLinks);
+      } catch (_err) {
+        rawSocialLinks = null;
+      }
+    }
+
+    if (rawSocialLinks && typeof rawSocialLinks === "object") {
+      updatedFields.socialLinks = {
+        facebook: normalizeSocialLink("facebook", rawSocialLinks?.facebook),
+        instagram: normalizeSocialLink("instagram", rawSocialLinks?.instagram),
+        youtube: normalizeSocialLink("youtube", rawSocialLinks?.youtube),
+        telegram: normalizeSocialLink("telegram", rawSocialLinks?.telegram),
+        linkedin: normalizeSocialLink("linkedin", rawSocialLinks?.linkedin),
       };
     }
 
@@ -191,8 +271,50 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
         );
 
         ownerIds.forEach((ownerId) => {
+          io.to(`user:${ownerId}`).emit("profile:updated", {
+            userId: String(updatedUser._id),
+            avatar: String(updatedUser?.profile?.avatar || ""),
+            accountType: String(updatedUser?.accountType || "personal"),
+            businessProfile: updatedUser?.businessProfile || null,
+            updatedAt: new Date().toISOString(),
+          });
           io.to(`user:${ownerId}`).emit("contacts:changed", {
             ownerId,
+            action: "profile_update",
+            linkedUserId: String(updatedUser._id),
+            updatedAt: new Date().toISOString(),
+          });
+        });
+
+        const relatedConversationRows = await Conversation.find(
+          { participants: updatedUser._id },
+          { participants: 1 },
+        ).lean();
+        const relatedGroupRows = await GroupConversation.find(
+          { participants: updatedUser._id },
+          { participants: 1 },
+        ).lean();
+
+        const participantIds = new Set();
+        [...relatedConversationRows, ...relatedGroupRows].forEach((row) => {
+          const ids = Array.isArray(row?.participants) ? row.participants : [];
+          ids.forEach((pid) => {
+            const id = String(pid || "").trim();
+            if (!id || id === String(updatedUser._id)) return;
+            participantIds.add(id);
+          });
+        });
+
+        participantIds.forEach((participantId) => {
+          io.to(`user:${participantId}`).emit("profile:updated", {
+            userId: String(updatedUser._id),
+            avatar: String(updatedUser?.profile?.avatar || ""),
+            accountType: String(updatedUser?.accountType || "personal"),
+            businessProfile: updatedUser?.businessProfile || null,
+            updatedAt: new Date().toISOString(),
+          });
+          io.to(`user:${participantId}`).emit("contacts:changed", {
+            ownerId: participantId,
             action: "profile_update",
             linkedUserId: String(updatedUser._id),
             updatedAt: new Date().toISOString(),
@@ -973,6 +1095,65 @@ export const filterContacts = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const getChatPreferences = asyncHandler(async (req, res) => {
+  const userId = String(req.user?._id || "").trim();
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const user = await User.findById(userId).select("chatPreferences");
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const activeFilter = cleanText(user?.chatPreferences?.activeFilter) || "personals";
+  const customTabs = sanitizeChatTabs(user?.chatPreferences?.customTabs || []);
+  return res.status(200).json({
+    success: true,
+    preferences: { activeFilter, customTabs },
+  });
+});
+
+export const upsertChatPreferences = asyncHandler(async (req, res) => {
+  const userId = String(req.user?._id || "").trim();
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const requestedFilter = cleanText(req.body?.activeFilter) || "personals";
+  const activeFilter =
+    requestedFilter === "groups" || requestedFilter === "personals" || requestedFilter.startsWith("custom_")
+      ? requestedFilter
+      : "personals";
+  const customTabs = sanitizeChatTabs(req.body?.customTabs || []);
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        chatPreferences: {
+          activeFilter,
+          customTabs,
+          updatedAt: new Date(),
+        },
+      },
+    },
+    { new: true, runValidators: true, select: "chatPreferences" },
+  );
+
+  if (!updated) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  return res.status(200).json({
+    success: true,
+    preferences: {
+      activeFilter: cleanText(updated?.chatPreferences?.activeFilter) || "personals",
+      customTabs: sanitizeChatTabs(updated?.chatPreferences?.customTabs || []),
+    },
+  });
+});
 
 
 //delete user account not delete just hide the user account
