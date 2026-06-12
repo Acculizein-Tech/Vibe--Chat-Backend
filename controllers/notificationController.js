@@ -1,4 +1,5 @@
 import Notification from '../models/Notification.js';
+import Message from '../models/Message.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 export const getNotifications = asyncHandler(async (req, res) => {
@@ -103,7 +104,10 @@ export const markConversationNotificationsAsRead = asyncHandler(
       return res.status(400).json({ message: "conversationId is required" });
     }
 
-    const matchConversation = [{ "data.conversationId": rawConversationId }];
+    const matchConversation = [
+      { "data.conversationId": rawConversationId },
+      { "data.threadKey": `chat:${rawConversationId}` },
+    ];
     if (Notification?.db?.base?.Types?.ObjectId?.isValid?.(rawConversationId)) {
       matchConversation.push({
         "data.conversationId": new Notification.db.base.Types.ObjectId(
@@ -149,7 +153,9 @@ export const getChatUnreadCounts = asyncHandler(async (req, res) => {
     },
     {
       $group: {
-        _id: "$data.conversationId",
+        _id: {
+          $toString: "$data.conversationId",
+        },
         unreadCount: { $sum: 1 }
       }
     }
@@ -166,17 +172,68 @@ export const getUserNotifications = asyncHandler(async (req, res) => {
   const unreadNotifications = await Notification.find({
     recipient: userId,
     isRead: false,
+    type: "NEW_MESSAGE",
   })
     .sort({ createdAt: -1 })
     .lean();
 
+  const conversationIds = Array.from(
+    new Set(
+      unreadNotifications
+        .map((notification) => String(notification?.data?.conversationId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const stillUnreadConversationIds = new Set();
+  if (conversationIds.length) {
+    const userObjectId = userId;
+    const checks = await Promise.all(
+      conversationIds.map(async (conversationId) => {
+        const hasUnreadMessages = await Message.exists({
+          conversationId,
+          sender: { $ne: userObjectId },
+          readBy: { $ne: userObjectId },
+        });
+        return {
+          conversationId,
+          hasUnreadMessages: Boolean(hasUnreadMessages),
+        };
+      }),
+    );
+
+    checks.forEach(({ conversationId, hasUnreadMessages }) => {
+      if (hasUnreadMessages) stillUnreadConversationIds.add(conversationId);
+    });
+
+    const staleIds = unreadNotifications
+      .filter((notification) => {
+        const cid = String(notification?.data?.conversationId || "").trim();
+        return cid && !stillUnreadConversationIds.has(cid);
+      })
+      .map((notification) => notification._id)
+      .filter(Boolean);
+
+    if (staleIds.length) {
+      await Notification.updateMany(
+        { _id: { $in: staleIds } },
+        { $set: { isRead: true } },
+      );
+    }
+  }
+
+  const filteredUnreadNotifications = unreadNotifications.filter((notification) => {
+    const cid = String(notification?.data?.conversationId || "").trim();
+    return cid ? stillUnreadConversationIds.has(cid) : false;
+  });
+
   // 2️⃣ Unread count
-  const unreadCount = unreadNotifications.length;
+  const unreadCount = filteredUnreadNotifications.length;
 
   res.status(200).json({
     success: true,
     unreadCount,
-    notifications: unreadNotifications,
+    notifications: filteredUnreadNotifications,
   });
 });
 

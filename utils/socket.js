@@ -10,6 +10,10 @@ import {
   materializeMessageForClient,
   decryptMessageText,
 } from "./messageCrypto.js";
+import {
+  buildPhoneLookupCandidates,
+  normalizePhoneNumber,
+} from "./phoneNormalizer.js";
 
 import {
   onlineUsers,
@@ -43,6 +47,25 @@ export const setupSocket = (io) => {
         return { ...group, source: "group", isGroup: true };
       }
       return null;
+    };
+
+    const resolveNotificationRecipientId = async (rawRecipient) => {
+      const candidate = String(rawRecipient || "").trim();
+      if (!candidate) return null;
+      if (mongoose.Types.ObjectId.isValid(candidate)) return candidate;
+
+      const parsedPhone = normalizePhoneNumber(candidate);
+      if (!parsedPhone.isValid) return null;
+      const candidates = buildPhoneLookupCandidates(
+        parsedPhone.e164,
+        parsedPhone.local,
+      );
+      const matchedUser = await User.findOne({
+        phone: { $in: candidates },
+      })
+        .select("_id")
+        .lean();
+      return matchedUser?._id ? String(matchedUser._id) : null;
     };
 
     const updateLastMessageRef = async ({ conversationId, source, messageId }) => {
@@ -105,6 +128,7 @@ export const setupSocket = (io) => {
         date: String(src?.date || "").trim(),
         time: String(src?.time || "").trim(),
         location: String(src?.location || "").trim(),
+        eventImage: String(src?.eventImage || src?.image || "").trim(),
       };
       return out.name ? out : null;
     };
@@ -511,8 +535,12 @@ export const setupSocket = (io) => {
           {
             recipient: userObjectId,
             type: "NEW_MESSAGE",
-            "data.conversationId": conversationObjectId,
             isRead: false,
+            $or: [
+              { "data.conversationId": conversationObjectId },
+              { "data.conversationId": conversationId.toString() },
+              { "data.threadKey": `chat:${conversationId.toString()}` },
+            ],
           },
           { _id: 1 },
         ).lean();
@@ -632,9 +660,10 @@ export const setupSocket = (io) => {
     ========================== */
     socket.on("sendMessage", async (data) => {
       try {
-        const { sender, receiver, text, conversationId, tempId } = data;
+        const { sender, receiver, receiverId, text, conversationId, tempId } = data;
         const normalizedEventData = normalizeEventData(data?.eventData);
         const messageType = normalizedEventData ? "event" : "text";
+        const resolvedReceiver = String(receiver || receiverId || "").trim();
         const incomingMedia = Array.isArray(data?.media) ? data.media : [];
         const mediaPayload = incomingMedia
           .map((m) => ({
@@ -652,11 +681,11 @@ export const setupSocket = (io) => {
         const conversation = await resolveConversation(conversationId);
         if (!conversation) return;
         const isGroupConversation = Boolean(conversation.isGroup);
-        if (!isGroupConversation && !receiver) return;
+        if (!isGroupConversation && !resolvedReceiver) return;
         if (
           !isGroupConversation &&
-          receiver &&
-          sender.toString() === receiver.toString()
+          resolvedReceiver &&
+          sender.toString() === resolvedReceiver.toString()
         ) return;
         const textValue = String(text || "");
         const eventPreview = normalizedEventData
@@ -673,7 +702,7 @@ export const setupSocket = (io) => {
             ? (conversation.participants || [])
                 .map((id) => String(id || ""))
                 .filter((id) => id && id !== String(sender))
-            : [String(receiver || "").trim()].filter(Boolean)
+            : [resolvedReceiver].filter(Boolean)
         ).map((id) => String(id));
 
         // Snapshot once to avoid racey status decisions.
@@ -699,7 +728,7 @@ export const setupSocket = (io) => {
         /* 1ï¸âƒ£ SAVE MESSAGE */
         const msg = await Message.create({
           sender,
-          receiver: isGroupConversation ? recipients : receiver,
+          receiver: isGroupConversation ? recipients : resolvedReceiver,
           conversationId,
           status: initialStatus,
           deliveryInfo: onlineRecipientIds.map((id) => ({
@@ -766,10 +795,12 @@ export const setupSocket = (io) => {
           messageId: msg._id,
           text: previewLabel,
           forwarded: Boolean(outgoingMsg?.forwarded),
-          previewKind: getMediaPreviewKind(outgoingMsg?.media),
+          previewKind: normalizedEventData
+            ? "event"
+            : getMediaPreviewKind(outgoingMsg?.media),
           media: Array.isArray(outgoingMsg?.media) ? outgoingMsg.media : [],
           sender: sender,
-          receiver: isGroupConversation ? recipients : receiver,
+          receiver: isGroupConversation ? recipients : resolvedReceiver,
           createdAt: msg.createdAt,
         };
         const participantIds = (conversation.participants || []).map((p) =>
@@ -850,37 +881,42 @@ export const setupSocket = (io) => {
         for (const recipientId of recipients) {
           if (viewers.has(recipientId)) continue;
 
-        const notification = await Notification.create({
-          recipient: recipientId,
-          scope: "USER",
-          type: "NEW_MESSAGE",
-          title: isGroupConversation ? groupLabel : "New Message",
-          message: isGroupConversation
-            ? `${senderLabel}: ${notificationPreview}`
-            : notificationPreview,
-          data: {
-            conversationId,
-            senderId: sender,
-            isGroup: isGroupConversation,
-            groupName: isGroupConversation ? groupLabel : "",
-            senderLabel,
-            threadKey: chatThreadKey,
-          },
-          isRead: false,
-        });
+          const notificationRecipientId = await resolveNotificationRecipientId(
+            recipientId,
+          );
+          if (!notificationRecipientId) continue;
+
+          const notification = await Notification.create({
+            recipient: notificationRecipientId,
+            scope: "USER",
+            type: "NEW_MESSAGE",
+            title: isGroupConversation ? groupLabel : "New Message",
+            message: isGroupConversation
+              ? `${senderLabel}: ${notificationPreview}`
+              : notificationPreview,
+            data: {
+              conversationId,
+              senderId: sender,
+              isGroup: isGroupConversation,
+              groupName: isGroupConversation ? groupLabel : "",
+              senderLabel,
+              threadKey: chatThreadKey,
+            },
+            isRead: false,
+          });
           deliveredNotifications += 1;
 
-          const recipientSocketId = getActiveSocketId(recipientId);
+          const recipientSocketId = getActiveSocketId(notificationRecipientId);
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("newNotification", notification);
             const unreadCount = await Notification.countDocuments({
-              recipient: recipientId,
+              recipient: notificationRecipientId,
               isRead: false,
             });
             io.to(recipientSocketId).emit("unreadCount", unreadCount);
           }
 
-          const recipientUser = await User.findById(recipientId)
+          const recipientUser = await User.findById(notificationRecipientId)
             .select("pushToken")
             .lean();
           if (recipientUser?.pushToken) {

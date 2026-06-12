@@ -21,6 +21,19 @@ const normalizeId = (value) => String(value || "").trim();
 const uniqueIds = (values = []) =>
   Array.from(new Set(values.map((v) => normalizeId(v)).filter(Boolean)));
 
+const normalizeEventData = (input) => {
+  const src = input && typeof input === "object" ? input : {};
+  const out = {
+    name: String(src?.name || "").trim(),
+    description: String(src?.description || "").trim(),
+    date: String(src?.date || "").trim(),
+    time: String(src?.time || "").trim(),
+    location: String(src?.location || "").trim(),
+    eventImage: String(src?.eventImage || src?.image || "").trim(),
+  };
+  return out.name ? out : null;
+};
+
 const resolveConversationForMessage = async (conversationId) => {
   const direct = await Conversation.findById(conversationId)
     .select("participants isGroup lastMessage")
@@ -342,9 +355,13 @@ const emitMessageSideEffects = async ({
 export const sendMessage = async (req, res) => {
   try {
     const sender = req.user._id;
-    const { conversationId, receiver, text } = req.body;
+    const { conversationId, receiver, receiverId, text, eventData } = req.body;
+    const normalizedEventData = normalizeEventData(eventData);
+    const messageType = normalizedEventData ? "event" : "text";
+    const textValue = String(text || "");
+    const resolvedReceiver = String(receiver || receiverId || "").trim();
 
-    if (!conversationId || !text) {
+    if (!conversationId || (!String(textValue).trim() && !normalizedEventData)) {
       return res.status(400).json({ error: "Missing fields" });
     }
 
@@ -353,13 +370,13 @@ export const sendMessage = async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
-    if (!isGroupConversation && !receiver) {
+    if (!isGroupConversation && !resolvedReceiver) {
       return res.status(400).json({ error: "Receiver is required for direct chat" });
     }
 
     const encrypted = await encryptMessageText({
       conversationId,
-      text,
+      text: textValue,
     });
     const groupReceiverIds = isGroupConversation
       ? (conversation?.participants || [])
@@ -370,11 +387,13 @@ export const sendMessage = async (req, res) => {
     const message = await Message.create({
       conversationId,
       sender,
-      receiver: isGroupConversation ? groupReceiverIds : receiver,
+      receiver: isGroupConversation ? groupReceiverIds : resolvedReceiver,
       deliveryInfo: [],
       readBy: [sender],
       readInfo: [{ userId: sender, readAt: new Date() }],
       senderAccountType: String(req.user?.accountType || "").trim(),
+      messageType,
+      eventData: normalizedEventData || undefined,
       ...encrypted,
     });
 
@@ -385,7 +404,9 @@ export const sendMessage = async (req, res) => {
     });
 
     const outgoing = await materializeMessageForClient(message);
-    const previewLabel = String(text || "").trim();
+    const previewLabel = normalizedEventData
+      ? `Event: ${normalizedEventData.name}`
+      : String(textValue || "").trim();
     await emitMessageSideEffects({
       conversationId,
       conversation,

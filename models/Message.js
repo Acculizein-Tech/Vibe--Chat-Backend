@@ -127,6 +127,7 @@ const messageSchema = new mongoose.Schema(
       date: { type: String, default: "" },
       time: { type: String, default: "" },
       location: { type: String, default: "" },
+      eventImage: { type: String, default: "" },
     },
   },
   { timestamps: true }
