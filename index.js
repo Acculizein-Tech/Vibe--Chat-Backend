@@ -27,6 +27,7 @@ import uploadRoutes from "./routes/uploadData.js";
 import bulkMessagingRoutes from "./routes/bulkMessagingRoute.js";
 import statusRoutes from "./routes/statusRoute.js";
 import eventReminderRoutes from "./routes/eventReminderRoute.js";
+import emiPlanRoutes from "./routes/emiPlanRoute.js";
 import { startBulkMessageWorker } from "./workers/bulkMessageWorker.js";
 //backend superadmin routes fix
 
@@ -97,6 +98,7 @@ app.use("/api", uploadRoutes);
 app.use("/api", bulkMessagingRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/events", eventReminderRoutes);
+app.use("/api/emi-plans", emiPlanRoutes);
 
 app.use(errorHandler);
 

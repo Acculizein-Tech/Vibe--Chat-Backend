@@ -84,6 +84,33 @@ const buildLocationMapUrl = (location) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`;
 };
 
+const parseAddressParts = (components = []) => {
+  const pick = (types = []) =>
+    components.find(
+      (c) => Array.isArray(c?.types) && types.some((t) => c.types.includes(t)),
+    )?.long_name || "";
+
+  const locality =
+    pick(["sublocality_level_1", "sublocality", "neighborhood"]) ||
+    pick(["locality"]) ||
+    pick(["administrative_area_level_2"]);
+  const city = pick(["locality"]) || pick(["administrative_area_level_2"]);
+  const state = pick(["administrative_area_level_1"]);
+  const country = pick(["country"]);
+  const formattedAddress = components
+    .map((c) => String(c?.long_name || "").trim())
+    .filter(Boolean)
+    .join(", ");
+
+  return {
+    locality,
+    city,
+    state,
+    country,
+    formattedAddress,
+  };
+};
+
 const fetchImageBuffer = async (rawUri) => {
   const sourceUri = toSafe(rawUri);
   if (!sourceUri) return null;
@@ -440,59 +467,210 @@ export const getLocationSuggestions = async (req, res) => {
       return res.status(400).json({ message: "Query must be at least 2 characters." });
     }
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
-    if (!apiKey) {
-      return res.status(500).json({ message: "Google Places API key is not configured." });
-    }
+    const requestHeaders = {
+      Accept: "application/json",
+      "User-Agent": "VibeChat/1.0 (location-search)",
+    };
 
-    const biasParams =
+    const resolveCountryCode = async () => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "IN";
+      try {
+        const reverseUrl =
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}` +
+          `&lon=${encodeURIComponent(lon)}&accept-language=en`;
+        const reverseRes = await fetch(reverseUrl, { headers: requestHeaders });
+        if (!reverseRes.ok) return "IN";
+        const reverseData = await reverseRes.json();
+        const reverseCountry = String(reverseData?.address?.country_code || "")
+          .trim()
+          .toUpperCase();
+        return reverseCountry || "IN";
+      } catch {
+        return "IN";
+      }
+    };
+
+    const countryCode = await resolveCountryCode();
+    const countryCodeLower = String(countryCode || "IN").trim().toLowerCase();
+    const viewbox =
       Number.isFinite(lat) && Number.isFinite(lon)
-        ? `&location=${lat},${lon}&radius=50000`
+        ? `${lon - 2},${lat + 2},${lon + 2},${lat - 2}`
         : "";
-    const autoUrl =
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}` +
-      `&language=en&types=geocode&key=${encodeURIComponent(apiKey)}${biasParams}`;
 
-    const autoRes = await fetch(autoUrl);
-    if (!autoRes.ok) {
-      return res.status(502).json({ message: "Failed to fetch Google autocomplete suggestions." });
-    }
-    const autoData = await autoRes.json();
-    const predictions = Array.isArray(autoData?.predictions) ? autoData.predictions.slice(0, limit) : [];
+    const parseLocationParts = (components = {}) => {
+      const city =
+        toSafe(components?.city) ||
+        toSafe(components?.town) ||
+        toSafe(components?.village) ||
+        toSafe(components?.municipality) ||
+        toSafe(components?.county) ||
+        toSafe(components?.state_district);
+      const state = toSafe(components?.state) || toSafe(components?.region);
+      const country = toSafe(components?.country) || "India";
+      return { city, state, country };
+    };
 
-    const details = await Promise.all(
-      predictions.map(async (pred) => {
-        const placeId = toSafe(pred?.place_id);
-        if (!placeId) return null;
-        const detailsUrl =
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-          `&fields=geometry/location,name,formatted_address&key=${encodeURIComponent(apiKey)}`;
-        try {
-          const detailsRes = await fetch(detailsUrl);
-          if (!detailsRes.ok) return null;
-          const detailsData = await detailsRes.json();
-          const loc = detailsData?.result?.geometry?.location;
-          const latitude = Number(loc?.lat);
-          const longitude = Number(loc?.lng);
-          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-          const title = toSafe(pred?.structured_formatting?.main_text) || toSafe(detailsData?.result?.name);
-          const subtitle =
-            toSafe(pred?.structured_formatting?.secondary_text) ||
-            toSafe(detailsData?.result?.formatted_address);
+    const parseNominatimRow = (row, idx) => {
+      const address = row?.address || {};
+      const { city, state, country } = parseLocationParts(address);
+      const title =
+        toSafe(address?.road) ||
+        toSafe(address?.suburb) ||
+        toSafe(address?.neighbourhood) ||
+        toSafe(address?.quarter) ||
+        toSafe(row?.namedetails?.name) ||
+        toSafe(row?.name) ||
+        toSafe(String(row?.display_name || "").split(",")[0]) ||
+        toSafe(q);
+      const subtitle = [city, state, country].filter(Boolean).join(", ");
+      return {
+        placeId: String(row?.place_id || row?.osm_id || `${idx}-${title}`),
+        title: title || "Selected place",
+        subtitle: subtitle || toSafe(row?.display_name),
+        city,
+        state,
+        country,
+        formattedAddress: toSafe(row?.display_name),
+        latitude: Number(row?.lat || row?.latitude || 0),
+        longitude: Number(row?.lon || row?.longitude || 0),
+      };
+    };
+
+    const fetchNominatimSuggestions = async () => {
+      const nominatimUrl =
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1` +
+        `&limit=${encodeURIComponent(limit)}&accept-language=en&countrycodes=${encodeURIComponent(countryCodeLower)}` +
+        `&q=${encodeURIComponent(q)}${viewbox ? `&viewbox=${encodeURIComponent(viewbox)}&bounded=1` : ""}`;
+      const nominatimRes = await fetch(nominatimUrl, { headers: requestHeaders });
+      if (!nominatimRes.ok) return [];
+      const nominatimData = await nominatimRes.json();
+      return Array.isArray(nominatimData)
+        ? nominatimData
+            .map((row, idx) => parseNominatimRow(row, idx))
+            .filter(
+              (item) =>
+                !!item.placeId &&
+                Number.isFinite(item.latitude) &&
+                Number.isFinite(item.longitude),
+            )
+        : [];
+    };
+
+    const fetchPhotonSuggestions = async () => {
+      const photonUrl =
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}` +
+        `&limit=${encodeURIComponent(limit)}&lang=en` +
+        (Number.isFinite(lat) && Number.isFinite(lon)
+          ? `&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+          : "");
+      const photonRes = await fetch(photonUrl, { headers: requestHeaders });
+      if (!photonRes.ok) return [];
+      const photonData = await photonRes.json();
+      const features = Array.isArray(photonData?.features) ? photonData.features : [];
+      return features
+        .map((feature, idx) => {
+          const props = feature?.properties || {};
+          const coords = feature?.geometry?.coordinates || [];
+          const lonValue = Number(coords?.[0] || props?.lon || 0);
+          const latValue = Number(coords?.[1] || props?.lat || 0);
+          const { city, state, country } = parseLocationParts(props);
+          const title =
+            toSafe(props?.name) ||
+            toSafe(props?.street) ||
+            toSafe(props?.district) ||
+            toSafe(props?.county) ||
+            toSafe(q);
+          const subtitle = [city, state, country].filter(Boolean).join(", ");
           return {
-            placeId,
-            title: title || "Selected place",
+            placeId: String(props?.osm_id || feature?.id || `${idx}-${title}`),
+            title,
             subtitle,
-            latitude,
-            longitude,
+            city,
+            state,
+            country,
+            formattedAddress: toSafe(props?.name || props?.street || props?.osm_value),
+            latitude: latValue,
+            longitude: lonValue,
           };
-        } catch {
-          return null;
-        }
-      }),
-    );
+        })
+        .filter(
+          (item) =>
+            !!item.placeId &&
+            Number.isFinite(item.latitude) &&
+            Number.isFinite(item.longitude),
+        );
+    };
 
-    const suggestions = details.filter(Boolean);
+    const fetchGeoapifySuggestions = async () => {
+      const geoapifyKey =
+        process.env.GEOAPIFY_API_KEY ||
+        process.env.GEOAPIFY_KEY ||
+        process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY ||
+        "";
+      if (!geoapifyKey) return [];
+      const geoapifyUrl =
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(q)}` +
+        `&limit=${encodeURIComponent(limit)}&lang=en&format=json&apiKey=${encodeURIComponent(geoapifyKey)}` +
+        (countryCodeLower ? `&filter=countrycode:${encodeURIComponent(countryCodeLower)}` : "") +
+        (Number.isFinite(lat) && Number.isFinite(lon)
+          ? `&bias=proximity:${encodeURIComponent(`${lon},${lat}`)}`
+          : "");
+      const geoapifyRes = await fetch(geoapifyUrl, { headers: requestHeaders });
+      if (!geoapifyRes.ok) return [];
+      const geoapifyData = await geoapifyRes.json();
+      const results = Array.isArray(geoapifyData?.results) ? geoapifyData.results : [];
+      return results
+        .map((row, idx) => {
+          const { city, state, country } = parseLocationParts(row);
+          const title =
+            toSafe(row?.name) ||
+            toSafe(row?.street) ||
+            toSafe(row?.address_line1) ||
+            toSafe(q);
+          const subtitle = [city, state, country].filter(Boolean).join(", ");
+          return {
+            placeId: String(row?.place_id || row?.id || `${idx}-${title}`),
+            title,
+            subtitle,
+            city,
+            state,
+            country,
+            formattedAddress: toSafe(row?.formatted || row?.formatted_address || row?.address_line2),
+            latitude: Number(row?.lat || 0),
+            longitude: Number(row?.lon || 0),
+          };
+        })
+        .filter(
+          (item) =>
+            !!item.placeId &&
+            Number.isFinite(item.latitude) &&
+            Number.isFinite(item.longitude),
+        );
+    };
+
+    const [nominatimSuggestions, photonSuggestions, geoapifySuggestions] =
+      await Promise.all([
+        fetchNominatimSuggestions(),
+        fetchPhotonSuggestions(),
+        fetchGeoapifySuggestions(),
+      ]);
+
+    const combined = [...nominatimSuggestions, ...photonSuggestions, ...geoapifySuggestions];
+    const seen = new Set();
+    const suggestions = combined
+      .filter((item) => {
+        const key = [
+          String(item?.placeId || ""),
+          String(item?.title || "").toLowerCase(),
+          Number(item?.latitude || 0).toFixed(5),
+          Number(item?.longitude || 0).toFixed(5),
+        ].join("|");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, limit);
+
     return res.status(200).json({ suggestions });
   } catch (err) {
     return res.status(500).json({ message: "Server error", error: err.message });
@@ -510,43 +688,53 @@ export const getReverseGeocode = async (req, res) => {
       return res.status(400).json({ message: "Valid lat/lon are required." });
     }
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
-    if (!apiKey) {
-      return res.status(500).json({ message: "Google Maps API key is not configured." });
-    }
-
-    const geoUrl =
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${lat},${lon}`)}` +
-      `&language=en&key=${encodeURIComponent(apiKey)}`;
-    const geoRes = await fetch(geoUrl);
-    if (!geoRes.ok) {
+    const reverseUrl =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&namedetails=1` +
+      `&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&accept-language=en`;
+    const reverseRes = await fetch(reverseUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "VibeChat/1.0 (reverse-geocode)",
+      },
+    });
+    if (!reverseRes.ok) {
       return res.status(502).json({ message: "Failed to fetch reverse geocode." });
     }
-    const geoData = await geoRes.json();
-    const first = Array.isArray(geoData?.results) ? geoData.results[0] : null;
-    const components = Array.isArray(first?.address_components)
-      ? first.address_components
-      : [];
-    const pick = (types = []) =>
-      components.find((c) => Array.isArray(c?.types) && types.some((t) => c.types.includes(t)))?.long_name || "";
-
+    const reverseData = await reverseRes.json();
+    const address = reverseData?.address || {};
     const locality =
-      pick(["sublocality_level_1", "sublocality", "neighborhood"]) ||
-      pick(["locality"]) ||
-      pick(["administrative_area_level_2"]);
-    const city = pick(["locality"]) || pick(["administrative_area_level_2"]);
-    const state = pick(["administrative_area_level_1"]);
-    const country = pick(["country"]);
-    const label = [locality, city, state, country]
+      toSafe(address?.neighbourhood) ||
+      toSafe(address?.suburb) ||
+      toSafe(address?.hamlet) ||
+      toSafe(address?.village) ||
+      toSafe(address?.town) ||
+      toSafe(address?.city_district) ||
+      toSafe(address?.county);
+    const city =
+      toSafe(address?.city) ||
+      toSafe(address?.town) ||
+      toSafe(address?.village) ||
+      toSafe(address?.municipality) ||
+      toSafe(address?.county) ||
+      locality;
+    const state = toSafe(address?.state);
+    const country = toSafe(address?.country);
+    const countryCode = toSafe(address?.country_code).toUpperCase();
+    const formattedAddress = toSafe(reverseData?.display_name);
+    const label = [city || locality, state, country]
       .map((v) => String(v || "").trim())
       .filter(Boolean)
-      .slice(0, 3)
       .join(", ");
 
     return res.status(200).json({
-      label: label || String(first?.formatted_address || "").trim(),
-      formattedAddress: String(first?.formatted_address || "").trim(),
-      placeId: String(first?.place_id || ""),
+      label: label || formattedAddress,
+      formattedAddress,
+      placeId: String(reverseData?.place_id || reverseData?.osm_id || ""),
+      locality,
+      city,
+      state,
+      country,
+      countryCode,
     });
   } catch (err) {
     return res.status(500).json({ message: "Server error", error: err.message });
