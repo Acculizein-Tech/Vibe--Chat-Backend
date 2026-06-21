@@ -31,6 +31,9 @@ const emiPlanSchema = new mongoose.Schema(
       default: "monthly",
     },
     customFrequencyDays: { type: Number, default: 30 },
+    dueDate: { type: Date, default: null },
+    reminderDate: { type: Date, default: null },
+    reminderLastSentAt: { type: Date, default: null },
     status: {
       type: String,
       enum: ["active", "completed"],

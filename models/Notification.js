@@ -30,7 +30,8 @@ const notificationSchema = new mongoose.Schema(
         "BUSINESS_CREATED",
         "CUSTOMER_ENQUIRY",
         "ADMIN_ALERT",
-        "EVENT_REMINDER"
+        "EVENT_REMINDER",
+        "EMI_REMINDER"
       ],
       required: true
     },
@@ -50,6 +51,25 @@ const notificationSchema = new mongoose.Schema(
       eventId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "EventReminder"
+      },
+      emiId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "EmiPlan"
+      },
+      dueDate: {
+        type: String
+      },
+      reminderDate: {
+        type: String
+      },
+      cycleStartDate: {
+        type: String
+      },
+      reminderStage: {
+        type: String
+      },
+      daysRemaining: {
+        type: Number
       }
     },
 

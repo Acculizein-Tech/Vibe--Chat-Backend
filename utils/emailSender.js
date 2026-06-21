@@ -1,28 +1,3 @@
-// import nodemailer from 'nodemailer';
-
-// const sendEmail = async ({ to, subject, text }) => {
-//   const transporter = nodemailer.createTransport({
-//     service: 'gmail',
-//     auth: {
-//       user: process.env.EMAIL_USER,      // your gmail
-//       pass: process.env.EMAIL_PASS       // app password (not your Gmail password)
-//     }
-//   });
-
-//   const mailOptions = {
-//     from: `"Bizvility" <${process.env.EMAIL_USER}>`,
-//     to,
-//     subject,
-//     text
-//   };
-
-//   await transporter.sendMail(mailOptions);
-// };
-
-// export default sendEmail;
-
-
-
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -36,78 +11,182 @@ const sesClient = new SESv2Client({
   },
 });
 
+
 const sendEmail = async ({ to, subject, text, html }) => {
   try {
-    // 🔍 DEBUG LOGS
+
     console.log("📧 EMAIL DEBUG START -------------------");
     console.log("FROM:", process.env.EMAIL_FROM);
     console.log("TO:", to);
-    console.log("REGION:", process.env.AWS_REGION);
-    console.log(
-      "KEY EXISTS:",
-      !!process.env.AWS_ACCESS_KEY_ID,
-      "SECRET EXISTS:",
-      !!process.env.AWS_SECRET_ACCESS_KEY
-    );
 
-    // ❗ VALIDATION
+
     if (!process.env.EMAIL_FROM) {
       throw new Error("EMAIL_FROM missing in env");
-    }
-
-    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-      throw new Error("AWS credentials missing in env");
     }
 
     if (!to) {
       throw new Error("Recipient email missing");
     }
 
+
+    // ✅ Default OTP Email Template
+    const emailHtml =
+      html ||
+      `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>Email Verification</title>
+      </head>
+
+      <body style="
+        margin:0;
+        padding:0;
+        background:#f4f4f4;
+        font-family:Arial, sans-serif;
+      ">
+
+        <div style="
+          max-width:600px;
+          margin:40px auto;
+          background:#ffffff;
+          padding:30px;
+          border-radius:12px;
+        ">
+
+          <h2 style="
+            color:#111827;
+            text-align:center;
+          ">
+            Verify your email
+          </h2>
+
+
+          <p style="
+            color:#4b5563;
+            font-size:16px;
+          ">
+            Thank you for creating your account.
+            Please use the verification code below:
+          </p>
+
+
+          <div style="
+            margin:30px 0;
+            text-align:center;
+          ">
+
+            <span style="
+              display:inline-block;
+              background:#111827;
+              color:white;
+              font-size:32px;
+              letter-spacing:8px;
+              padding:15px 25px;
+              border-radius:10px;
+              font-weight:bold;
+            ">
+              ${text?.match(/\d{6}/)?.[0] || "------"}
+            </span>
+
+          </div>
+
+
+          <p style="
+            color:#6b7280;
+            font-size:14px;
+          ">
+            This verification code is valid for 10 minutes.
+          </p>
+
+
+          <p style="
+            color:#6b7280;
+            font-size:14px;
+          ">
+            If you did not request this code, you can safely ignore this email.
+          </p>
+
+
+          <hr />
+
+
+          <p style="
+            text-align:center;
+            color:#9ca3af;
+            font-size:12px;
+          ">
+            © Bizvility
+          </p>
+
+
+        </div>
+
+      </body>
+      </html>
+      `;
+
+
     const command = new SendEmailCommand({
+
       FromEmailAddress: process.env.EMAIL_FROM,
-      Destination: {
-        ToAddresses: [to],
+
+      Destination:{
+        ToAddresses:[to],
       },
-      Content: {
-        Simple: {
-          Subject: {
-            Data: subject || "No Subject",
+
+
+      Content:{
+        Simple:{
+
+          Subject:{
+            Data: subject || "Verify your email",
           },
-          Body: {
-            Text: {
-              Data: text || "No text content",
+
+
+          Body:{
+
+            Text:{
+              Data:
+                text ||
+                "Your email verification code is required.",
             },
-            Html: {
-              Data: html || "<p>No HTML content</p>",
+
+
+            Html:{
+              Data: emailHtml,
             },
+
           },
+
         },
       },
+
     });
 
+
+
     const response = await sesClient.send(command);
+
 
     console.log("✅ SES Email sent successfully");
     console.log("📨 MessageId:", response.MessageId);
     console.log("📧 EMAIL DEBUG END -------------------");
 
+
     return response;
 
-  } catch (err) {
-    console.error("❌ EMAIL FAILED -------------------");
 
-    // 🔍 Deep debug
+  } catch(err){
+
+    console.error("❌ EMAIL FAILED -------------------");
     console.error("MESSAGE:", err.message);
     console.error("STACK:", err.stack);
-
-    if (err.name) console.error("ERROR NAME:", err.name);
-    if (err.Code) console.error("ERROR CODE:", err.Code);
-    if (err.$metadata) console.error("METADATA:", err.$metadata);
-
-    console.error("❌ EMAIL FAILED END -------------------");
 
     throw err;
   }
 };
+
 
 export default sendEmail;

@@ -172,7 +172,7 @@ export const getUserNotifications = asyncHandler(async (req, res) => {
   const unreadNotifications = await Notification.find({
     recipient: userId,
     isRead: false,
-    type: "NEW_MESSAGE",
+    type: { $in: ["NEW_MESSAGE", "EVENT_REMINDER", "EMI_REMINDER"] },
   })
     .sort({ createdAt: -1 })
     .lean();

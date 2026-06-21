@@ -21,6 +21,7 @@ import notificationRoutes from "./routes/notificationRoute.js";
 import Notification from "./models/Notification.js";
 import { setupSocket } from "./utils/socket.js";
 import { startEventReminderJob } from "./cronJobs/eventReminderJob.js";
+import { startEmiReminderJob } from "./cronJobs/emiReminderJob.js";
 import UserContact from "./routes/userContactRoute.js";
 import superAdminRoutes from "./routes/SuperAdminRoute.js";
 import uploadRoutes from "./routes/uploadData.js";
@@ -78,6 +79,7 @@ app.set("io", io);
 // index.js (after io init)
 setupSocket(io);
 startEventReminderJob(io);
+startEmiReminderJob(io);
 
 
 

@@ -8,7 +8,7 @@ import crypto from "crypto";
 
 // Helper: Generate JWT
 const generateToken = (id, expiresIn) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn});
+  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn });
 };
 
 // Helper: Generate 6-digit OTP
@@ -20,7 +20,9 @@ const generateReferralCode = () => {
 };
 
 const normalizeDeviceType = (value) => {
-  const normalized = String(value || "unknown").trim().toLowerCase();
+  const normalized = String(value || "unknown")
+    .trim()
+    .toLowerCase();
   const allowed = new Set(["android", "ios", "ipad", "web"]);
   return allowed.has(normalized) ? normalized : "unknown";
 };
@@ -51,19 +53,27 @@ const buildLoginDeviceMeta = (req = {}) => {
       ? detectDeviceTypeFromUserAgent(userAgent)
       : parsedDeviceType;
   const platform =
-    String(req.body?.platform || deviceType || "unknown").trim().toLowerCase() ||
-    "unknown";
+    String(req.body?.platform || deviceType || "unknown")
+      .trim()
+      .toLowerCase() || "unknown";
   const ipAddress = String(req.clientIp || req.ip || "").trim();
   return { deviceType, platform, userAgent, ipAddress };
 };
 
 const hashToken = (value) =>
-  crypto.createHash("sha256").update(String(value || "")).digest("hex");
+  crypto
+    .createHash("sha256")
+    .update(String(value || ""))
+    .digest("hex");
 const normalizePhone = (phone = "") =>
-  String(phone || "").replace(/\D/g, "").slice(-10);
+  String(phone || "")
+    .replace(/\D/g, "")
+    .slice(-10);
 const hashPhone = (phone = "") =>
-  crypto.createHash("sha256").update(String(phone || "")).digest("hex");
-
+  crypto
+    .createHash("sha256")
+    .update(String(phone || ""))
+    .digest("hex");
 
 export const register = asyncHandler(async (req, res) => {
   const {
@@ -78,56 +88,56 @@ export const register = asyncHandler(async (req, res) => {
     platform = "unknown",
   } = req.body;
 
-  const normalizedDeviceType = String(deviceType || "unknown").trim().toLowerCase();
+  const normalizedDeviceType = String(deviceType || "unknown")
+    .trim()
+    .toLowerCase();
   const allowedDeviceTypes = new Set(["android", "ios", "ipad", "web"]);
   const safeDeviceType = allowedDeviceTypes.has(normalizedDeviceType)
     ? normalizedDeviceType
     : "unknown";
-  const safePlatform = String(platform || "unknown").trim().toLowerCase() || "unknown";
+  const safePlatform =
+    String(platform || "unknown")
+      .trim()
+      .toLowerCase() || "unknown";
 
   // 🚫 Restrict admin/superadmin registration
- if (["admin", "superadmin"].includes(role)) {
-  return res.status(400).json({ message: "Cannot register as admin" });
-}
+  if (["admin", "superadmin"].includes(role)) {
+    return res.status(400).json({ message: "Cannot register as admin" });
+  }
 
   // 🔍 Check if email is already registered
   const existingUser = await User.findOne({ email });
   if (existingUser) {
-  if (existingUser.isVerified) {
-    return res.status(400).json({ message: "Email is already registered" });
-  }
+    if (existingUser.isVerified) {
+      return res.status(400).json({ message: "Email is already registered" });
+    }
 
-  const now = Date.now();
+    const now = Date.now();
 
-  if (
-    existingUser.emailResendBlock &&
-    existingUser.emailResendBlock > now
-  ) {
-    return res.status(429).json({
-      message: "OTP already sent. Please wait before requesting again",
+    if (existingUser.emailResendBlock && existingUser.emailResendBlock > now) {
+      return res.status(429).json({
+        message: "OTP already sent. Please wait before requesting again",
+      });
+    }
+
+    const otp = generateOTP();
+    existingUser.emailVerifyOTP = otp;
+    existingUser.emailVerifyExpires = now + 10 * 60 * 1000;
+    existingUser.emailResendBlock = now + 30 * 1000;
+
+    await existingUser.save();
+
+    await sendEmail({
+      to: existingUser.email,
+      subject: "Email Verification OTP",
+      text: `Your OTP is: ${otp}`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP resent to your email. Please verify",
     });
   }
-
-  const otp = generateOTP();
-  existingUser.emailVerifyOTP = otp;
-  existingUser.emailVerifyExpires = now + 10 * 60 * 1000;
-  existingUser.emailResendBlock = now + 30 * 1000;
-
-  await existingUser.save();
-
-  await sendEmail({
-    to: existingUser.email,
-    subject: "Email Verification OTP",
-    text: `Your OTP is: ${otp}`,
-  });
-
-  return res.status(200).json({
-    success: true,
-    message: "OTP resent to your email. Please verify",
-  });
-}
-
-
 
   // 🔐 Generate OTP
   const otp = generateOTP();
@@ -187,13 +197,17 @@ export const register = asyncHandler(async (req, res) => {
     referredBy,
   });
 
-
   // 📧 Send OTP email
   await sendEmail({
     to: user.email,
-    subject: "Email Verification OTP",
-    // text: `Your OTP is: ${otp}`,
-    html:`<!DOCTYPE html>
+    subject: "Ryngales Email Verification OTP",
+    text: `
+      Welcome to Ryngales.
+      Your email verification code is: ${otp}
+      This code is valid for 10 minutes.
+      If you did not request this, ignore this email.
+    `,
+    html: `<!DOCTYPE html>
 <html>
   <body style="font-family: Arial, sans-serif; background:#f5f6fa; padding:20px;">
     <div style="max-width:600px; margin:auto; background:#ffffff; padding:25px; border-radius:10px;">
@@ -245,7 +259,7 @@ export const register = asyncHandler(async (req, res) => {
 
     </div>
   </body>
-</html>`
+</html>`,
   });
   console.log("✅ EMAIL SENT TO:", user.email);
 
@@ -265,12 +279,13 @@ export const register = asyncHandler(async (req, res) => {
   });
 });
 
-
-
-
-
 export const verifyEmailOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
+
+  console.log("VERIFY OTP REQUEST:", {
+    email,
+    otp,
+  });
 
   const user = await User.findOne({ email });
 
@@ -289,7 +304,7 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
   user.emailVerifyExpires = undefined;
   await user.save();
 
-  res.json({ success: true,  message: "Email verified successfully" });
+  res.json({ success: true, message: "Email verified successfully" });
 });
 
 // @desc    Login user
@@ -300,7 +315,6 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
 //   // 🔍 Find user
 //   const user = await User.findOne({ email, isDeleted: { $ne: true } });
 
- 
 //   // ❌ No user found
 //   if (!user) {
 //     res.status(401);
@@ -310,7 +324,6 @@ export const verifyEmailOTP = asyncHandler(async (req, res) => {
 //     res.status(403).json({ message: "Account has been permanently deleted" });
 //     return;
 //   }
-  
 
 //   // 🚫 Deleted account
 
@@ -359,124 +372,157 @@ export const login = asyncHandler(async (req, res) => {
     isDeleted: { $ne: true },
   });
 
-  if (user) {
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      throw new AppError("Invalid email or password", 401);
-    }
-
-    if (!user.isVerified) {
-      throw new AppError("Please verify your email first", 403);
-    }
-
-    const accessToken = generateToken(user._id, "30d");
-    const refreshToken = generateToken(user._id, "7d");
-    let sessionId = crypto.randomBytes(16).toString("hex");
-    const refreshTokenHash = hashToken(refreshToken);
-    const now = new Date();
-    const deviceMeta = buildLoginDeviceMeta(req);
-
-    user.loginDevices = Array.isArray(user.loginDevices) ? user.loginDevices : [];
-    user.refreshTokens = Array.isArray(user.refreshTokens) ? user.refreshTokens : [];
-
-    const incomingSessionId = String(req.body?.deviceSessionId || "").trim();
-    const normalizedMeta = {
-      deviceType: String(deviceMeta?.deviceType || "unknown").trim().toLowerCase(),
-      platform: String(deviceMeta?.platform || "unknown").trim().toLowerCase(),
-      userAgent: String(deviceMeta?.userAgent || "").trim().toLowerCase(),
-    };
-
-    const existingIndex = user.loginDevices.findIndex((d) => {
-      const dSessionId = String(d?.sessionId || "").trim();
-      if (incomingSessionId && dSessionId === incomingSessionId) return true;
-
-      return (
-        String(d?.deviceType || "unknown").trim().toLowerCase() === normalizedMeta.deviceType &&
-        String(d?.platform || "unknown").trim().toLowerCase() === normalizedMeta.platform &&
-        String(d?.userAgent || "").trim().toLowerCase() === normalizedMeta.userAgent
-      );
+  // ✅ NEW: User doesn't exist
+  if (!user) {
+    // 🔍 Check deleted account
+    const deletedUser = await User.findOne({
+      originalEmail: email,
+      isDeleted: true,
     });
 
-    if (existingIndex >= 0) {
-      const existing = user.loginDevices[existingIndex];
-      sessionId = String(existing?.sessionId || sessionId);
-      const previousHash = String(existing?.refreshTokenHash || "").trim();
-
-      if (previousHash) {
-        user.refreshTokens = user.refreshTokens.filter(
-          (t) => hashToken(t) !== previousHash,
-        );
-      }
-
-      user.loginDevices[existingIndex] = {
-        ...existing,
-        sessionId,
-        refreshTokenHash,
-        ...deviceMeta,
-        lastLoginAt: now,
-        lastActiveAt: now,
-      };
-    } else {
-      user.loginDevices.push({
-        sessionId,
-        refreshTokenHash,
-        ...deviceMeta,
-        lastLoginAt: now,
-        lastActiveAt: now,
-      });
+    if (deletedUser) {
+      return res
+        .status(403)
+        .json({ message: "Account has been permanently deleted" });
     }
 
-    user.refreshTokens = user.refreshTokens.filter(
-      (t) => String(t || "") !== String(refreshToken),
-    );
-    user.refreshTokens.push(refreshToken);
-    if (user.loginDevices.length > 20) {
-      user.loginDevices = user.loginDevices
-        .sort(
-          (a, b) =>
-            new Date(b?.lastActiveAt || 0).getTime() -
-            new Date(a?.lastActiveAt || 0).getTime(),
-        )
-        .slice(0, 20);
-    }
+    throw new AppError("You don't have an account. Please SignUp first.", 404);
+  }
+
+  // 🔐 Password check
+  const isMatch = await user.matchPassword(password);
+
+  if (!isMatch) {
+    throw new AppError("Invalid email or password", 401);
+  }
+
+  if (!user.isVerified) {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.emailVerifyOTP = otp;
+    user.emailVerifyExpires = Date.now() + 10 * 60 * 1000;
+
     await user.save();
 
-    return res.json({
-      user: {
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-        subscriptionPlan: user.subscriptionPlan || "free",
-        accountType: user.accountType || "personal",
-        businessProfile: user.businessProfile || null,
-        avatar:
-          user.avatar ||
-          "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
-      },
-      accessToken,
-      refreshToken,
-      deviceSessionId: sessionId,
+    // yaha apna existing OTP mail function call karo
+    await sendEmail({
+      to: user.email, // ✅ important
+      subject: "Verify your email",
+      text: `Your email verification OTP is ${otp}`,
+      html: `
+      <h3>Email Verification</h3>
+      <p>Your OTP is <b>${otp}</b></p>
+    `,
+    });
+
+    throw new AppError("Please verify your email first", 403);
+  }
+
+  const accessToken = generateToken(user._id, "30d");
+  const refreshToken = generateToken(user._id, "7d");
+
+  let sessionId = crypto.randomBytes(16).toString("hex");
+  const refreshTokenHash = hashToken(refreshToken);
+  const now = new Date();
+  const deviceMeta = buildLoginDeviceMeta(req);
+
+  user.loginDevices = Array.isArray(user.loginDevices) ? user.loginDevices : [];
+  user.refreshTokens = Array.isArray(user.refreshTokens)
+    ? user.refreshTokens
+    : [];
+
+  const incomingSessionId = String(req.body?.deviceSessionId || "").trim();
+  const normalizedMeta = {
+    deviceType: String(deviceMeta?.deviceType || "unknown")
+      .trim()
+      .toLowerCase(),
+    platform: String(deviceMeta?.platform || "unknown")
+      .trim()
+      .toLowerCase(),
+    userAgent: String(deviceMeta?.userAgent || "")
+      .trim()
+      .toLowerCase(),
+  };
+
+  const existingIndex = user.loginDevices.findIndex((d) => {
+    const dSessionId = String(d?.sessionId || "").trim();
+    if (incomingSessionId && dSessionId === incomingSessionId) return true;
+
+    return (
+      String(d?.deviceType || "unknown")
+        .trim()
+        .toLowerCase() === normalizedMeta.deviceType &&
+      String(d?.platform || "unknown")
+        .trim()
+        .toLowerCase() === normalizedMeta.platform &&
+      String(d?.userAgent || "")
+        .trim()
+        .toLowerCase() === normalizedMeta.userAgent
+    );
+  });
+
+  if (existingIndex >= 0) {
+    const existing = user.loginDevices[existingIndex];
+    sessionId = String(existing?.sessionId || sessionId);
+    const previousHash = String(existing?.refreshTokenHash || "").trim();
+
+    if (previousHash) {
+      user.refreshTokens = user.refreshTokens.filter(
+        (t) => hashToken(t) !== previousHash,
+      );
+    }
+
+    user.loginDevices[existingIndex] = {
+      ...existing,
+      sessionId,
+      refreshTokenHash,
+      ...deviceMeta,
+      lastLoginAt: now,
+      lastActiveAt: now,
+    };
+  } else {
+    user.loginDevices.push({
+      sessionId,
+      refreshTokenHash,
+      ...deviceMeta,
+      lastLoginAt: now,
+      lastActiveAt: now,
     });
   }
 
-  // 🔍 2. Check if deleted account with same original email exists
-  const deletedUser = await User.findOne({
-    originalEmail: email,
-    isDeleted: true,
-  });
-
-  if (deletedUser) {
-    return res
-      .status(403)
-      .json({ message: "Account has been permanently deleted" });
+  user.refreshTokens = user.refreshTokens.filter(
+    (t) => String(t || "") !== String(refreshToken),
+  );
+  user.refreshTokens.push(refreshToken);
+  if (user.loginDevices.length > 20) {
+    user.loginDevices = user.loginDevices
+      .sort(
+        (a, b) =>
+          new Date(b?.lastActiveAt || 0).getTime() -
+          new Date(a?.lastActiveAt || 0).getTime(),
+      )
+      .slice(0, 20);
   }
+  await user.save();
 
-  // ❌ 3. Truly invalid
-  throw new AppError("Invalid email or password", 401);
+  return res.json({
+    user: {
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      subscriptionPlan: user.subscriptionPlan || "free",
+      accountType: user.accountType || "personal",
+      businessProfile: user.businessProfile || null,
+      avatar:
+        user.avatar ||
+        "https://bizvility.s3.us-east-1.amazonaws.com/others/1754035118344-others.webp",
+    },
+    accessToken,
+    refreshToken,
+    deviceSessionId: sessionId,
+  });
 });
-
-
 
 // @route   POST /api/auth/refresh
 export const refreshToken = asyncHandler(async (req, res) => {
@@ -498,8 +544,6 @@ export const refreshToken = asyncHandler(async (req, res) => {
   const newAccessToken = generateToken(user._id, "15m");
   res.json({ accessToken: newAccessToken });
 });
-
-
 
 // @desc    Forgot password - send OTP
 // @route   POST /api/auth/forgot-password
@@ -572,7 +616,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     </div>
   </body>
 </html>
-`
+`,
   });
 
   // 🔐 Generate secure short-lived token
@@ -585,7 +629,6 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     resetToken, // 🚀 Send this to frontend
   });
 });
-
 
 // /api/auth/verify-forgot-otp
 export const verifyForgotOTP = asyncHandler(async (req, res) => {
@@ -623,12 +666,13 @@ export const logout = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization; // Already lowercased
   console.log("Logout - Auth Header:", authHeader); // Add this log
 
-  if (!authHeader?.startsWith('Bearer ')) { // Strict with space
+  if (!authHeader?.startsWith("Bearer ")) {
+    // Strict with space
     res.status(401);
     throw new Error("No token found");
   }
 
-  const token = authHeader.split(' ')[1].trim();
+  const token = authHeader.split(" ")[1].trim();
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findById(decoded.id);
 
@@ -751,7 +795,6 @@ export const getMyLoginDevices = asyncHandler(async (req, res) => {
 //   });
 // });
 
-
 // export const resendOTP = asyncHandler(async (req, res) => {
 //   const { email } = req.body;
 
@@ -805,14 +848,14 @@ export const resendOTP = asyncHandler(async (req, res) => {
 
   if (!email) {
     res.status(400);
-    throw new Error('Email is required');
+    throw new Error("Email is required");
   }
 
   const user = await User.findOne({ email });
 
   if (!user) {
     res.status(404);
-    throw new Error('User not found');
+    throw new Error("User not found");
   }
 
   const now = Date.now();
@@ -821,37 +864,32 @@ export const resendOTP = asyncHandler(async (req, res) => {
   if (user.emailResendBlock && user.emailResendBlock > now) {
     return res.status(429).json({
       success: false,
-      message: 'OTP already sent. Please wait 30 seconds before requesting again.',
+      message:
+        "OTP already sent. Please wait 30 seconds before requesting again.",
     });
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // ✨ Update all relevant OTP fields
+  // ✅ Only Email Verification OTP
   user.emailVerifyOTP = otp;
   user.emailVerifyExpires = now + 10 * 60 * 1000;
-
-  user.resetPasswordOTP = otp;
-  user.resetPasswordExpires = now + 10 * 60 * 1000;
 
   user.emailResendBlock = now + 30 * 1000;
 
   await user.save();
 
-  // 📧 Send email
   await sendEmail({
     to: user.email,
-    subject: 'Your New OTP',
-    text: `Your new OTP is: ${otp}\n\nIt is valid for 10 minutes.`,
+    subject: "Your Email Verification OTP",
+    text: `Your email verification OTP is: ${otp}\n\nIt is valid for 10 minutes.`,
   });
 
   res.status(200).json({
     success: true,
-    message: 'A new OTP has been sent to your email.',
+    message: "A new OTP has been sent to your email.",
   });
 });
-
-
 
 //reset password
 export const resetPassword = asyncHandler(async (req, res) => {

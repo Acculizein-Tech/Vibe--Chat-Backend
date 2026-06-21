@@ -62,11 +62,14 @@ const errorHandler = (err, req, res, next) => {
 
     if (isConnectionResetLikeError(err)) {
       console.warn('WARN network/transient error', payload);
+    } else if (err.isOperational || `${err.statusCode}`.startsWith('4')) {
+      console.warn(
+        `WARN ${payload.method} ${payload.path} ${payload.statusCode} - ${payload.message}`,
+      );
     } else {
-      console.error('ERROR ??', {
+      console.error('ERROR', {
         ...payload,
         stack: err.stack,
-        error: err,
       });
     }
   }
